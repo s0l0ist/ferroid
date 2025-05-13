@@ -5,6 +5,10 @@ use crate::{
 use base32::{decode, encode, Alphabet};
 use std::convert::TryInto;
 
+const U32_SIZE: usize = std::mem::size_of::<u32>();
+const U64_SIZE: usize = std::mem::size_of::<u64>();
+const U128_SIZE: usize = std::mem::size_of::<u128>();
+
 /// A trait for types that can be encoded to and decoded from big-endian bytes.
 pub trait BeBytes: Sized {
     type ByteArray: AsRef<[u8]>;
@@ -15,40 +19,40 @@ pub trait BeBytes: Sized {
 }
 
 impl BeBytes for u32 {
-    type ByteArray = [u8; 4];
+    type ByteArray = [u8; U32_SIZE];
 
     fn to_be_bytes(self) -> Self::ByteArray {
         self.to_be_bytes()
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Option<Self> {
-        let arr: [u8; 4] = bytes.try_into().ok()?;
+        let arr: [u8; U32_SIZE] = bytes.try_into().ok()?;
         Some(Self::from_be_bytes(arr))
     }
 }
 
 impl BeBytes for u64 {
-    type ByteArray = [u8; 8];
+    type ByteArray = [u8; U64_SIZE];
 
     fn to_be_bytes(self) -> Self::ByteArray {
         self.to_be_bytes()
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Option<Self> {
-        let arr: [u8; 8] = bytes.try_into().ok()?;
+        let arr: [u8; U64_SIZE] = bytes.try_into().ok()?;
         Some(Self::from_be_bytes(arr))
     }
 }
 
 impl BeBytes for u128 {
-    type ByteArray = [u8; 16];
+    type ByteArray = [u8; U128_SIZE];
 
     fn to_be_bytes(self) -> Self::ByteArray {
         self.to_be_bytes()
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Option<Self> {
-        let arr: [u8; 16] = bytes.try_into().ok()?;
+        let arr: [u8; U128_SIZE] = bytes.try_into().ok()?;
         Some(Self::from_be_bytes(arr))
     }
 }
@@ -69,26 +73,10 @@ where
     }
 }
 
-macro_rules! impl_base32 {
-    ($id:ty) => {
-        impl Base32 for $id {}
-
-        impl $id {
-            pub fn encode(&self) -> String {
-                <Self as Base32>::encode(self)
-            }
-
-            pub fn decode(s: &str) -> Result<Self> {
-                <Self as Base32>::decode(s)
-            }
-        }
-    };
-}
-
-impl_base32!(SnowflakeTwitterId);
-impl_base32!(SnowflakeDiscordId);
-impl_base32!(SnowflakeInstagramId);
-impl_base32!(SnowflakeMastodonId);
+impl Base32 for SnowflakeTwitterId {}
+impl Base32 for SnowflakeDiscordId {}
+impl Base32 for SnowflakeInstagramId {}
+impl Base32 for SnowflakeMastodonId {}
 
 #[cfg(test)]
 mod tests {
