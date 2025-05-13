@@ -5,7 +5,7 @@ and parsing **Snowflake-style unique IDs**.
 
 It supports pre-built layouts for platforms like Twitter, Discord, Instagram,
 and Mastodon. These IDs are 64-bit integers that encode timestamps,
-machine/shard IDs, and sequence numbers—making them **lexicographically
+machine/shard IDs, and sequence numbers - making them **lexicographically
 sortable**, **scalable**, and ideal for **distributed systems**.
 
 Features:
