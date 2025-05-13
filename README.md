@@ -8,11 +8,6 @@ and Mastodon. These IDs are 64-bit integers that encode timestamps,
 machine/shard IDs, and sequence numbers—making them **lexicographically
 sortable**, **scalable**, and ideal for **distributed systems**.
 
-It offers pre-built formats the platforms like Twitter, Discord, Instagram, and
-Mastodon. These are 64-bit identifiers that encode timestamps, machine/shard
-IDs, and sequence numbers—making them lexicographically sortable, scalable, and
-ideal for distributed systems.
-
 Features:
 
 - 📌 Bit-level layout compatibility with major Snowflake formats
