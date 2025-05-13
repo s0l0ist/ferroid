@@ -2,7 +2,7 @@ use crate::{
     Error, Result, Snowflake, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
     SnowflakeTwitterId,
 };
-use base32::{decode, encode, Alphabet};
+use base32::{Alphabet, decode, encode};
 use std::convert::TryInto;
 
 const U32_SIZE: usize = std::mem::size_of::<u32>();
@@ -57,7 +57,8 @@ impl BeBytes for u128 {
     }
 }
 
-/// A trait for types that can be encoded to and decoded from base32 (crockford) strings.
+/// A trait for types that can be encoded to and decoded from base32 (crockford)
+/// strings.
 pub trait Base32: Snowflake + Sized
 where
     Self::Ty: BeBytes,

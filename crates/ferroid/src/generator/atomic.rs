@@ -202,7 +202,7 @@ where
                 cmp::Ordering::Less => {
                     return Ok(IdGenStatus::Pending {
                         yield_until: current_ts,
-                    })
+                    });
                 }
                 cmp::Ordering::Greater => (now, ID::ZERO),
                 cmp::Ordering::Equal => {
