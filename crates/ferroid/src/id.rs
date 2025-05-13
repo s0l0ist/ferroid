@@ -210,7 +210,7 @@ impl fmt::Display for SnowflakeTwitterId {
 /// - 42 bits timestamp (ms since Discord epoch: Jan 1, 2015 UTC)
 /// - 10 bits internal worker ID (5) and process ID (5), combined into
 ///   machine_id (10)
-/// - 12 bits increment
+/// - 12 bits sequence
 ///
 /// ```text
 /// | timestamp (42) | machine_id (10) | sequence (12) |
