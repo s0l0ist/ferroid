@@ -227,7 +227,7 @@ where
                 return Ok(IdGenStatus::Ready { id: next_id });
             }
 
-            std::hint::spin_loop(); // retry
+            std::thread::yield_now(); // retry
         }
     }
 }
