@@ -1,6 +1,6 @@
-# snowflake-rs
+# ferroid
 
-[`snowflake-rs`](https://github.com/s0l0ist/snowflake-rs) is a Rust crate for
+[`ferroid`](https://github.com/s0l0ist/ferroid) is a Rust crate for
 generating and parsing **Snowflake-style unique IDs**, compatible with public
 formats used by platforms like Twitter, Discord, Instagram, and Mastodon. These
 64-bit identifiers encode timestamps, machine/shard IDs, and sequence
@@ -93,7 +93,7 @@ assert_eq!(id, decoded);
 
 ## 📈 Benchmarks
 
-`snowflake-rs` ships with Criterion benchmarks to measure ID generation
+`ferroid` ships with Criterion benchmarks to measure ID generation
 performance:
 
 - `BasicSnowflakeGenerator`: single-threaded generator
