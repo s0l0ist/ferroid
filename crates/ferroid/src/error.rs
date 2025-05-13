@@ -7,8 +7,6 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug, From)]
 pub enum Error {
     LockPoisoned,
-
-    // TODO feature flag
     #[cfg(feature = "base32")]
     DecodeNonAsciiValue,
     #[cfg(feature = "base32")]
