@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/ferroid"
+]
+
+[workspace.dependencies]
+tracing = { version = "0.1", default-features = false }
+criterion = { version = "0.5", default-features = false }
+futures = { version = "0.3", default-features = false }
+derive_more = { version = "2.0.1", default-features = false }
+serde = { version = "1.0", default-features = false }
+base32 = { version = "0.5", default-features = false }
