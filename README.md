@@ -44,9 +44,9 @@ All generators produce **monotonically increasing**, **time-ordered**, and
 ### Generate an ID
 
 ```rust
-use ferroid::{MonotonicClock, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+use ferroid::{MonotonicClock, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
 
-let clock = MonotonicClock::default();
+let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
 let mut generator = BasicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(1, clock);
 
 let id = loop {
