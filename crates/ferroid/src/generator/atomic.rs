@@ -34,7 +34,7 @@ use tracing::instrument;
 /// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
 pub struct AtomicSnowflakeGenerator<T, ID>
 where
-    T: TimeSource<u64>,
+    T: TimeSource<ID::Ty>,
     ID: Snowflake<Ty = u64>,
 {
     state: AtomicU64,
@@ -65,8 +65,8 @@ where
     ///
     /// # Returns
     ///
-    /// A new  [`AtomicSnowflakeGenerator`] ready to produce globally unique,
-    /// time-ordered IDs.
+    /// A new [`AtomicSnowflakeGenerator`] ready to produce unique, time-ordered
+    /// IDs.
     ///
     /// # Example
     ///

@@ -57,6 +57,7 @@ impl BeBytes for u128 {
     }
 }
 
+/// A trait for types that can be encoded to and decoded from base32 (crockford) strings.
 pub trait Base32: Snowflake + Sized
 where
     Self::Ty: BeBytes,

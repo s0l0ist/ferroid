@@ -54,8 +54,8 @@ where
     ///
     /// # Returns
     ///
-    /// A new [`BasicSnowflakeGenerator`] ready to produce globally unique,
-    /// time-ordered IDs.
+    /// A new [`BasicSnowflakeGenerator`] ready to produce unique, time-ordered
+    /// IDs.
     ///
     /// # Example
     ///

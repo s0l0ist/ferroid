@@ -58,8 +58,8 @@ where
     ///
     /// # Returns
     ///
-    /// A new [`LockSnowflakeGenerator`] ready to produce globally unique,
-    /// time-ordered IDs.
+    /// A new [`LockSnowflakeGenerator`] ready to produce unique, time-ordered
+    /// IDs.
     ///
     /// # Example
     ///
@@ -98,7 +98,6 @@ where
     pub fn from_components(
         timestamp: ID::Ty,
         machine_id: ID::Ty,
-
         sequence: ID::Ty,
         clock: T,
     ) -> Self {
