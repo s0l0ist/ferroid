@@ -3,11 +3,12 @@ name = "ferroid"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+authors = ["Nick Angelou <angelou.nick@gmail.com>"]
 readme = "../../README.md"
 description = "A fast, modular Snowflake ID generator supporting Twitter, Discord, Instagram, Mastodon, or custom layouts."
 repository = "https://github.com/s0l0ist/ferroid"
+documentation = "https://docs.rs/ferroid"
 keywords = ["ferroid", "snowflake", "uuid", "generator", "monotonic"]
-categories = ["algorithms", "data-structures", "concurrency"]
 
 [lib]
 
