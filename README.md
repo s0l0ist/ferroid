@@ -125,7 +125,6 @@ let id = SnowflakeTwitterId::from(123456, 1, 42);
 println!("default: {id}");
 // > default: 517811998762
 
-// Instead, do this:
 println!("padded: {}", id.to_padded_string());
 // > padded: 00000000517811998762
 
