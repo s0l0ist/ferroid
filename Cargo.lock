@@ -177,6 +177,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferroid-army"
+version = "0.1.3"
+dependencies = [
+ "criterion",
+ "ferroid",
+ "tracing",
+]
+
+[[package]]
 name = "half"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

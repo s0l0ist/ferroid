@@ -1,0 +1,33 @@
+[package]
+name = "ferroid-army"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+readme.workspace = true
+description.workspace = true
+repository.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
+
+[dependencies]
+tracing = { workspace = true, optional = true, features = ["attributes"] }
+ferroid = { path = "../ferroid" }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[features]
+default = []
+tracing = ["dep:tracing", "ferroid/tracing"]
+serde = ["ferroid/serde"]
+base32 = ["ferroid/base32"]
