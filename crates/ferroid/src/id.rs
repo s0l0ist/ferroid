@@ -1,5 +1,8 @@
 use core::fmt;
-use std::ops::Add;
+use std::{
+    hash::Hash,
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
+};
 
 /// A trait representing a layout-compatible Snowflake ID generator.
 ///
@@ -18,9 +21,29 @@ use std::ops::Add;
 /// assert_eq!(id.machine_id(), 2);
 /// assert_eq!(id.sequence(), 1);
 /// ```
-pub trait Snowflake: Sized + Copy + fmt::Display {
+pub trait Snowflake:
+    Sized + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
+{
     /// Scalar type for all bit fields (typically `u64`)
-    type Ty: Ord + Copy + Add<Output = Self::Ty> + Into<Self::Ty> + From<Self::Ty>;
+    type Ty: Ord
+        + Copy
+        + Add<Output = Self::Ty>
+        + AddAssign
+        + Sub<Output = Self::Ty>
+        + SubAssign
+        + Mul<Output = Self::Ty>
+        + MulAssign
+        + Div<Output = Self::Ty>
+        + DivAssign
+        + Into<Self::Ty>
+        + Into<u64>
+        + From<Self::Ty>
+        + From<u8>
+        + From<u16>
+        + From<u32>
+        + From<u64>
+        + fmt::Debug
+        + fmt::Display;
 
     /// Zero value (used for resetting the sequence)
     const ZERO: Self::Ty;

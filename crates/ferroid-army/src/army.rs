@@ -1,30 +1,33 @@
-use ferroid::{IdGenStatus, Result, Snowflake, SnowflakeGenerator};
+use ferroid::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-pub struct Army<G, ID>
+pub struct Army<G, ID, T>
 where
-    G: SnowflakeGenerator<ID>,
+    G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
     generators: Vec<G>,
     ready: VecDeque<usize>,
     pending: VecDeque<usize>,
     _id: PhantomData<ID>,
+    _t: PhantomData<T>,
 }
 
-impl<G, ID> Army<G, ID>
+impl<G, ID, T> Army<G, ID, T>
 where
-    G: SnowflakeGenerator<ID>,
+    G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
     pub fn new(generators: Vec<G>) -> Self {
-        let ready = (0..generators.len()).collect();
         Self {
+            ready: (0..generators.len()).collect(),
             generators,
-            ready,
             pending: VecDeque::new(),
             _id: PhantomData,
+            _t: PhantomData,
         }
     }
 

@@ -13,7 +13,14 @@ use crate::{
 /// # Note
 /// This trait is not intended for external use and may change or be removed in
 /// future versions.
-pub trait SnowflakeGenerator<ID: Snowflake> {
+pub trait SnowflakeGenerator<ID, T>
+where
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
+    // Creates a new generator
+    fn new(machine_id: ID::Ty, clock: T) -> Self;
+
     /// Returns the next available ID or yields if generation is temporarily
     /// stalled.
     fn next(&mut self) -> IdGenStatus<ID>;
@@ -31,7 +38,14 @@ pub trait SnowflakeGenerator<ID: Snowflake> {
 /// # Note
 /// This trait is not intended for external use and may change or be removed in
 /// future versions.
-pub trait MultithreadedSnowflakeGenerator<ID: Snowflake> {
+pub trait MultithreadedSnowflakeGenerator<ID, T>
+where
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
+    // Creates a new generator
+    fn new(machine_id: ID::Ty, clock: T) -> Self;
+
     /// Returns the next available ID or yields if generation is temporarily
     /// stalled.
     fn next(&self) -> IdGenStatus<ID>;
@@ -40,11 +54,15 @@ pub trait MultithreadedSnowflakeGenerator<ID: Snowflake> {
     fn try_next(&self) -> Result<IdGenStatus<ID>>;
 }
 
-impl<T, ID> SnowflakeGenerator<ID> for BasicSnowflakeGenerator<T, ID>
+impl<ID, T> SnowflakeGenerator<ID, T> for BasicSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<ID::Ty>,
     ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
+    fn new(machine_id: ID::Ty, clock: T) -> Self {
+        Self::new(machine_id, clock)
+    }
+
     fn next(&mut self) -> IdGenStatus<ID> {
         self.next_id()
     }
@@ -54,11 +72,14 @@ where
     }
 }
 
-impl<T, ID> SnowflakeGenerator<ID> for LockSnowflakeGenerator<T, ID>
+impl<T, ID> SnowflakeGenerator<ID, T> for LockSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<ID::Ty>,
     ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
+    fn new(machine_id: ID::Ty, clock: T) -> Self {
+        Self::new(machine_id, clock)
+    }
     fn next(&mut self) -> IdGenStatus<ID> {
         self.next_id()
     }
@@ -68,11 +89,15 @@ where
     }
 }
 
-impl<T, ID> SnowflakeGenerator<ID> for AtomicSnowflakeGenerator<T, ID>
+impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<u64>,
     ID: Snowflake<Ty = u64>,
+    T: TimeSource<u64>,
 {
+    fn new(machine_id: ID::Ty, clock: T) -> Self {
+        Self::new(machine_id, clock)
+    }
+
     fn next(&mut self) -> IdGenStatus<ID> {
         self.next_id()
     }
@@ -82,11 +107,15 @@ where
     }
 }
 
-impl<T, ID> MultithreadedSnowflakeGenerator<ID> for LockSnowflakeGenerator<T, ID>
+impl<T, ID> MultithreadedSnowflakeGenerator<ID, T> for LockSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<ID::Ty>,
     ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
+    fn new(machine_id: ID::Ty, clock: T) -> Self {
+        Self::new(machine_id, clock)
+    }
+
     fn next(&self) -> IdGenStatus<ID> {
         self.next_id()
     }
@@ -96,11 +125,15 @@ where
     }
 }
 
-impl<T, ID> MultithreadedSnowflakeGenerator<ID> for AtomicSnowflakeGenerator<T, ID>
+impl<T, ID> MultithreadedSnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<u64>,
     ID: Snowflake<Ty = u64>,
+    T: TimeSource<u64>,
 {
+    fn new(machine_id: ID::Ty, clock: T) -> Self {
+        Self::new(machine_id, clock)
+    }
+
     fn next(&self) -> IdGenStatus<ID> {
         self.next_id()
     }

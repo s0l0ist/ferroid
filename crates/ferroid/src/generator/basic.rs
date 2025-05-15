@@ -23,19 +23,19 @@ use tracing::instrument;
 ///
 /// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
 /// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
-pub struct BasicSnowflakeGenerator<T, ID>
+pub struct BasicSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<ID::Ty>,
     ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
     state: ID,
     time: T,
 }
 
-impl<T, ID> BasicSnowflakeGenerator<T, ID>
+impl<ID, T> BasicSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<ID::Ty>,
     ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`BasicSnowflakeGenerator`] initialized with the current
     /// time and a given machine ID.
@@ -62,7 +62,7 @@ where
     /// ```
     /// use ferroid::{BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
     ///
-    /// let mut generator = BasicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(0, MonotonicClock::default());
+    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
     /// let id = generator.next_id();
     /// ```
     ///
@@ -121,7 +121,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = BasicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(0, clock);
+    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.next_id() {
@@ -159,7 +159,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = BasicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(0, clock);
+    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.try_next_id() {

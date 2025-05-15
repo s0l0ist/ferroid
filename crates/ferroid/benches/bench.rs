@@ -25,10 +25,11 @@ const TOTAL_IDS: usize = 4096;
 /// Benchmarks a sequential generator where all generated IDs are `Ready` (no
 /// contention, no `Pending`). This simulates the generator's hot path under
 /// ideal conditions which is useful for optimizing the generator itself.
-fn bench_generator<ID, G>(c: &mut Criterion, group_name: &str, generator_factory: impl Fn() -> G)
+fn bench_generator<G, ID, T>(c: &mut Criterion, group_name: &str, generator_factory: impl Fn() -> G)
 where
+    G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
-    G: SnowflakeGenerator<ID>,
+    T: TimeSource<ID::Ty>,
 {
     let mut group = c.benchmark_group(group_name);
 
@@ -59,13 +60,14 @@ where
 /// Benchmarks a sequential generator that may yield `Pending` if the timestamp
 /// hasn't advanced. This simulates realistic usage with clock-aware generators
 /// like `MonotonicClock`.
-fn bench_generator_yield<ID, G>(
+fn bench_generator_yield<G, ID, T>(
     c: &mut Criterion,
     group_name: &str,
     generator_factory: impl Fn() -> G,
 ) where
+    G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
-    G: SnowflakeGenerator<ID>,
+    T: TimeSource<ID::Ty>,
 {
     let mut group = c.benchmark_group(group_name);
 
@@ -99,13 +101,14 @@ fn bench_generator_yield<ID, G>(
 /// Benchmarks a multithreaded generator where each thread attempts to generate
 /// IDs from a shared generator. This measures contention performance when the
 /// generator always returns `Ready` (e.g., fixed timestamp).
-fn bench_generator_threaded<ID, G>(
+fn bench_generator_threaded<G, ID, T>(
     c: &mut Criterion,
     group_name: &str,
     generator_fn: impl Fn() -> G,
 ) where
+    G: MultithreadedSnowflakeGenerator<ID, T> + Send + Sync,
     ID: Snowflake,
-    G: MultithreadedSnowflakeGenerator<ID> + Send + Sync,
+    T: TimeSource<ID::Ty>,
 {
     let mut group = c.benchmark_group(group_name);
     let thread_counts = [1, 2, 4, 8, 16];
@@ -155,13 +158,15 @@ fn bench_generator_threaded<ID, G>(
 /// Benchmarks a multithreaded generator that may return `Pending`, simulating
 /// contention + time progression. Threads yield when the sequence is exhausted,
 /// which is typical with `MonotonicClock`.
-fn bench_generator_threaded_yield<ID, G>(
+fn bench_generator_threaded_yield<G, ID, T>(
     c: &mut Criterion,
     group_name: &str,
     generator_fn: impl Fn() -> G,
 ) where
+    G: MultithreadedSnowflakeGenerator<ID, T> + Send + Sync,
     ID: Snowflake,
-    G: MultithreadedSnowflakeGenerator<ID> + Send + Sync,
+    T: TimeSource<ID::Ty>,
+    ID: Snowflake,
 {
     let mut group = c.benchmark_group(group_name);
     let thread_counts = [1, 2, 4, 8, 16];
@@ -215,7 +220,7 @@ fn bench_generator_threaded_yield<ID, G>(
 /// advances. Always returns `Ready`, so this exercises the fastest possible hot
 /// path.
 fn benchmark_mock_sequential_basic(c: &mut Criterion) {
-    bench_generator::<SnowflakeTwitterId, _>(c, "mock/sequential/basic", || {
+    bench_generator::<_, SnowflakeTwitterId, _>(c, "mock/sequential/basic", || {
         BasicSnowflakeGenerator::new(0, FixedMockTime { millis: 1 })
     });
 }
@@ -223,7 +228,7 @@ fn benchmark_mock_sequential_basic(c: &mut Criterion) {
 /// Benchmarks the `LockSnowflakeGenerator` with a mock clock and
 /// single-threaded access.
 fn benchmark_mock_sequential_lock(c: &mut Criterion) {
-    bench_generator::<SnowflakeTwitterId, _>(c, "mock/sequential/lock", || {
+    bench_generator::<_, SnowflakeTwitterId, _>(c, "mock/sequential/lock", || {
         LockSnowflakeGenerator::new(0, FixedMockTime { millis: 1 })
     });
 }
@@ -231,7 +236,7 @@ fn benchmark_mock_sequential_lock(c: &mut Criterion) {
 /// Benchmarks the `AtomicSnowflakeGenerator` with a mock clock and
 /// single-threaded access.
 fn benchmark_mock_sequential_atomic(c: &mut Criterion) {
-    bench_generator::<SnowflakeTwitterId, _>(c, "mock/sequential/atomic", || {
+    bench_generator::<_, SnowflakeTwitterId, _>(c, "mock/sequential/atomic", || {
         AtomicSnowflakeGenerator::new(0, FixedMockTime { millis: 1 })
     });
 }
@@ -239,15 +244,15 @@ fn benchmark_mock_sequential_atomic(c: &mut Criterion) {
 /// Benchmarks the `LockSnowflakeGenerator` under multithreaded contention with
 /// a fixed clock. Measures cost of synchronization under no time progression.
 fn benchmark_mock_threaded_lock(c: &mut Criterion) {
-    bench_generator_threaded::<SnowflakeTwitterId, _>(c, "mock/threaded/lock", || {
+    bench_generator_threaded::<_, SnowflakeTwitterId, _>(c, "mock/threaded/lock", || {
         LockSnowflakeGenerator::new(0, FixedMockTime { millis: 1 })
     });
 }
 
 /// Benchmarks the `AtomicSnowflakeGenerator` under multithreaded contention
-/// with a fixed clock.
+/// with a fixed clock. This has to always use yielding because CAS can fail.
 fn benchmark_mock_threaded_atomic(c: &mut Criterion) {
-    bench_generator_threaded::<SnowflakeTwitterId, _>(c, "mock/threaded/atomic", || {
+    bench_generator_threaded_yield::<_, SnowflakeTwitterId, _>(c, "mock/threaded/atomic", || {
         AtomicSnowflakeGenerator::new(0, FixedMockTime { millis: 1 })
     });
 }
@@ -256,7 +261,7 @@ fn benchmark_mock_threaded_atomic(c: &mut Criterion) {
 /// IDs may yield if the clock hasn't advanced; simulates a realistic wall
 /// clock.
 fn benchmark_mono_sequential_basic(c: &mut Criterion) {
-    bench_generator_yield::<SnowflakeTwitterId, _>(c, "mono/sequential/basic", || {
+    bench_generator_yield::<_, SnowflakeTwitterId, _>(c, "mono/sequential/basic", || {
         BasicSnowflakeGenerator::new(0, MonotonicClock::default())
     });
 }
@@ -264,7 +269,7 @@ fn benchmark_mono_sequential_basic(c: &mut Criterion) {
 /// Benchmarks `LockSnowflakeGenerator` with `MonotonicClock` under a single
 /// thread.
 fn benchmark_mono_sequential_lock(c: &mut Criterion) {
-    bench_generator_yield::<SnowflakeTwitterId, _>(c, "mono/sequential/lock", || {
+    bench_generator_yield::<_, SnowflakeTwitterId, _>(c, "mono/sequential/lock", || {
         LockSnowflakeGenerator::new(0, MonotonicClock::default())
     });
 }
@@ -272,7 +277,7 @@ fn benchmark_mono_sequential_lock(c: &mut Criterion) {
 /// Benchmarks `AtomicSnowflakeGenerator` with `MonotonicClock` under a single
 /// thread.
 fn benchmark_mono_sequential_atomic(c: &mut Criterion) {
-    bench_generator_yield::<SnowflakeTwitterId, _>(c, "mono/sequential/atomic", || {
+    bench_generator_yield::<_, SnowflakeTwitterId, _>(c, "mono/sequential/atomic", || {
         AtomicSnowflakeGenerator::new(0, MonotonicClock::default())
     });
 }
@@ -280,7 +285,7 @@ fn benchmark_mono_sequential_atomic(c: &mut Criterion) {
 /// Benchmarks the lock-based generator with `MonotonicClock` and multithreaded
 /// contention. Threads yield if the sequence is exhausted for the current tick.
 fn benchmark_mono_threaded_lock(c: &mut Criterion) {
-    bench_generator_threaded_yield::<SnowflakeTwitterId, _>(c, "mono/threaded/lock", || {
+    bench_generator_threaded_yield::<_, SnowflakeTwitterId, _>(c, "mono/threaded/lock", || {
         LockSnowflakeGenerator::new(0, MonotonicClock::default())
     });
 }
@@ -288,7 +293,7 @@ fn benchmark_mono_threaded_lock(c: &mut Criterion) {
 /// Benchmarks the atomic generator with `MonotonicClock` and multithreaded
 /// contention.
 fn benchmark_mono_threaded_atomic(c: &mut Criterion) {
-    bench_generator_threaded_yield::<SnowflakeTwitterId, _>(c, "mono/threaded/atomic", || {
+    bench_generator_threaded_yield::<_, SnowflakeTwitterId, _>(c, "mono/threaded/atomic", || {
         AtomicSnowflakeGenerator::new(0, MonotonicClock::default())
     });
 }
@@ -300,8 +305,8 @@ criterion_group!(
     benchmark_mock_sequential_lock,
     benchmark_mock_sequential_atomic,
     benchmark_mock_threaded_lock,
-    benchmark_mock_threaded_atomic,
-    // Monotonic clocks that could yield
+    benchmark_mock_threaded_atomic, // yields because of CAS failures
+    // Monotonic clocks (yielding)
     benchmark_mono_sequential_basic,
     benchmark_mono_sequential_lock,
     benchmark_mono_sequential_atomic,
