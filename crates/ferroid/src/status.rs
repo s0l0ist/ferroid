@@ -22,7 +22,7 @@ use crate::Snowflake;
 ///     }
 /// }
 ///
-/// let mut generator = BasicSnowflakeGenerator::<_, SnowflakeTwitterId>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
+/// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
 /// match generator.next_id() {
 ///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
 ///     IdGenStatus::Pending { yield_until } => println!("Back off until: {yield_until}"),

@@ -32,10 +32,10 @@ use tracing::instrument;
 ///
 /// [`BasicSnowflakeGenerator`]: crate::BasicSnowflakeGenerator
 /// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
-pub struct AtomicSnowflakeGenerator<T, ID>
+pub struct AtomicSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<ID::Ty>,
     ID: Snowflake<Ty = u64>,
+    T: TimeSource<ID::Ty>,
 {
     state: AtomicU64,
     machine_id: u64,
@@ -43,10 +43,10 @@ where
     _id: PhantomData<ID>,
 }
 
-impl<T, ID> AtomicSnowflakeGenerator<T, ID>
+impl<ID, T> AtomicSnowflakeGenerator<ID, T>
 where
-    T: TimeSource<u64>,
     ID: Snowflake<Ty = u64>,
+    T: TimeSource<u64>,
 {
     /// Creates a new [`AtomicSnowflakeGenerator`] initialized with the current
     /// time and a given machine ID.
@@ -73,7 +73,7 @@ where
     /// ```
     /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
     ///
-    /// let generator = AtomicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(0, MonotonicClock::default());
+    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
     /// let id = generator.next_id();
     /// ```
     ///
@@ -134,7 +134,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = AtomicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(0, clock);
+    /// let mut generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.next_id() {
@@ -172,7 +172,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = AtomicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(0, clock);
+    /// let mut generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.try_next_id() {
@@ -191,43 +191,44 @@ where
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
         let now = self.time.current_millis();
-        loop {
-            let current_raw = self.state.load(Ordering::Relaxed);
-            let current_id = ID::from_raw(current_raw);
 
-            let current_ts = current_id.timestamp();
-            let seq = current_id.sequence();
+        let current_raw = self.state.load(Ordering::Relaxed);
+        let current_id = ID::from_raw(current_raw);
 
-            let (next_ts, next_seq) = match now.cmp(&current_ts) {
-                cmp::Ordering::Less => {
+        let current_ts = current_id.timestamp();
+        let seq = current_id.sequence();
+
+        let (next_ts, next_seq) = match now.cmp(&current_ts) {
+            cmp::Ordering::Less => {
+                return Ok(IdGenStatus::Pending {
+                    yield_until: current_ts,
+                });
+            }
+            cmp::Ordering::Greater => (now, ID::ZERO),
+            cmp::Ordering::Equal => {
+                if seq < ID::max_sequence() {
+                    (current_ts, seq + ID::ONE)
+                } else {
                     return Ok(IdGenStatus::Pending {
-                        yield_until: current_ts,
+                        yield_until: current_ts + ID::ONE,
                     });
                 }
-                cmp::Ordering::Greater => (now, ID::ZERO),
-                cmp::Ordering::Equal => {
-                    if seq < ID::max_sequence() {
-                        (current_ts, seq + ID::ONE)
-                    } else {
-                        return Ok(IdGenStatus::Pending {
-                            yield_until: current_ts + ID::ONE,
-                        });
-                    }
-                }
-            };
-
-            let next_id = ID::from_components(next_ts, self.machine_id, next_seq);
-            let next_raw = next_id.to_raw();
-
-            if self
-                .state
-                .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
-                .is_ok()
-            {
-                return Ok(IdGenStatus::Ready { id: next_id });
             }
+        };
 
-            std::thread::yield_now(); // retry
+        let next_id = ID::from_components(next_ts, self.machine_id, next_seq);
+        let next_raw = next_id.to_raw();
+
+        if self
+            .state
+            .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            return Ok(IdGenStatus::Ready { id: next_id });
+        } else {
+            Ok(IdGenStatus::Pending {
+                yield_until: ID::ZERO, // retry immediately
+            })
         }
     }
 }
