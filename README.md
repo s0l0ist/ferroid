@@ -51,7 +51,7 @@ that case, you can spin, yield, or sleep depending on your environment:
 use ferroid::{MonotonicClock, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
 
 let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
-let mut generator = BasicSnowflakeGenerator::<_, SnowflakeTwitterId>::new(1, clock);
+let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(1, clock);
 
 let id: SnowflakeTwitterId = loop {
     match generator.next_id() {
@@ -75,7 +75,7 @@ Or use another pre-built layout such as `Mastodon`:
 use ferroid::{MonotonicClock, MASTODON_EPOCH, BasicSnowflakeGenerator, SnowflakeMastodonId, IdGenStatus};
 
 let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-let mut generator = BasicSnowflakeGenerator::<_, SnowflakeMastodonId>::new(1, clock);
+let mut generator = BasicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(1, clock);
 
 // loop as above
 ```
