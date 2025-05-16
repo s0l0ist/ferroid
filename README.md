@@ -172,9 +172,8 @@ cargo test --all-features
 
 Licensed under either of:
 
-- [Apache License, Version 2.0](LICENSE-APACHE or
-  <https://www.apache.org/licenses/LICENSE-2.0>)
-- [MIT License](LICENSE-MIT or <https://opensource.org/licenses/MIT>)
+- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) ([LICENSE-APACHE](LICENSE-APACHE))
+- [MIT License](https://opensource.org/licenses/MIT) ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
 
