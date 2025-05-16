@@ -120,8 +120,10 @@ impl MonotonicClock {
     /// // let now = TWITTER_EPOCH;
     ///
     /// let clock = MonotonicClock::with_epoch(now);
+    /// std::thread::sleep(std::time::Duration::from_millis(5));
     /// let ts = clock.current_millis();
-    /// assert_eq!(ts, 0);
+    ///
+    /// assert!(ts >= 5 && ts <= 6);
     /// ```
     ///
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
@@ -141,17 +143,20 @@ impl MonotonicClock {
             _handle: OnceLock::new(),
         });
 
-        let inner_clone = Arc::clone(&inner);
+        let weak_inner = Arc::downgrade(&inner);
         let handle = thread::spawn(move || {
             let start = Instant::now();
             loop {
+                let Some(inner_ref) = weak_inner.upgrade() else {
+                    break;
+                };
                 let elapsed_us = start.elapsed().as_micros();
                 let target_us = elapsed_us + 1000; // add 1ms
                 let sleep_us = target_us.saturating_sub(elapsed_us);
 
                 thread::sleep(Duration::from_micros(sleep_us as u64));
                 let now_ms = start.elapsed().as_millis() as u64;
-                inner_clone.current.store(now_ms, Ordering::Relaxed);
+                inner_ref.current.store(now_ms, Ordering::Relaxed);
             }
         });
 
@@ -167,23 +172,25 @@ impl MonotonicClock {
     }
 }
 
-impl Drop for SharedTickerInner {
-    fn drop(&mut self) {
-        if let Some(handle) = self._handle.take() {
-            // We can't safely propagate errors from Drop, so we log instead.
-            // This should be rare and typically only occurs if the ticker
-            // thread panicked.
-            if let Err(e) = handle.join() {
-                eprintln!("MonotonicClock ticker thread panicked: {:?}", e);
-            }
-        }
-    }
-}
-
 impl TimeSource<u64> for MonotonicClock {
     /// Returns the number of milliseconds since the configured epoch, based on
     /// the elapsed monotonic time since construction.
     fn current_millis(&self) -> u64 {
-        self.epoch_offset + self.inner.current.load(Ordering::Relaxed)
+        self.epoch_offset + self.inner.current.load(Ordering::Acquire)
     }
 }
+
+// I'm including this test to check if the drop causes the thread to terminate.
+// Run this test manually by inserting a println into the inner loop
+// #[cfg(test)] mod tests { use super::*;
+//
+//     #[test]
+//     fn test_monotonic_clock_drop_terminates_thread() {
+//         use std::time::Duration;
+//
+//         let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
+//         std::thread::sleep(Duration::from_millis(1));
+//
+//         drop(clock);
+//     }
+// }
