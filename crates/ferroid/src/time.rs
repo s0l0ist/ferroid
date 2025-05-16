@@ -84,10 +84,17 @@ impl MonotonicClock {
     /// Constructs a monotonic clock using a custom epoch as the origin (t = 0),
     /// specified in milliseconds since the Unix epoch.
     ///
-    /// This epoch defines the zero-point for all future timestamps returned by
-    /// this clock. Internally, the clock measures elapsed time using a
-    /// monotonic counter and adds it to the offset between `SystemTime::now()`
-    /// and the given epoch.
+    /// The provided epoch defines the zero-point for all future timestamps
+    /// returned by this clock. Internally, the clock spawns a background thread
+    /// that updates a shared atomic counter once per millisecond, using a
+    /// monotonic timer (`Instant`) to measure elapsed time since startup.
+    ///
+    /// On each call to [`current_millis`], the clock returns the current tick
+    /// value plus a fixed offset — the precomputed difference between the
+    /// current wall-clock time (`SystemTime::now()`) and the given epoch.
+    ///
+    /// This design avoids syscalls on the hot path and ensures that time never
+    /// goes backward, even if the system clock is adjusted externally.
     ///
     /// # Parameters
     ///
@@ -95,7 +102,10 @@ impl MonotonicClock {
     ///
     /// # Panics
     ///
-    /// Panics if the current system time is earlier than the given epoch.
+    /// Panics if:
+    ///
+    /// - The current system time is earlier than the given epoch
+    /// - The internal ticker thread has already been initialized
     ///
     /// # Example
     ///
@@ -135,25 +145,37 @@ impl MonotonicClock {
         let handle = thread::spawn(move || {
             let start = Instant::now();
             loop {
-                let elapsed = start.elapsed();
-                let elapsed_us = elapsed.as_micros();
-                let next_ms = (elapsed_us / 1000) + 1;
-                let target_us = next_ms * 1000;
+                let elapsed_us = start.elapsed().as_micros();
+                let target_us = elapsed_us + 1000; // add 1ms
                 let sleep_us = target_us.saturating_sub(elapsed_us);
 
                 thread::sleep(Duration::from_micros(sleep_us as u64));
-
-                // Only truncate to milliseconds when storing
-                let now_ms = (start.elapsed().as_micros() / 1000) as u64;
+                let now_ms = start.elapsed().as_millis() as u64;
                 inner_clone.current.store(now_ms, Ordering::Relaxed);
             }
         });
 
-        let _ = inner._handle.set(handle);
+        let _ = inner
+            ._handle
+            .set(handle)
+            .expect("failed to set thread handle");
 
         Self {
             inner,
             epoch_offset: offset,
+        }
+    }
+}
+
+impl Drop for SharedTickerInner {
+    fn drop(&mut self) {
+        if let Some(handle) = self._handle.take() {
+            // We can't safely propagate errors from Drop, so we log instead.
+            // This should be rare and typically only occurs if the ticker
+            // thread panicked.
+            if let Err(e) = handle.join() {
+                eprintln!("MonotonicClock ticker thread panicked: {:?}", e);
+            }
         }
     }
 }
