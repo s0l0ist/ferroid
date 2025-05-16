@@ -110,6 +110,7 @@ impl MonotonicClock {
     /// # Example
     ///
     /// ```
+    /// use std::time::Instant;
     /// use ferroid::{MonotonicClock, TimeSource};
     /// let now = std::time::SystemTime::now()
     ///     .duration_since(std::time::UNIX_EPOCH)
@@ -118,12 +119,14 @@ impl MonotonicClock {
     /// // Or use a default epoch
     /// // use ferroid::TWITTER_EPOCH,
     /// // let now = TWITTER_EPOCH;
-    ///
+    /// let start = Instant::now();
     /// let clock = MonotonicClock::with_epoch(now);
     /// std::thread::sleep(std::time::Duration::from_millis(5));
     ///
+    /// let elapsed_us = start.elapsed().as_micros();
     /// let ts = clock.current_millis();
-    /// panic!("GOT TS: {:?}", ts);
+    ///
+    /// panic!("GOT TS: {:?}, elapsed_us {}", ts, elapsed_us);
     /// ```
     ///
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
