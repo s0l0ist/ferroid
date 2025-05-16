@@ -147,6 +147,7 @@ impl MonotonicClock {
         let handle = thread::spawn(move || {
             let start = Instant::now();
             loop {
+                // Ensures the thread gets dropped by hot holding a strong count
                 let Some(inner_ref) = weak_inner.upgrade() else {
                     break;
                 };
