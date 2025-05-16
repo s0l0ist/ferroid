@@ -145,18 +145,31 @@ impl MonotonicClock {
         let weak_inner = Arc::downgrade(&inner);
         let handle = thread::spawn(move || {
             let start = Instant::now();
+            let mut tick = 0;
+
             loop {
-                // Ensures the thread gets dropped by hot holding a strong count
                 let Some(inner_ref) = weak_inner.upgrade() else {
                     break;
                 };
-                let elapsed_us = start.elapsed().as_micros();
-                let target_us = elapsed_us + 1000; // add 1ms
-                let sleep_us = target_us.saturating_sub(elapsed_us);
 
-                thread::sleep(Duration::from_micros(sleep_us as u64));
+                // Compute the absolute target time of the next tick
+                let target = start + Duration::from_millis(tick);
+
+                // Sleep if we are early
+                let now = Instant::now();
+                if now < target {
+                    thread::sleep(target - now);
+                }
+
+                // After waking, recompute how far we actually are from the
+                // start
                 let now_ms = start.elapsed().as_millis() as u64;
+
+                // Monotonic store, aligned to elapsed milliseconds since start
                 inner_ref.current.store(now_ms, Ordering::Relaxed);
+
+                // Align to next tick after the current actual time
+                tick = now_ms + 1;
             }
         });
 

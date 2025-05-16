@@ -22,7 +22,7 @@ fn bench_single_army<G, ID, T>(
 {
     let mut group = c.benchmark_group(group_name);
 
-    for num_generators in [1, 2, 4, 8, 16, 32, 64] {
+    for num_generators in [1, 2, 4, 8, 16, 32, 64, 128] {
         group.throughput(Throughput::Elements(TOTAL_IDS as u64));
         group.bench_function(
             format!("elems/{}/generators/{}", TOTAL_IDS, num_generators),
