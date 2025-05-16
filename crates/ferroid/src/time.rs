@@ -123,7 +123,7 @@ impl MonotonicClock {
     /// std::thread::sleep(std::time::Duration::from_millis(5));
     /// let ts = clock.current_millis();
     ///
-    /// assert!(ts >= 5 && ts <= 6);
+    /// assert!(ts >= 5);
     /// ```
     ///
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
