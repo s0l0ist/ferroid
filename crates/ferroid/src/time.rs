@@ -112,6 +112,7 @@ impl MonotonicClock {
     /// ```
     /// use std::time::Instant;
     /// use ferroid::{MonotonicClock, TimeSource};
+    /// let start = Instant::now();
     /// let now = std::time::SystemTime::now()
     ///     .duration_since(std::time::UNIX_EPOCH)
     ///     .unwrap();
@@ -119,7 +120,6 @@ impl MonotonicClock {
     /// // Or use a default epoch
     /// // use ferroid::TWITTER_EPOCH,
     /// // let now = TWITTER_EPOCH;
-    /// let start = Instant::now();
     /// let clock = MonotonicClock::with_epoch(now);
     /// std::thread::sleep(std::time::Duration::from_millis(5));
     ///
