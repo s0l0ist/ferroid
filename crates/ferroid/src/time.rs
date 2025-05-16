@@ -144,8 +144,9 @@ impl MonotonicClock {
         });
 
         let weak_inner = Arc::downgrade(&inner);
+        let start = Instant::now();
         let handle = thread::spawn(move || {
-            let start = Instant::now();
+            let start = start;
             let mut tick = 0;
 
             loop {
