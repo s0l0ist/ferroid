@@ -82,8 +82,9 @@ where
 {
     let mut last_timestamp = ID::ZERO;
     let mut sequence = ID::ZERO;
+    const TOTAL_IDS: usize = 4096 * 256;
 
-    for _ in 0..8192 {
+    for _ in 0..TOTAL_IDS {
         loop {
             match generator.next() {
                 IdGenStatus::Ready { id } => {
@@ -119,7 +120,7 @@ where
     use std::thread::scope;
 
     const THREADS: usize = 8;
-    const TOTAL_IDS: usize = 4096;
+    const TOTAL_IDS: usize = 4096 * 256;
     const IDS_PER_THREAD: usize = TOTAL_IDS / THREADS;
 
     let generator = Arc::new(make_generator());
