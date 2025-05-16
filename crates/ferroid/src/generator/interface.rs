@@ -92,7 +92,7 @@ where
 impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
     ID: Snowflake<Ty = u64>,
-    T: TimeSource<u64>,
+    T: TimeSource<ID::Ty>,
 {
     fn new(machine_id: ID::Ty, clock: T) -> Self {
         Self::new(machine_id, clock)
@@ -128,7 +128,7 @@ where
 impl<T, ID> MultithreadedSnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
     ID: Snowflake<Ty = u64>,
-    T: TimeSource<u64>,
+    T: TimeSource<ID::Ty>,
 {
     fn new(machine_id: ID::Ty, clock: T) -> Self {
         Self::new(machine_id, clock)

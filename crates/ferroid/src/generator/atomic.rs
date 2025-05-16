@@ -46,7 +46,7 @@ where
 impl<ID, T> AtomicSnowflakeGenerator<ID, T>
 where
     ID: Snowflake<Ty = u64>,
-    T: TimeSource<u64>,
+    T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`AtomicSnowflakeGenerator`] initialized with the current
     /// time and a given machine ID.
