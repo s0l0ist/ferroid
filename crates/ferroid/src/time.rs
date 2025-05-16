@@ -120,9 +120,10 @@ impl MonotonicClock {
     /// // let now = TWITTER_EPOCH;
     ///
     /// let clock = MonotonicClock::with_epoch(now);
+    /// std::thread::sleep(std::time::Duration::from_millis(5));
     ///
     /// let ts = clock.current_millis();
-    /// assert!(ts >= 0);
+    /// assert!(ts >= 5);
     /// ```
     ///
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
