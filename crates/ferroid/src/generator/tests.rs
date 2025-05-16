@@ -300,7 +300,7 @@ fn atomic_generator_monotonic_clock_sequence_increments() {
 fn lock_generator_threaded_monotonic() {
     let clock = MonotonicClock::default();
     run_generator_monotonic_threaded(move || {
-        LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock)
+        LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock.clone())
     });
 }
 
@@ -308,7 +308,7 @@ fn lock_generator_threaded_monotonic() {
 fn atomic_generator_threaded_monotonic() {
     let clock = MonotonicClock::default();
     run_generator_monotonic_threaded(move || {
-        AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock)
+        AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock.clone())
     });
 }
 

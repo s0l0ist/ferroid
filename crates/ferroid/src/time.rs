@@ -1,4 +1,11 @@
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::{
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicU64, Ordering},
+    },
+    thread::{self, JoinHandle},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
 
 /// Custom epoch: Wednesday, January 1, 2025 00:00:00 UTC
 pub const CUSTOM_EPOCH: Duration = Duration::from_millis(1_735_689_600_000);
@@ -43,6 +50,12 @@ pub trait TimeSource<T> {
     fn current_millis(&self) -> T;
 }
 
+/// Shared ticker thread that updates every millisecond.
+struct SharedTickerInner {
+    current: AtomicU64,
+    _handle: OnceLock<JoinHandle<()>>,
+}
+
 /// A monotonic time source that returns elapsed time since process start,
 /// offset from a user-defined epoch.
 ///
@@ -52,10 +65,10 @@ pub trait TimeSource<T> {
 /// Internally, the clock measures time by capturing `Instant::now()` at
 /// construction and adding to it the duration elapsed since a given epoch
 /// (computed from `SystemTime::now()` at startup).
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct MonotonicClock {
-    epoch: Instant,
-    offset: Duration,
+    inner: Arc<SharedTickerInner>,
+    epoch_offset: u64, // in milliseconds
 }
 
 impl Default for MonotonicClock {
@@ -66,6 +79,7 @@ impl Default for MonotonicClock {
         Self::with_epoch(CUSTOM_EPOCH)
     }
 }
+
 impl MonotonicClock {
     /// Constructs a monotonic clock using a custom epoch as the origin (t = 0),
     /// specified in milliseconds since the Unix epoch.
@@ -104,13 +118,42 @@ impl MonotonicClock {
     /// ID encoding) by anchoring all generated times to a custom epoch of your
     /// choosing.
     pub fn with_epoch(epoch: Duration) -> Self {
-        let offset = SystemTime::now()
-            .duration_since(UNIX_EPOCH + epoch)
-            .expect("System time before custom epoch");
+        let system_now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("System clock before UNIX_EPOCH");
+        let offset = system_now
+            .checked_sub(epoch)
+            .expect("System clock before custom epoch")
+            .as_millis() as u64;
+
+        let inner = Arc::new(SharedTickerInner {
+            current: AtomicU64::new(0),
+            _handle: OnceLock::new(),
+        });
+
+        let inner_clone = Arc::clone(&inner);
+        let handle = thread::spawn(move || {
+            let start = Instant::now();
+            loop {
+                let elapsed = start.elapsed();
+                let elapsed_us = elapsed.as_micros();
+                let next_ms = (elapsed_us / 1000) + 1;
+                let target_us = next_ms * 1000;
+                let sleep_us = target_us.saturating_sub(elapsed_us);
+
+                thread::sleep(Duration::from_micros(sleep_us as u64));
+
+                // Only truncate to milliseconds when storing
+                let now_ms = (start.elapsed().as_micros() / 1000) as u64;
+                inner_clone.current.store(now_ms, Ordering::Relaxed);
+            }
+        });
+
+        let _ = inner._handle.set(handle);
 
         Self {
-            epoch: Instant::now(),
-            offset,
+            inner,
+            epoch_offset: offset,
         }
     }
 }
@@ -119,6 +162,6 @@ impl TimeSource<u64> for MonotonicClock {
     /// Returns the number of milliseconds since the configured epoch, based on
     /// the elapsed monotonic time since construction.
     fn current_millis(&self) -> u64 {
-        (self.offset + self.epoch.elapsed()).as_millis() as u64
+        self.epoch_offset + self.inner.current.load(Ordering::Relaxed)
     }
 }
