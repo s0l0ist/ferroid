@@ -120,10 +120,16 @@ impl MonotonicClock {
     /// // use ferroid::TWITTER_EPOCH,
     /// // let now = TWITTER_EPOCH;
     /// let clock = MonotonicClock::with_epoch(now);
-    /// std::thread::sleep(std::time::Duration::from_millis(5));
     ///
-    /// let ts = clock.current_millis();
-    /// assert!(ts >= 5);
+    /// // Ignored on Windows due to timing/jitter issues. You may need to
+    /// // implement a different clock as this one relies on sleeping for
+    /// // less than 1ms.
+    /// if !cfg!(target_os = "windows") {
+    ///     use std::time::Duration;
+    ///     std::thread::sleep(Duration::from_millis(5));
+    ///     let ts = clock.current_millis();
+    ///     assert!(ts >= 5);
+    /// }
     /// ```
     ///
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
