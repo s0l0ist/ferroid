@@ -126,7 +126,8 @@ impl MonotonicClock {
     /// let ts = clock.current_millis();
     ///
     /// // Due to differences in timer resolution across operating systems,
-    /// // this may not yield exactly 5 milliseconds.
+    /// // this may not yield exactly 5 milliseconds, but it will
+    /// // be monotonically increasing.
     /// // For example, Windows may delay longer.
     /// // assert!(ts >= 5);
     /// ```
