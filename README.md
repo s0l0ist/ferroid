@@ -29,11 +29,11 @@ Features:
 
 ## 🔧 Generator Comparison
 
-| Generator                  | Thread-Safe | Lock-Free | Throughput | Use Case                                                                             |
-| -------------------------- | ----------- | --------- | ---------- | ------------------------------------------------------------------------------------ |
-| `BasicSnowflakeGenerator`  | ❌          | ❌        | High       | Single-threaded execution; one instance per thread or core                           |
-| `LockSnowflakeGenerator`   | ✅          | ❌        | Low        | Multi-threaded workloads with consistent, shared access                              |
-| `AtomicSnowflakeGenerator` | ✅          | ✅        | Medium     | Multi-threaded workloads with moderate contention; outperforms locks, but not always |
+| Generator                  | Thread-Safe | Lock-Free | Throughput | Use Case                                                                       |
+| -------------------------- | ----------- | --------- | ---------- | ------------------------------------------------------------------------------ |
+| `BasicSnowflakeGenerator`  | ❌          | ❌        | Highest    | Single-threaded, zero contention; ideal for sharded/core-local generators      |
+| `LockSnowflakeGenerator`   | ✅          | ❌        | Medium     | Multi-threaded workloads where fair access across threads is important         |
+| `AtomicSnowflakeGenerator` | ✅          | ✅        | High       | Multi-threaded workloads where fair access is sacrificed for higher throughput |
 
 All generators produce **monotonically increasing**, **time-ordered**, and
 **unique** IDs.

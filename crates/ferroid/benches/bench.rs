@@ -261,40 +261,45 @@ fn benchmark_mock_threaded_atomic(c: &mut Criterion) {
 /// IDs may yield if the clock hasn't advanced; simulates a realistic wall
 /// clock.
 fn benchmark_mono_sequential_basic(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
     bench_generator_yield::<_, SnowflakeTwitterId, _>(c, "mono/sequential/basic", || {
-        BasicSnowflakeGenerator::new(0, MonotonicClock::default())
+        BasicSnowflakeGenerator::new(0, clock.clone())
     });
 }
 
 /// Benchmarks `LockSnowflakeGenerator` with `MonotonicClock` under a single
 /// thread.
 fn benchmark_mono_sequential_lock(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
     bench_generator_yield::<_, SnowflakeTwitterId, _>(c, "mono/sequential/lock", || {
-        LockSnowflakeGenerator::new(0, MonotonicClock::default())
+        LockSnowflakeGenerator::new(0, clock.clone())
     });
 }
 
 /// Benchmarks `AtomicSnowflakeGenerator` with `MonotonicClock` under a single
 /// thread.
 fn benchmark_mono_sequential_atomic(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
     bench_generator_yield::<_, SnowflakeTwitterId, _>(c, "mono/sequential/atomic", || {
-        AtomicSnowflakeGenerator::new(0, MonotonicClock::default())
+        AtomicSnowflakeGenerator::new(0, clock.clone())
     });
 }
 
 /// Benchmarks the lock-based generator with `MonotonicClock` and multithreaded
 /// contention. Threads yield if the sequence is exhausted for the current tick.
 fn benchmark_mono_threaded_lock(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
     bench_generator_threaded_yield::<_, SnowflakeTwitterId, _>(c, "mono/threaded/lock", || {
-        LockSnowflakeGenerator::new(0, MonotonicClock::default())
+        LockSnowflakeGenerator::new(0, clock.clone())
     });
 }
 
 /// Benchmarks the atomic generator with `MonotonicClock` and multithreaded
 /// contention.
 fn benchmark_mono_threaded_atomic(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
     bench_generator_threaded_yield::<_, SnowflakeTwitterId, _>(c, "mono/threaded/atomic", || {
-        AtomicSnowflakeGenerator::new(0, MonotonicClock::default())
+        AtomicSnowflakeGenerator::new(0, clock.clone())
     });
 }
 
