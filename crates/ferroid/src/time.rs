@@ -110,7 +110,7 @@ impl MonotonicClock {
     /// # Example
     ///
     /// ```
-    /// use std::time::Instant;
+    /// use std::time::{Duration, Instant};
     /// use ferroid::{MonotonicClock, TimeSource};
     /// let now = std::time::SystemTime::now()
     ///     .duration_since(std::time::UNIX_EPOCH)
@@ -121,21 +121,19 @@ impl MonotonicClock {
     /// // let now = TWITTER_EPOCH;
     /// let clock = MonotonicClock::with_epoch(now);
     ///
-    /// // Ignored on Windows due to timing/jitter issues. You may need to
-    /// // implement a different clock as this one relies on sleeping for
-    /// // less than 1ms.
-    /// if !cfg!(target_os = "windows") {
-    ///     use std::time::Duration;
-    ///     std::thread::sleep(Duration::from_millis(5));
-    ///     let ts = clock.current_millis();
-    ///     assert!(ts >= 5);
+    /// std::thread::sleep(Duration::from_millis(5));
+    /// let ts = clock.current_millis();
+    /// if ts < 5 {
+    ///     panic!("GOT TS: {:?}", ts);
     /// }
+    /// assert!(ts >= 5);
     /// ```
     ///
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
     /// ID encoding) by anchoring all generated times to a custom epoch of your
     /// choosing.
     pub fn with_epoch(epoch: Duration) -> Self {
+        let start = Instant::now();
         let system_now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("System clock before UNIX_EPOCH");
@@ -150,7 +148,6 @@ impl MonotonicClock {
         });
 
         let weak_inner = Arc::downgrade(&inner);
-        let start = Instant::now();
         let handle = thread::spawn(move || {
             let start = start;
             let mut tick = 0;
