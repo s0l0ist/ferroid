@@ -122,10 +122,8 @@ impl MonotonicClock {
     /// let clock = MonotonicClock::with_epoch(now);
     ///
     /// std::thread::sleep(Duration::from_millis(5));
+    ///
     /// let ts = clock.current_millis();
-    /// if ts < 5 {
-    ///     panic!("GOT TS: {:?}", ts);
-    /// }
     /// assert!(ts >= 5);
     /// ```
     ///
