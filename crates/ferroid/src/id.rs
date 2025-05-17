@@ -108,7 +108,7 @@ pub trait Snowflake:
 /// - 12 bits sequence
 ///
 /// ```text
-/// | timestamp (41) | machine_id (10) | sequence (12) |
+/// | reserved (1) | timestamp (41) | machine_id (10) | sequence (12) |
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -468,7 +468,7 @@ impl fmt::Display for SnowflakeMastodonId {
 /// - 10 bits sequence
 ///
 /// ```text
-/// | timestamp (48) | machine(13) | sequence (10) |
+/// | timestamp (41) | machine(13) | sequence (10) |
 /// ```
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
