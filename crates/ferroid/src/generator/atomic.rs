@@ -163,7 +163,7 @@ where
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_for })`: Wait for time to advance
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: Wait for time (in milliseconds) to advance
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
     /// # Example
@@ -181,8 +181,6 @@ where
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
     ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         // This should rarely happen on the first call, but if it does,
-    ///         // backoff or yield and try again.
     ///         println!("Exhausted; wait until: {}", yield_for);
     ///     }
     ///     Err(err) => eprintln!("Generator error: {}", err),
