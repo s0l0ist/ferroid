@@ -134,9 +134,7 @@ where
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
     ///     IdGenStatus::Pending { yield_for } => {
-    ///         // This should rarely happen on the first call, but if it does,
-    ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_for);
+    ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     /// }
     /// ```
@@ -173,7 +171,7 @@ where
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
     ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         println!("Exhausted; wait until: {}", yield_for);
+    ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     ///     Err(err) => eprintln!("Generator error: {}", err),
     /// }

@@ -57,7 +57,7 @@ let id: SnowflakeTwitterId = loop {
     match generator.next_id() {
         IdGenStatus::Ready { id } => break id,
         IdGenStatus::Pending { yield_for } => {
-            println!("Exhausted; wait until: {}", yield_for);
+            println!("Exhausted; wait for: {}ms", yield_for);
             std::hint::spin_loop();
             // Use `std::hint::spin_loop()` for single-threaded or per-thread generators.
             // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
