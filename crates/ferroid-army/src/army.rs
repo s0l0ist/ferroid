@@ -75,47 +75,58 @@ where
         }
     }
 
-    /// Returns the next available ID, panicking if generation fails.
-    ///
-    /// This is a convenience wrapper around [`Self::try_next_id`] that unwraps
-    /// the result.
+    /// Attempts to generate the next ID by polling underlying generators in
+    /// round-robin order.
     ///
     /// # Panics
-    /// Panics if the underlying generator returns an error.
+    /// This method currently has no fallible code paths, but may panic if an
+    /// internal error occurs in future implementations. For explicitly fallible
+    /// behavior, use [`Self::try_next_id`] instead.
     pub fn next_id(&mut self) -> ID {
         self.try_next_id().unwrap()
     }
 
-    /// Attempts to generate the next ID by polling underlying generators in round-robin order.
+    /// Attempts to generate the next ID by polling underlying generators in
+    /// round-robin order.
     ///
-    /// This method continuously rotates through each generator until one yields a valid ID.
-    /// If a generator returns [`IdGenStatus::Pending`], it is skipped temporarily and retried
-    /// on a future poll.
+    /// This method continuously rotates through each generator until one yields
+    /// a valid ID. If a generator returns [`IdGenStatus::Pending`], it is
+    /// skipped temporarily and retried on a future poll.
     ///
     /// # Returns
     /// - `Ok(id)`: When a generator yields a valid ID.
     /// - `Err(e)`: If a generator fails unexpectedly.
     ///
     /// # Fairness
-    /// This scheduler guarantees **fairness** by rotating through each generator in turn,
-    /// and immediately moving on if one becomes unavailable (e.g., due to exhausted sequence space).
-    ///
-    /// # Performance
-    /// Uses [`std::thread::yield_now`] to avoid busy-waiting when no generator is ready.
+    /// This scheduler guarantees **fairness** by rotating through each
+    /// generator in turn, and immediately moving on if one becomes unavailable
+    /// (e.g., due to exhausted sequence space).
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Army, BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
+    /// use ferroid::{BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
+    /// use ferroid_army::Army;
     ///
     /// let clock = MonotonicClock::default();
-    /// let generators = (0..4)
-    ///     .map(|id| BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(id, clock.clone()))
+    ///
+    /// // We use linear machine IDs here (0..4),
+    /// // but you can assign IDs using any sharding or partitioning scheme.
+    /// let generators = (0..=4)
+    ///     .map(|machine_id| BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(machine_id, clock.clone()))
     ///     .collect();
     ///
     /// let mut army = Army::new(generators);
     ///
-    /// let id = army.try_next_id().unwrap();
-    /// println!("Generated ID: {}", id);
+    /// for i in 0..4 {
+    ///     let id = army.try_next_id().unwrap();
+    ///
+    ///     // Each generator should be called in round-robin order.
+    ///     assert_eq!(id.machine_id(), i);
+    ///
+    ///     // We’re not exhausting the sequence (limit = 4096),
+    ///     // and the clock shouldn't have advanced by 1 ms in this loop.
+    ///     assert_eq!(id.sequence(), 0);
+    /// }
     /// ```
     pub fn try_next_id(&mut self) -> Result<ID> {
         loop {
@@ -126,7 +137,6 @@ where
                 }
                 IdGenStatus::Pending { .. } => {
                     self.next = (self.next + 1) % self.num_generators;
-                    // std::hint::spin_loop();
                     std::thread::yield_now();
                 }
             }
