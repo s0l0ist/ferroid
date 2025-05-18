@@ -23,7 +23,7 @@ fn run_id_sequence_increments_within_same_tick<G, ID, T>(mut generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
-    ID::Ty: fmt::Debug + fmt::Display,
+    ID::Ty: fmt::Debug + fmt::Display + From<u64>,
     T: TimeSource<ID::Ty>,
 {
     let id1 = generator.next().unwrap_ready();
@@ -54,7 +54,7 @@ fn run_generator_handles_rollover<G, ID, T>(mut generator: G, shared_time: Share
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
-    ID::Ty: fmt::Debug + fmt::Display,
+    ID::Ty: fmt::Debug + fmt::Display + Into<u64> + From<u64>,
     T: TimeSource<ID::Ty>,
 {
     for i in 0..=ID::max_sequence().into() {

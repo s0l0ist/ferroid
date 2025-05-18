@@ -27,6 +27,7 @@ use tracing::instrument;
 ///
 /// [`BasicSnowflakeGenerator`]: crate::BasicSnowflakeGenerator
 /// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
+#[repr(C, align(64))]
 pub struct LockSnowflakeGenerator<ID, T>
 where
     ID: Snowflake,

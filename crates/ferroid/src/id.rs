@@ -25,8 +25,8 @@ pub trait Snowflake:
     Sized + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
     /// Scalar type for all bit fields (typically `u64`)
-    type Ty: Ord
-        + Copy
+    type Ty: Copy
+        + Clone
         + Add<Output = Self::Ty>
         + AddAssign
         + Sub<Output = Self::Ty>
@@ -36,12 +36,12 @@ pub trait Snowflake:
         + Div<Output = Self::Ty>
         + DivAssign
         + Into<Self::Ty>
-        + Into<u64>
         + From<Self::Ty>
-        + From<u8>
-        + From<u16>
-        + From<u32>
-        + From<u64>
+        + Ord
+        + PartialOrd
+        + Eq
+        + PartialEq
+        + Hash
         + fmt::Debug
         + fmt::Display;
 
