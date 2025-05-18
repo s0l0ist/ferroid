@@ -64,7 +64,7 @@ where
     }
 
     let yield_for = generator.next().unwrap_pending();
-    assert_eq!(yield_for, 43_u64.into());
+    assert_eq!(yield_for, ID::ONE);
 
     shared_time.clock.index.set(1);
 
