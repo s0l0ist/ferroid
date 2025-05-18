@@ -28,21 +28,18 @@ fn bench_single_army<G, ID, T>(
             format!("elems/{}/generators/{}", TOTAL_IDS, num_generators),
             |b| {
                 b.iter_custom(|iters| {
+                    let clock = clock_factory(); // create one shared clock
+                    let generators: Vec<_> = (0..num_generators)
+                        .map(|machine_id| generator_fn(machine_id, clock.clone()))
+                        .collect();
+                    let mut army = Army::new(generators);
+
                     let start = Instant::now();
-
                     for _ in 0..iters {
-                        let clock = clock_factory(); // create one shared clock
-                        let generators: Vec<_> = (0..num_generators)
-                            .map(|machine_id| generator_fn(machine_id, clock.clone()))
-                            .collect();
-
-                        let mut army = Army::new(generators);
-
                         for _ in 0..TOTAL_IDS {
                             black_box(army.next_id());
                         }
                     }
-
                     start.elapsed()
                 });
             },

@@ -132,10 +132,10 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     IdGenStatus::Pending { yield_until } => {
+    ///     IdGenStatus::Pending { yield_for } => {
     ///         // This should rarely happen on the first call, but if it does,
     ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///         println!("Exhausted; wait until: {}", yield_for);
     ///     }
     /// }
     /// ```
@@ -153,7 +153,7 @@ where
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_until })`: Wait for time to advance
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: Wait for time to advance
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
     /// # Example
@@ -170,10 +170,10 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_until }) => {
+    ///     Ok(IdGenStatus::Pending { yield_for }) => {
     ///         // This should rarely happen on the first call, but if it does,
     ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///         println!("Exhausted; wait until: {}", yield_for);
     ///     }
     ///     Err(err) => eprintln!("Generator error: {}", err),
     /// }
@@ -185,9 +185,11 @@ where
         let current_ts = id.timestamp();
 
         let status = match now.cmp(&current_ts) {
-            Ordering::Less => IdGenStatus::Pending {
-                yield_until: current_ts,
-            },
+            Ordering::Less => {
+                let yield_for = current_ts - now;
+                debug_assert!(yield_for >= ID::ZERO);
+                IdGenStatus::Pending { yield_for }
+            }
             Ordering::Greater => {
                 *id = id.rollover_to_timestamp(now);
                 IdGenStatus::Ready { id: *id }
@@ -197,9 +199,7 @@ where
                     *id = id.increment_sequence();
                     IdGenStatus::Ready { id: *id }
                 } else {
-                    IdGenStatus::Pending {
-                        yield_until: current_ts + ID::ONE,
-                    }
+                    IdGenStatus::Pending { yield_for: ID::ONE }
                 }
             }
         };

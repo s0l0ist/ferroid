@@ -6,7 +6,7 @@ use crate::Snowflake;
 ///
 /// - [`IdGenStatus::Ready`] indicates a new ID was successfully generated.
 /// - [`IdGenStatus::Pending`] means the generator is throttled and cannot
-///   produce a new ID until the clock advances past `yield_until`.
+///   produce a new ID until the clock advances past `yield_for`.
 ///
 /// This allows non-blocking generation loops and clean backoff strategies.
 ///
@@ -25,24 +25,22 @@ use crate::Snowflake;
 /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
 /// match generator.next_id() {
 ///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
-///     IdGenStatus::Pending { yield_until } => println!("Back off until: {yield_until}"),
+///     IdGenStatus::Pending { yield_for } => println!("Back off until: {yield_for}"),
 /// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdGenStatus<T: Snowflake> {
-    /// A unique ID was generated and is ready to use.
+    /// A new Snowflake ID was successfully generated.
     Ready {
         /// The generated Snowflake ID.
         id: T,
     },
-    /// No ID could be generated because the sequence has been exhausted for the
-    /// current tick.
+    /// The generator is not ready to produce a new ID yet.
     ///
-    /// You should wait until the clock reaches or exceeds `yield_until` before
-    /// attempting to generate a new ID again.
+    /// Wait for the specified number of milliseconds (`yield_for`)
+    /// before trying again.
     Pending {
-        /// The next timestamp (inclusive) at which you may resume generating
-        /// IDs.
-        yield_until: T::Ty,
+        /// Milliseconds to wait before the next attempt.
+        yield_for: T::Ty,
     },
 }

@@ -142,10 +142,10 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     IdGenStatus::Pending { yield_until } => {
+    ///     IdGenStatus::Pending { yield_for } => {
     ///         // This should rarely happen on the first call, but if it does,
     ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///         println!("Exhausted; wait until: {}", yield_for);
     ///     }
     /// }
     /// ```
@@ -163,7 +163,7 @@ where
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_until })`: Wait for time to advance
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: Wait for time to advance
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
     /// # Example
@@ -180,10 +180,10 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_until }) => {
+    ///     Ok(IdGenStatus::Pending { yield_for }) => {
     ///         // This should rarely happen on the first call, but if it does,
     ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///         println!("Exhausted; wait until: {}", yield_for);
     ///     }
     ///     Err(err) => eprintln!("Generator error: {}", err),
     /// }
@@ -200,18 +200,16 @@ where
 
         let (next_ts, next_seq) = match now.cmp(&current_ts) {
             cmp::Ordering::Less => {
-                return Ok(IdGenStatus::Pending {
-                    yield_until: current_ts,
-                });
+                let yield_for = current_ts - now;
+                debug_assert!(yield_for >= ID::ZERO);
+                return Ok(IdGenStatus::Pending { yield_for });
             }
             cmp::Ordering::Greater => (now, ID::ZERO),
             cmp::Ordering::Equal => {
                 if seq < ID::max_sequence() {
                     (current_ts, seq + ID::ONE)
                 } else {
-                    return Ok(IdGenStatus::Pending {
-                        yield_until: current_ts + ID::ONE,
-                    });
+                    return Ok(IdGenStatus::Pending { yield_for: ID::ONE });
                 }
             }
         };
@@ -224,10 +222,11 @@ where
             .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            return Ok(IdGenStatus::Ready { id: next_id });
+            Ok(IdGenStatus::Ready { id: next_id })
         } else {
+            // CAS failed — another thread won the race. Yield 0 to retry immediately.
             Ok(IdGenStatus::Pending {
-                yield_until: ID::ZERO, // retry immediately
+                yield_for: ID::ZERO,
             })
         }
     }

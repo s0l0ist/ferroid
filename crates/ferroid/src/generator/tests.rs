@@ -46,8 +46,8 @@ where
     ID::Ty: fmt::Debug + fmt::Display,
     T: TimeSource<ID::Ty>,
 {
-    let yield_until = generator.next().unwrap_pending();
-    assert_eq!(yield_until, ID::ONE);
+    let yield_for = generator.next().unwrap_pending();
+    assert_eq!(yield_for, ID::ONE);
 }
 
 fn run_generator_handles_rollover<G, ID, T>(mut generator: G, shared_time: SharedMockStepTime)
@@ -63,8 +63,8 @@ where
         assert_eq!(id.timestamp(), 42_u64.into());
     }
 
-    let yield_until = generator.next().unwrap_pending();
-    assert_eq!(yield_until, 43_u64.into());
+    let yield_for = generator.next().unwrap_pending();
+    assert_eq!(yield_for, 43_u64.into());
 
     shared_time.clock.index.set(1);
 
@@ -330,8 +330,8 @@ where
     fn unwrap_ready(self) -> T {
         match self {
             IdGenStatus::Ready { id } => id,
-            IdGenStatus::Pending { yield_until } => {
-                panic!("unexpected pending (yield until: {})", yield_until)
+            IdGenStatus::Pending { yield_for } => {
+                panic!("unexpected pending (yield until: {})", yield_for)
             }
         }
     }
@@ -339,7 +339,7 @@ where
     fn unwrap_pending(self) -> T::Ty {
         match self {
             IdGenStatus::Ready { id } => panic!("unexpected ready ({})", id),
-            IdGenStatus::Pending { yield_until } => yield_until,
+            IdGenStatus::Pending { yield_for } => yield_for,
         }
     }
 }
