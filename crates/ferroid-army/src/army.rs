@@ -1,6 +1,24 @@
 use ferroid::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
 use std::marker::PhantomData;
 
+/// A cooperative, non-threadsafe wrapper around multiple [`SnowflakeGenerator`]
+/// instances, distributing ID generation fairly across a pool of generators.
+///
+/// This scheduler rotates through generators in round-robin fashion. If a
+/// generator returns [`IdGenStatus::Pending`], it yields and continues polling
+/// the next one.
+///
+/// ## Features
+///
+/// - ❌ Not thread-safe
+/// - ✅ Efficient single-threaded scheduling of many generators
+/// - ✅ Resilient to temporary generator exhaustion
+///
+/// ## Recommended When
+///
+/// - You have many generators (e.g., per core or shard) and want to saturate
+///   throughput
+/// - You are writing a single-threaded benchmark or high-throughput coordinator
 #[repr(C, align(64))]
 pub struct Army<G, ID, T>
 where
@@ -20,6 +38,33 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
+    /// Creates a new [`Army`] with a given vector of generators.
+    ///
+    /// Each generator will be polled cooperatively to balance ID generation.
+    ///
+    /// # Parameters
+    /// - `generators`: A `Vec<G>` where each generator must implement
+    ///   [`SnowflakeGenerator`].
+    ///
+    /// # Returns
+    /// A new [`Army`] instance, ready to generate IDs by rotating across
+    /// generators.
+    ///
+    /// # Panics
+    /// Panics if the `generators` vector is empty.
+    ///
+    /// # Example
+    /// ```
+    /// use ferroid::{Army, BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
+    ///
+    /// let clock = MonotonicClock::default();
+    /// let generators = (0..4)
+    ///     .map(|id| BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(id, clock.clone()))
+    ///     .collect();
+    ///
+    /// let mut army = Army::new(generators);
+    /// let id = army.next_id();
+    /// ```
     pub fn new(generators: Vec<G>) -> Self {
         let length = generators.len();
         Self {
@@ -30,10 +75,48 @@ where
         }
     }
 
+    /// Returns the next available ID, panicking if generation fails.
+    ///
+    /// This is a convenience wrapper around [`Self::try_next_id`] that unwraps
+    /// the result.
+    ///
+    /// # Panics
+    /// Panics if the underlying generator returns an error.
     pub fn next_id(&mut self) -> ID {
         self.try_next_id().unwrap()
     }
 
+    /// Attempts to generate the next ID by polling underlying generators in round-robin order.
+    ///
+    /// This method continuously rotates through each generator until one yields a valid ID.
+    /// If a generator returns [`IdGenStatus::Pending`], it is skipped temporarily and retried
+    /// on a future poll.
+    ///
+    /// # Returns
+    /// - `Ok(id)`: When a generator yields a valid ID.
+    /// - `Err(e)`: If a generator fails unexpectedly.
+    ///
+    /// # Fairness
+    /// This scheduler guarantees **fairness** by rotating through each generator in turn,
+    /// and immediately moving on if one becomes unavailable (e.g., due to exhausted sequence space).
+    ///
+    /// # Performance
+    /// Uses [`std::thread::yield_now`] to avoid busy-waiting when no generator is ready.
+    ///
+    /// # Example
+    /// ```
+    /// use ferroid::{Army, BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
+    ///
+    /// let clock = MonotonicClock::default();
+    /// let generators = (0..4)
+    ///     .map(|id| BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(id, clock.clone()))
+    ///     .collect();
+    ///
+    /// let mut army = Army::new(generators);
+    ///
+    /// let id = army.try_next_id().unwrap();
+    /// println!("Generated ID: {}", id);
+    /// ```
     pub fn try_next_id(&mut self) -> Result<ID> {
         loop {
             match self.generators[self.next].try_next()? {
@@ -43,7 +126,8 @@ where
                 }
                 IdGenStatus::Pending { .. } => {
                     self.next = (self.next + 1) % self.num_generators;
-                    std::hint::spin_loop();
+                    // std::hint::spin_loop();
+                    std::thread::yield_now();
                 }
             }
         }

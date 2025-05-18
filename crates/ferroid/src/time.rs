@@ -135,6 +135,8 @@ impl MonotonicClock {
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
     /// ID encoding) by anchoring all generated times to a custom epoch of your
     /// choosing.
+    ///
+    /// [`current_millis`]: TimeSource::current_millis
     pub fn with_epoch(epoch: Duration) -> Self {
         let start = Instant::now();
         let system_now = SystemTime::now()
