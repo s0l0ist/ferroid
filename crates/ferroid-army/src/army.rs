@@ -55,7 +55,8 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Army, BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
+    /// use ferroid::{BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
+    /// use ferroid_army::Army;
     ///
     /// let clock = MonotonicClock::default();
     /// let generators = (0..4)
