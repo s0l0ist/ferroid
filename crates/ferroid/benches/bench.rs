@@ -41,7 +41,7 @@ where
             for _ in 0..iters {
                 let mut generator = generator_factory();
                 for _ in 0..TOTAL_IDS {
-                    match generator.next() {
+                    match generator.next_id() {
                         IdGenStatus::Ready { id } => {
                             black_box(id);
                         }
@@ -80,7 +80,7 @@ fn bench_generator_yield<G, ID, T>(
                 let mut generator = generator_factory();
                 for _ in 0..TOTAL_IDS {
                     loop {
-                        match generator.next() {
+                        match generator.next_id() {
                             IdGenStatus::Ready { id } => {
                                 black_box(id);
                                 break;
@@ -133,7 +133,7 @@ fn bench_generator_threaded<G, ID, T>(
                                 s.spawn(move || {
                                     barrier.wait();
                                     for _ in 0..ids_per_thread {
-                                        match generator.next() {
+                                        match generator.next_id() {
                                             IdGenStatus::Ready { id } => {
                                                 black_box(id);
                                             }
@@ -192,7 +192,7 @@ fn bench_generator_threaded_yield<G, ID, T>(
                                     barrier.wait();
                                     for _ in 0..ids_per_thread {
                                         loop {
-                                            match generator.next() {
+                                            match generator.next_id() {
                                                 IdGenStatus::Ready { id } => {
                                                     black_box(id);
                                                     break;

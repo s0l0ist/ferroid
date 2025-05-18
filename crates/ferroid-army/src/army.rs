@@ -68,6 +68,7 @@ where
     /// ```
     pub fn new(generators: Vec<G>) -> Self {
         let length = generators.len();
+        assert!(length > 0, "must have at least 1 generator");
         Self {
             num_generators: length,
             next: 0,
@@ -124,14 +125,14 @@ where
     ///     // Each generator should be called in round-robin order.
     ///     assert_eq!(id.machine_id(), i);
     ///
-    ///     // We’re not exhausting the sequence (limit = 4096),
+    ///     // We're not exhausting the sequence (limit = 4096),
     ///     // and the clock shouldn't have advanced by 1 ms in this loop.
     ///     assert_eq!(id.sequence(), 0);
     /// }
     /// ```
     pub fn try_next_id(&mut self) -> Result<ID> {
         loop {
-            match self.generators[self.next].try_next()? {
+            match self.generators[self.next].try_next_id()? {
                 IdGenStatus::Ready { id } => {
                     self.next = (self.next + 1) % self.num_generators;
                     return Ok(id);

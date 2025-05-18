@@ -26,9 +26,9 @@ where
     ID::Ty: fmt::Debug + fmt::Display + From<u64>,
     T: TimeSource<ID::Ty>,
 {
-    let id1 = generator.next().unwrap_ready();
-    let id2 = generator.next().unwrap_ready();
-    let id3 = generator.next().unwrap_ready();
+    let id1 = generator.next_id().unwrap_ready();
+    let id2 = generator.next_id().unwrap_ready();
+    let id3 = generator.next_id().unwrap_ready();
 
     assert_eq!(id1.timestamp(), 42_u64.into());
     assert_eq!(id2.timestamp(), 42_u64.into());
@@ -46,7 +46,7 @@ where
     ID::Ty: fmt::Debug + fmt::Display,
     T: TimeSource<ID::Ty>,
 {
-    let yield_for = generator.next().unwrap_pending();
+    let yield_for = generator.next_id().unwrap_pending();
     assert_eq!(yield_for, ID::ONE);
 }
 
@@ -58,17 +58,17 @@ where
     T: TimeSource<ID::Ty>,
 {
     for i in 0..=ID::max_sequence().into() {
-        let id = generator.next().unwrap_ready();
+        let id = generator.next_id().unwrap_ready();
         assert_eq!(id.sequence(), i.into());
         assert_eq!(id.timestamp(), 42_u64.into());
     }
 
-    let yield_for = generator.next().unwrap_pending();
+    let yield_for = generator.next_id().unwrap_pending();
     assert_eq!(yield_for, ID::ONE);
 
     shared_time.clock.index.set(1);
 
-    let id = generator.next().unwrap_ready();
+    let id = generator.next_id().unwrap_ready();
     assert_eq!(id.timestamp(), 43_u64.into());
     assert_eq!(id.sequence(), 0_u64.into());
 }
@@ -86,7 +86,7 @@ where
 
     for _ in 0..TOTAL_IDS {
         loop {
-            match generator.next() {
+            match generator.next_id() {
                 IdGenStatus::Ready { id } => {
                     let ts = id.timestamp();
                     if ts > last_timestamp {
@@ -134,7 +134,7 @@ where
             s.spawn(move || {
                 for _ in 0..IDS_PER_THREAD {
                     loop {
-                        match generator.next() {
+                        match generator.next_id() {
                             IdGenStatus::Ready { id } => {
                                 let mut set = seen_ids.lock().unwrap();
                                 assert!(set.insert(id));
