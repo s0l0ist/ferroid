@@ -19,7 +19,7 @@ use tracing::instrument;
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
-/// - You want the lowest possible latency under moderate-to-heavy contention
+/// - Fair access across threads is important
 ///
 /// ## See Also
 /// - [`BasicSnowflakeGenerator`]
@@ -153,7 +153,8 @@ where
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_for })`: Wait for time (in milliseconds) to advance
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
+    ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
     /// # Example

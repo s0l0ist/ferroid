@@ -24,7 +24,7 @@ use tracing::instrument;
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
-/// - You want the lowest possible latency under light-to-moderate contention
+/// - Fair access is sacrificed for higher throughput
 ///
 /// ## See Also
 /// - [`BasicSnowflakeGenerator`]
@@ -121,7 +121,8 @@ where
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
     /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// clock has not advanced), it returns [`IdGenStatus::Pending`].
+    /// clock has not advanced, or CAS fails), it returns
+    /// [`IdGenStatus::Pending`].
     ///
     /// # Panics
     /// This method currently has no fallible code paths, but may panic if an
@@ -157,13 +158,14 @@ where
     ///
     /// This method attempts to generate the next ID based on the current time
     /// and internal state. If successful, it returns [`IdGenStatus::Ready`]
-    /// with a newly generated ID. If the generator is temporarily exhausted, it
-    /// returns [`IdGenStatus::Pending`]. If an internal failure occurs (e.g., a
-    /// time source or lock error), it returns an error.
+    /// with a newly generated ID. If the generator is temporarily exhausted or
+    /// CAS fails, it returns [`IdGenStatus::Pending`]. If an internal failure
+    /// occurs (e.g., a time source or lock error), it returns an error.
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_for })`: Wait for time (in milliseconds) to advance
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
+    ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
     /// # Example
@@ -222,7 +224,8 @@ where
         {
             Ok(IdGenStatus::Ready { id: next_id })
         } else {
-            // CAS failed — another thread won the race. Yield 0 to retry immediately.
+            // CAS failed - another thread won the race. Yield 0 to retry
+            // immediately.
             Ok(IdGenStatus::Pending {
                 yield_for: ID::ZERO,
             })
