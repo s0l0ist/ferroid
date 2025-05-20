@@ -8,8 +8,8 @@ use std::{
     time::Duration,
 };
 
-pub trait AsyncSnowflakeGeneratorExt<'a> {
-    fn await_id<ID, T, S>(&'a mut self) -> impl Future<Output = Result<ID>> + 'a
+pub trait AsyncSnowflakeGeneratorExt<'a, ID, T> {
+    fn try_next_id_async<S>(&'a mut self) -> impl Future<Output = Result<ID>> + 'a
     where
         Self: SnowflakeGenerator<ID, T>,
         ID: Snowflake + 'a,
@@ -18,8 +18,8 @@ pub trait AsyncSnowflakeGeneratorExt<'a> {
         S: SleepProvider + 'a;
 }
 
-impl<'a, G> AsyncSnowflakeGeneratorExt<'a> for G {
-    fn await_id<ID, T, S>(&'a mut self) -> impl Future<Output = Result<ID>> + 'a
+impl<'a, G, ID, T> AsyncSnowflakeGeneratorExt<'a, ID, T> for G {
+    fn try_next_id_async<S>(&'a mut self) -> impl Future<Output = Result<ID>> + 'a
     where
         G: SnowflakeGenerator<ID, T>,
         ID: Snowflake + 'a,
@@ -144,7 +144,7 @@ mod tests {
                 tokio::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = g.await_id::<_, _, TokioSleep>().await?;
+                        let id = g.try_next_id_async::<TokioSleep>().await?;
                         ids.push(id);
                     }
                     Ok(ids)

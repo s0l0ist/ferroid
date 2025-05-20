@@ -309,7 +309,8 @@ fn bench_generator_async_tokio<G, ID, T>(
                                 let mut generator = generator_fn(machine_id as u64, clock.clone());
                                 tasks.push(tokio::spawn(async move {
                                     for _ in 0..ids_per_generator {
-                                        let id = generator.await_id::<_, _, TokioSleep>().await?;
+                                        let id =
+                                            generator.try_next_id_async::<TokioSleep>().await?;
                                         black_box(id);
                                     }
                                     Ok(())
