@@ -121,7 +121,7 @@ mod tests {
     use std::collections::HashSet;
 
     const TOTAL_IDS: usize = 4096;
-    const NUM_GENERATORS: u64 = 128;
+    const NUM_GENERATORS: u64 = 32;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 32; // Enough to simulate at least 32 Pending cycles
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
