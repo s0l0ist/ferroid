@@ -1,5 +1,5 @@
 use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
-use std::marker::PhantomData;
+use std::{cell::Cell, marker::PhantomData};
 
 /// A cooperative, non-threadsafe wrapper around multiple [`SnowflakeGenerator`]
 /// instances, distributing ID generation fairly across a pool of generators.
@@ -27,7 +27,7 @@ where
 {
     generators: Vec<G>,
     num_generators: usize,
-    next: usize,
+    next: Cell<usize>,
     _idt: PhantomData<(ID, T)>,
 }
 
@@ -61,7 +61,7 @@ where
     ///     .map(|id| BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(id, clock.clone()))
     ///     .collect();
     ///
-    /// let mut army = Army::new(generators);
+    /// let army = Army::new(generators);
     /// let id = army.next_id();
     /// ```
     pub fn new(generators: Vec<G>) -> Self {
@@ -69,7 +69,7 @@ where
         assert!(length > 0, "must have at least 1 generator");
         Self {
             num_generators: length,
-            next: 0,
+            next: Cell::new(0),
             generators,
             _idt: PhantomData,
         }
@@ -82,7 +82,7 @@ where
     /// This method currently has no fallible code paths, but may panic if an
     /// internal error occurs in future implementations. For explicitly fallible
     /// behavior, use [`Self::try_next_id`] instead.
-    pub fn next_id(&mut self) -> ID {
+    pub fn next_id(&self) -> ID {
         self.try_next_id().unwrap()
     }
 
@@ -114,7 +114,7 @@ where
     ///     .map(|machine_id| BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(machine_id, clock.clone()))
     ///     .collect();
     ///
-    /// let mut army = Army::new(generators);
+    /// let army = Army::new(generators);
     ///
     /// for i in 0..4 {
     ///     let id = army.try_next_id().unwrap();
@@ -127,15 +127,15 @@ where
     ///     assert_eq!(id.sequence(), 0);
     /// }
     /// ```
-    pub fn try_next_id(&mut self) -> Result<ID> {
+    pub fn try_next_id(&self) -> Result<ID> {
         loop {
-            match self.generators[self.next].try_next_id()? {
+            match self.generators[self.next.get()].try_next_id()? {
                 IdGenStatus::Ready { id } => {
-                    self.next = (self.next + 1) % self.num_generators;
+                    self.next.set((self.next.get() + 1) % self.num_generators);
                     return Ok(id);
                 }
                 IdGenStatus::Pending { .. } => {
-                    self.next = (self.next + 1) % self.num_generators;
+                    self.next.set((self.next.get() + 1) % self.num_generators);
                     std::thread::yield_now();
                 }
             }
@@ -165,7 +165,7 @@ mod tests {
             let generators: Vec<_> = (0..num_generators)
                 .map(|machine_id| generator_fn(machine_id, clock.clone()))
                 .collect();
-            let mut army = Army::new(generators);
+            let army = Army::new(generators);
             let mut histogram: HashMap<ID::Ty, usize> = HashMap::with_capacity(TOTAL_IDS);
             let mut seen_ids = HashSet::with_capacity(TOTAL_IDS);
 

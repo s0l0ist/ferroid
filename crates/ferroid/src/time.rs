@@ -202,18 +202,3 @@ impl TimeSource<u64> for MonotonicClock {
         self.epoch_offset + self.inner.current.load(Ordering::Acquire)
     }
 }
-
-// I'm including this test to check if the drop causes the thread to terminate.
-// Run this test manually by inserting a println into the inner loop
-// #[cfg(test)] mod tests { use super::*;
-//
-//     #[test]
-//     fn test_monotonic_clock_drop_terminates_thread() {
-//         use std::time::Duration;
-//
-//         let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
-//         std::thread::sleep(Duration::from_millis(1));
-//
-//         drop(clock);
-//     }
-// }

@@ -100,15 +100,14 @@ where
                 }
             }
         };
-        match this.generator.try_next_id() {
-            Ok(IdGenStatus::Ready { id }) => return Poll::Ready(Ok(id)),
-            Ok(IdGenStatus::Pending { yield_for }) => {
+        match this.generator.try_next_id()? {
+            IdGenStatus::Ready { id } => Poll::Ready(Ok(id)),
+            IdGenStatus::Pending { yield_for } => {
                 let sleep_fut = S::sleep_for(Duration::from_millis(yield_for.into()));
                 this.sleep.as_mut().set(Some(sleep_fut));
                 cx.waker().wake_by_ref();
-                return Poll::Pending;
+                Poll::Pending
             }
-            Err(e) => Poll::Ready(Err(e)),
         }
     }
 }

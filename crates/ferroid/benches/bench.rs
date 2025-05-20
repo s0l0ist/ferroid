@@ -246,7 +246,7 @@ fn bench_single_army<G, ID, T>(
                     let generators: Vec<_> = (0..num_generators)
                         .map(|machine_id| generator_fn(machine_id, clock.clone()))
                         .collect();
-                    let mut army = Army::new(generators);
+                    let army = Army::new(generators);
 
                     let start = Instant::now();
                     for _ in 0..iters {
@@ -439,6 +439,26 @@ fn benchmark_mono_tokio_basic(c: &mut Criterion) {
     );
 }
 
+/// Benchmarks a pool of N basic generators over M workers for max async saturation
+fn benchmark_mono_tokio_lock(c: &mut Criterion) {
+    bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/async/tokio/lock",
+        |machine_id, clock| LockSnowflakeGenerator::new(machine_id, clock),
+        || MonotonicClock::default(),
+    );
+}
+
+/// Benchmarks a pool of N basic generators over M workers for max async saturation
+fn benchmark_mono_tokio_atomic(c: &mut Criterion) {
+    bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/async/tokio/atomic",
+        |machine_id, clock| AtomicSnowflakeGenerator::new(machine_id, clock),
+        || MonotonicClock::default(),
+    );
+}
+
 criterion_group!(
     benches,
     // Mock clock
@@ -457,5 +477,7 @@ criterion_group!(
     benchmark_mono_sequential_army_basic,
     // Async benchmark, using monotonic clocks
     benchmark_mono_tokio_basic,
+    benchmark_mono_tokio_lock,
+    benchmark_mono_tokio_atomic,
 );
 criterion_main!(benches);
