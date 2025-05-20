@@ -11,6 +11,9 @@ pub enum Error {
     DecodeNonAsciiValue,
     #[cfg(feature = "base32")]
     DecodeInvalidLen,
+    #[cfg(feature = "async-tokio")]
+    #[from]
+    JoinError(tokio::task::JoinError),
 }
 
 impl fmt::Display for Error {

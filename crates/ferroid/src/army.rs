@@ -1,4 +1,4 @@
-use ferroid::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
 use std::marker::PhantomData;
 
 /// A cooperative, non-threadsafe wrapper around multiple [`SnowflakeGenerator`]
@@ -19,16 +19,15 @@ use std::marker::PhantomData;
 /// - You have many generators (e.g., per core or shard) and want to saturate
 ///   throughput
 /// - You are writing a single-threaded benchmark or high-throughput coordinator
-#[repr(C, align(64))]
 pub struct Army<G, ID, T>
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
+    generators: Vec<G>,
     num_generators: usize,
     next: usize,
-    generators: Vec<G>,
     _idt: PhantomData<(ID, T)>,
 }
 
@@ -55,8 +54,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
-    /// use ferroid_army::Army;
+    /// use ferroid::{Army, BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
     ///
     /// let clock = MonotonicClock::default();
     /// let generators = (0..4)
@@ -106,8 +104,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
-    /// use ferroid_army::Army;
+    /// use ferroid::{Army, BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
     ///
     /// let clock = MonotonicClock::default();
     ///
@@ -149,10 +146,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{BasicSnowflakeGenerator, MonotonicClock, SnowflakeTwitterId};
     use core::fmt;
-    use ferroid::BasicSnowflakeGenerator;
-    use ferroid::MonotonicClock;
-    use ferroid::SnowflakeTwitterId;
     use std::collections::HashMap;
     use std::collections::HashSet;
 

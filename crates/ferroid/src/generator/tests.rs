@@ -2,7 +2,7 @@ use crate::{
     IdGenStatus, MonotonicClock, Snowflake, SnowflakeDiscordId, SnowflakeTwitterId, TimeSource,
     generator::{
         AtomicSnowflakeGenerator, BasicSnowflakeGenerator, LockSnowflakeGenerator,
-        MultithreadedSnowflakeGenerator, SnowflakeGenerator,
+        SnowflakeGenerator,
     },
 };
 use core::fmt;
@@ -19,7 +19,7 @@ impl TimeSource<u64> for MockTime {
     }
 }
 
-fn run_id_sequence_increments_within_same_tick<G, ID, T>(mut generator: G)
+fn run_id_sequence_increments_within_same_tick<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
@@ -39,7 +39,7 @@ where
     assert!(id1 < id2 && id2 < id3);
 }
 
-fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(mut generator: G)
+fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
@@ -50,7 +50,7 @@ where
     assert_eq!(yield_for, ID::ONE);
 }
 
-fn run_generator_handles_rollover<G, ID, T>(mut generator: G, shared_time: SharedMockStepTime)
+fn run_generator_handles_rollover<G, ID, T>(generator: G, shared_time: SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
@@ -73,7 +73,7 @@ where
     assert_eq!(id.sequence(), 0_u64.into());
 }
 
-fn run_generator_monotonic<G, ID, T>(mut generator: G)
+fn run_generator_monotonic<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug,
@@ -111,7 +111,7 @@ where
 
 fn run_generator_monotonic_threaded<G, ID, T>(make_generator: impl Fn() -> G)
 where
-    G: MultithreadedSnowflakeGenerator<ID, T> + Send + Sync,
+    G: SnowflakeGenerator<ID, T> + Send + Sync,
     ID: Snowflake + PartialEq + Eq + Hash + Send + Sync,
     T: TimeSource<ID::Ty>,
 {

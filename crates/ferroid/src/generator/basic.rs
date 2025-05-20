@@ -1,5 +1,5 @@
 use crate::{IdGenStatus, Result, Snowflake, TimeSource};
-use std::cmp::Ordering;
+use std::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -23,13 +23,12 @@ use tracing::instrument;
 ///
 /// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
 /// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
-#[repr(C, align(64))]
 pub struct BasicSnowflakeGenerator<ID, T>
 where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
-    state: ID,
+    state: Cell<ID>,
     time: T,
 }
 
@@ -100,7 +99,7 @@ where
     ) -> Self {
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
-            state: id,
+            state: Cell::new(id),
             time: clock,
         }
     }
@@ -135,7 +134,7 @@ where
     ///     }
     /// }
     /// ```
-    pub fn next_id(&mut self) -> IdGenStatus<ID> {
+    pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
     }
 
@@ -174,9 +173,10 @@ where
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&mut self) -> Result<IdGenStatus<ID>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
         let now = self.time.current_millis();
-        let current_ts = self.state.timestamp();
+        let state = self.state.get();
+        let current_ts = state.timestamp();
 
         let status = match now.cmp(&current_ts) {
             Ordering::Less => {
@@ -185,13 +185,15 @@ where
                 IdGenStatus::Pending { yield_for }
             }
             Ordering::Greater => {
-                self.state = self.state.rollover_to_timestamp(now);
-                IdGenStatus::Ready { id: self.state }
+                let updated = state.rollover_to_timestamp(now);
+                self.state.set(updated);
+                IdGenStatus::Ready { id: updated }
             }
             Ordering::Equal => {
-                if self.state.has_sequence_room() {
-                    self.state = self.state.increment_sequence();
-                    IdGenStatus::Ready { id: self.state }
+                if state.has_sequence_room() {
+                    let updated = state.increment_sequence();
+                    self.state.set(updated);
+                    IdGenStatus::Ready { id: updated }
                 } else {
                     IdGenStatus::Pending { yield_for: ID::ONE }
                 }

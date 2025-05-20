@@ -157,7 +157,7 @@ The thread-safe generators are primarily for convenience, or for use cases where
 ID generation is not expected to be the performance bottleneck. To run:
 
 ```sh
-cargo criterion
+cargo criterion --all-features
 ```
 
 ## 🧪 Testing
