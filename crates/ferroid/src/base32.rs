@@ -56,7 +56,7 @@ impl BeBytes for u128 {
 
 /// A trait for types that can be encoded to and decoded from base32 (crockford)
 /// strings.
-pub trait Base32: Snowflake + Sized
+pub trait SnowflakeBase32Ext: Snowflake + Sized
 where
     Self::Ty: BeBytes,
 {
@@ -72,7 +72,7 @@ where
     }
 }
 
-impl<ID> Base32 for ID
+impl<ID> SnowflakeBase32Ext for ID
 where
     ID: Snowflake + Sized,
     ID::Ty: BeBytes,
@@ -89,7 +89,7 @@ mod tests {
 
     fn test_encode_decode<T>(id: T, label: &str)
     where
-        T: Snowflake + Base32 + PartialEq + fmt::Debug,
+        T: Snowflake + SnowflakeBase32Ext + PartialEq + fmt::Debug,
         T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
     {
         let raw = id.to_raw();
