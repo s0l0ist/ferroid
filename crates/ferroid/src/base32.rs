@@ -1,7 +1,4 @@
-use crate::{
-    Error, Result, Snowflake, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
-    SnowflakeTwitterId,
-};
+use crate::{Error, Result, Snowflake};
 use base32::{Alphabet, decode, encode};
 use std::convert::TryInto;
 
@@ -75,16 +72,20 @@ where
     }
 }
 
-impl Base32 for SnowflakeTwitterId {}
-impl Base32 for SnowflakeDiscordId {}
-impl Base32 for SnowflakeInstagramId {}
-impl Base32 for SnowflakeMastodonId {}
+impl<ID> Base32 for ID
+where
+    ID: Snowflake + Sized,
+    ID::Ty: BeBytes,
+{
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use core::any::type_name;
-    use core::fmt;
+    use crate::{
+        SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId, SnowflakeTwitterId,
+    };
+    use core::{any::type_name, fmt};
 
     fn test_encode_decode<T>(id: T, label: &str)
     where
