@@ -82,24 +82,19 @@ let mut generator = BasicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(1, cl
 
 ### Custom Layouts
 
-To define a custom Snowflake layout, implement `Snowflake` and optionally
-`Base32`:
+To define a custom Snowflake layout, implement `Snowflake`:
 
 ```rust
-use ferroid::{Snowflake, Base32};
+use ferroid::Snowflake;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct MyCustomId {
     id: u64,
 }
 
-// required
 impl Snowflake for MyCustomId {
     // impl required methods
 }
-
-// optional, only if you need it
-impl Base32 for MyCustomId {}
 ```
 
 ### Behavior
