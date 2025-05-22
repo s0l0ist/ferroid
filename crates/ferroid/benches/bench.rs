@@ -1,7 +1,7 @@
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use ferroid::{
-    Army, AsyncSnowflakeGeneratorExt, AtomicSnowflakeGenerator, BasicSnowflakeGenerator,
-    IdGenStatus, LockSnowflakeGenerator, MonotonicClock, Result, Snowflake, SnowflakeGenerator,
+    Army, AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
+    MonotonicClock, Result, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt,
     SnowflakeTwitterId, TimeSource, TokioSleep,
 };
 use futures::future::try_join_all;

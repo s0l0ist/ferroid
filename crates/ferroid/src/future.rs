@@ -8,7 +8,23 @@ use std::{
     time::Duration,
 };
 
-pub trait AsyncSnowflakeGeneratorExt<'a, ID, T> {
+/// Extension trait for asynchronously generating Snowflake IDs.
+///
+/// This trait enables `SnowflakeGenerator` types to yield IDs in a
+/// `Future`-based context by awaiting until the generator is ready to produce a
+/// new ID.
+///
+/// The default implementation uses [`GeneratorFuture`] and a specified
+/// [`SleepProvider`] to yield when the generator is not yet ready.
+pub trait SnowflakeGeneratorAsyncExt<'a, ID, T> {
+    /// Returns a future that resolves to the next available Snowflake ID.
+    ///
+    /// If the generator is not ready to issue a new ID immediately, the future
+    /// will sleep for the amount of time indicated by the generator and retry.
+    ///
+    /// # Errors
+    ///
+    /// This future may return an error if the generator encounters one.
     fn try_next_id_async<S>(&'a mut self) -> impl Future<Output = Result<ID>> + 'a
     where
         Self: SnowflakeGenerator<ID, T>,
@@ -17,7 +33,7 @@ pub trait AsyncSnowflakeGeneratorExt<'a, ID, T> {
         S: SleepProvider + 'a;
 }
 
-impl<'a, G, ID, T> AsyncSnowflakeGeneratorExt<'a, ID, T> for G {
+impl<'a, G, ID, T> SnowflakeGeneratorAsyncExt<'a, ID, T> for G {
     fn try_next_id_async<S>(&'a mut self) -> impl Future<Output = Result<ID>> + 'a
     where
         G: SnowflakeGenerator<ID, T>,
@@ -29,12 +45,20 @@ impl<'a, G, ID, T> AsyncSnowflakeGeneratorExt<'a, ID, T> for G {
     }
 }
 
+/// A trait that abstracts over how to sleep for a given [`Duration`] in async
+/// contexts.
+///
+/// This allows the generator to be generic over runtimes like `Tokio` or
+/// `async-std`.
 pub trait SleepProvider {
     type Sleep: Future<Output = ()>;
 
     fn sleep_for(dur: Duration) -> Self::Sleep;
 }
 
+/// An implementation of [`SleepProvider`] using Tokio’s timer.
+///
+/// This is the default provider for use in async applications built on Tokio.
 pub struct TokioSleep;
 impl SleepProvider for TokioSleep {
     type Sleep = tokio::time::Sleep;
@@ -45,6 +69,12 @@ impl SleepProvider for TokioSleep {
 }
 
 pin_project! {
+    /// A future that polls a [`SnowflakeGenerator`] until it is ready to
+    /// produce an ID.
+    ///
+    /// This future handles `Pending` responses by sleeping for a recommended
+    /// amount of time before polling the generator again.
+    #[must_use = "futures do nothing unless you `.await` or poll them"]
     pub struct GeneratorFuture<'a, G, ID, T, S>
     where
         G: SnowflakeGenerator<ID, T>,
@@ -66,6 +96,10 @@ where
     T: TimeSource<ID::Ty>,
     S: SleepProvider,
 {
+    /// Constructs a new [`GeneratorFuture`] from a given generator.
+    ///
+    /// This does not immediately begin polling the generator; instead, it will
+    /// attempt to produce an ID when `.poll()` is called.
     pub fn new(generator: &'a mut G) -> Self {
         Self {
             generator,
@@ -84,6 +118,10 @@ where
 {
     type Output = Result<ID>;
 
+    /// Polls the generator for a new ID.
+    ///
+    /// If the generator is not ready, this will register the task waker and
+    /// sleep for the time recommended by the generator before polling again.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut this = self.project();
 

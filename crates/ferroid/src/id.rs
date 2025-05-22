@@ -5,7 +5,12 @@ use std::{
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
-/// A trait to universally convert an `ID::Ty` to a u64
+/// Trait for converting numeric-like values into a `u64`.
+///
+/// This is typically used to normalize custom duration types into milliseconds
+/// for compatibility with APIs like [`std::time::Duration::from_millis`], which
+/// are commonly required in async sleep contexts such as
+/// [`tokio::time::sleep`].
 pub trait ToU64 {
     fn to_u64(self) -> Result<u64>;
 }
