@@ -82,7 +82,7 @@ where
     /// This method currently has no fallible code paths, but may panic if an
     /// internal error occurs in future implementations. For explicitly fallible
     /// behavior, use [`Self::try_next_id`] instead.
-    pub fn next_id(&self) -> ID {
+    pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
     }
 
@@ -104,7 +104,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Army, BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock, TimeSource};
+    /// use ferroid::{Army, BasicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, MonotonicClock, TimeSource};
     ///
     /// let clock = MonotonicClock::default();
     ///
@@ -117,7 +117,12 @@ where
     /// let army = Army::new(generators);
     ///
     /// for i in 0..4 {
-    ///     let id = army.try_next_id().unwrap();
+    ///     let id = loop {
+    ///         match army.try_next_id().unwrap() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => std::hint::spin_loop(),
+    ///         }
+    ///     };
     ///
     ///     // Each generator should be called in round-robin order.
     ///     assert_eq!(id.machine_id(), i);
@@ -127,19 +132,10 @@ where
     ///     assert_eq!(id.sequence(), 0);
     /// }
     /// ```
-    pub fn try_next_id(&self) -> Result<ID> {
-        loop {
-            match self.generators[self.next.get()].try_next_id()? {
-                IdGenStatus::Ready { id } => {
-                    self.next.set((self.next.get() + 1) % self.num_generators);
-                    return Ok(id);
-                }
-                IdGenStatus::Pending { .. } => {
-                    self.next.set((self.next.get() + 1) % self.num_generators);
-                    std::thread::yield_now();
-                }
-            }
-        }
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+        let i = self.next.get();
+        self.next.set((i + 1) % self.num_generators);
+        self.generators[i].try_next_id()
     }
 }
 
@@ -169,7 +165,12 @@ mod tests {
             let mut seen_ids = HashSet::with_capacity(TOTAL_IDS);
 
             for _ in 0..TOTAL_IDS {
-                let id = army.next_id();
+                let id = loop {
+                    match army.next_id() {
+                        IdGenStatus::Ready { id } => break id,
+                        IdGenStatus::Pending { .. } => std::hint::spin_loop(),
+                    }
+                };
                 assert!(seen_ids.insert(id), "Duplicate ID detected: {:?}", id);
                 *histogram.entry(id.machine_id()).or_insert(0) += 1;
             }

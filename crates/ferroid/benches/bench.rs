@@ -251,7 +251,13 @@ fn bench_single_army<G, ID, T>(
                     let start = Instant::now();
                     for _ in 0..iters {
                         for _ in 0..total_ids {
-                            black_box(army.next_id());
+                            let id = loop {
+                                match army.next_id() {
+                                    IdGenStatus::Ready { id } => break id,
+                                    IdGenStatus::Pending { .. } => std::hint::spin_loop(),
+                                }
+                            };
+                            black_box(id);
                         }
                     }
                     start.elapsed()

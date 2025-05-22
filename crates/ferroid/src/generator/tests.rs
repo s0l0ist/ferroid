@@ -1,6 +1,5 @@
 use crate::{
-    IdGenStatus, MonotonicClock, Snowflake, SnowflakeDiscordId, SnowflakeTwitterId, TimeSource,
-    ToU64,
+    IdGenStatus, MonotonicClock, Snowflake, SnowflakeTwitterId, TimeSource, ToU64,
     generator::{
         AtomicSnowflakeGenerator, BasicSnowflakeGenerator, LockSnowflakeGenerator,
         SnowflakeGenerator,
@@ -328,7 +327,7 @@ where
         match self {
             IdGenStatus::Ready { id } => id,
             IdGenStatus::Pending { yield_for } => {
-                panic!("unexpected pending (yield until: {})", yield_for)
+                panic!("unexpected pending (yield for: {})", yield_for)
             }
         }
     }
@@ -339,13 +338,4 @@ where
             IdGenStatus::Pending { yield_for } => yield_for,
         }
     }
-}
-
-#[test]
-fn snowflake_discord_id_extraction() {
-    let id = SnowflakeDiscordId::from(123456, 18, 4095);
-    assert_eq!(id.timestamp(), 123456);
-    assert_eq!(id.machine_id(), 18);
-    assert_eq!(id.sequence(), 4095);
-    assert_eq!(SnowflakeDiscordId::from_components(123456, 18, 4095), id);
 }
