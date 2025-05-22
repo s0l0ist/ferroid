@@ -16,7 +16,7 @@ use std::{
 ///
 /// The default implementation uses [`GeneratorFuture`] and a specified
 /// [`SleepProvider`] to yield when the generator is not yet ready.
-pub trait SnowflakeGeneratorAsyncExt<'a, ID, T> {
+pub trait SnowflakeGeneratorAsyncExt<ID, T> {
     /// Returns a future that resolves to the next available Snowflake ID.
     ///
     /// If the generator is not ready to issue a new ID immediately, the future
@@ -25,18 +25,22 @@ pub trait SnowflakeGeneratorAsyncExt<'a, ID, T> {
     /// # Errors
     ///
     /// This future may return an error if the generator encounters one.
-    fn try_next_id_async<S>(&'a self) -> impl Future<Output = Result<ID>> + 'a
+    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>> + 'a
     where
-        Self: SnowflakeGenerator<ID, T>,
+        Self: SnowflakeGenerator<ID, T> + 'a,
         ID: Snowflake + 'a,
         T: TimeSource<ID::Ty> + 'a,
         S: SleepProvider + 'a;
 }
 
-impl<'a, G, ID, T> SnowflakeGeneratorAsyncExt<'a, ID, T> for G {
-    fn try_next_id_async<S>(&'a self) -> impl Future<Output = Result<ID>> + 'a
+impl<G, ID, T> SnowflakeGeneratorAsyncExt<ID, T> for G
+where
+    G: SnowflakeGenerator<ID, T>,
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
+    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>> + 'a
     where
-        G: SnowflakeGenerator<ID, T>,
         ID: Snowflake + 'a,
         T: TimeSource<ID::Ty> + 'a,
         S: SleepProvider + 'a,
