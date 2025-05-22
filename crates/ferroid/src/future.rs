@@ -25,12 +25,12 @@ pub trait SnowflakeGeneratorAsyncExt<ID, T> {
     /// # Errors
     ///
     /// This future may return an error if the generator encounters one.
-    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>> + 'a
+    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>>
     where
-        Self: SnowflakeGenerator<ID, T> + 'a,
-        ID: Snowflake + 'a,
-        T: TimeSource<ID::Ty> + 'a,
-        S: SleepProvider + 'a;
+        Self: SnowflakeGenerator<ID, T>,
+        ID: Snowflake,
+        T: TimeSource<ID::Ty>,
+        S: SleepProvider;
 }
 
 impl<G, ID, T> SnowflakeGeneratorAsyncExt<ID, T> for G
@@ -39,11 +39,11 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
-    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>> + 'a
+    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>>
     where
-        ID: Snowflake + 'a,
-        T: TimeSource<ID::Ty> + 'a,
-        S: SleepProvider + 'a,
+        ID: Snowflake,
+        T: TimeSource<ID::Ty>,
+        S: SleepProvider,
     {
         GeneratorFuture::<'a, G, ID, T, S>::new(self)
     }
