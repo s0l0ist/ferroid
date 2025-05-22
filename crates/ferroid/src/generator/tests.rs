@@ -109,7 +109,7 @@ where
 fn run_generator_monotonic_threaded<G, ID, T>(make_generator: impl Fn() -> G)
 where
     G: SnowflakeGenerator<ID, T> + Send + Sync,
-    ID: Snowflake + PartialEq + Eq + Hash + Send + Sync,
+    ID: Snowflake + PartialEq + Eq + Hash + Send,
     T: TimeSource<ID::Ty>,
 {
     use std::collections::HashSet;
