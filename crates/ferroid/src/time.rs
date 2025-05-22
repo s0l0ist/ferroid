@@ -123,12 +123,13 @@ impl MonotonicClock {
     ///
     /// std::thread::sleep(Duration::from_millis(5));
     ///
-    /// let ts = clock.current_millis();
+    /// let ts: u64 = clock.current_millis();
     ///
-    /// // Due to differences in timer resolution across operating systems,
-    /// // this may not yield exactly 5 milliseconds, but it will
-    /// // be monotonically increasing.
-    /// // For example, Windows may delay longer.
+    /// // On most systems, this will report a value near 5 ms. However, due to
+    /// // small differences in timer alignment and sleep accuracy, the counter
+    /// // may be slightly behind. It's common to observe values like 4–6 ms
+    /// // after sleeping for 5 ms. The value will never go backward and is
+    /// // guaranteed to increase monotonically.
     /// // assert!(ts >= 5);
     /// ```
     ///
@@ -152,6 +153,12 @@ impl MonotonicClock {
             _handle: OnceLock::new(),
         });
 
+        // On most systems, this will report a value near 5 ms. However, due to
+        // small differences in timer alignment and sleep accuracy (especially
+        // on macOS and Windows), the counter may be slightly behind. It's
+        // common to observe values like 4–6 ms after sleeping for 5 ms. The
+        // value will never go backward and is guaranteed to increase
+        // monotonically.
         let weak_inner = Arc::downgrade(&inner);
         let handle = thread::spawn(move || {
             let start = start;
@@ -200,5 +207,13 @@ impl TimeSource<u64> for MonotonicClock {
     /// the elapsed monotonic time since construction.
     fn current_millis(&self) -> u64 {
         self.epoch_offset + self.inner.current.load(Ordering::Acquire)
+    }
+}
+
+impl TimeSource<u128> for MonotonicClock {
+    /// Returns the number of milliseconds since the configured epoch, based on
+    /// the elapsed monotonic time since construction.
+    fn current_millis(&self) -> u128 {
+        self.epoch_offset as u128 + self.inner.current.load(Ordering::Acquire) as u128
     }
 }

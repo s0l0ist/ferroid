@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, SnowflakeGenerator, TimeSource, id::Snowflake};
+use crate::{IdGenStatus, Result, SnowflakeGenerator, TimeSource, ToU64, id::Snowflake};
 use pin_project_lite::pin_project;
 use std::{
     future::Future,
@@ -13,7 +13,6 @@ pub trait AsyncSnowflakeGeneratorExt<'a, ID, T> {
     where
         Self: SnowflakeGenerator<ID, T>,
         ID: Snowflake + 'a,
-        ID::Ty: Into<u64>,
         T: TimeSource<ID::Ty> + 'a,
         S: SleepProvider + 'a;
 }
@@ -23,7 +22,6 @@ impl<'a, G, ID, T> AsyncSnowflakeGeneratorExt<'a, ID, T> for G {
     where
         G: SnowflakeGenerator<ID, T>,
         ID: Snowflake + 'a,
-        ID::Ty: Into<u64>,
         T: TimeSource<ID::Ty> + 'a,
         S: SleepProvider + 'a,
     {
@@ -82,7 +80,6 @@ where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
-    ID::Ty: Into<u64>,
     S: SleepProvider,
 {
     type Output = Result<ID>;
@@ -103,7 +100,7 @@ where
         match this.generator.try_next_id()? {
             IdGenStatus::Ready { id } => Poll::Ready(Ok(id)),
             IdGenStatus::Pending { yield_for } => {
-                let sleep_fut = S::sleep_for(Duration::from_millis(yield_for.into()));
+                let sleep_fut = S::sleep_for(Duration::from_millis(yield_for.to_u64()?));
                 this.sleep.as_mut().set(Some(sleep_fut));
                 cx.waker().wake_by_ref();
                 Poll::Pending

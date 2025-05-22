@@ -274,7 +274,6 @@ fn bench_generator_async_tokio<G, ID, T>(
 ) where
     G: SnowflakeGenerator<ID, T> + Send + 'static,
     ID: Snowflake + Send,
-    ID::Ty: Into<u64>,
     T: TimeSource<ID::Ty> + Clone + Send,
 {
     let mut group = c.benchmark_group(group_name);

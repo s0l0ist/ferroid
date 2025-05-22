@@ -158,7 +158,6 @@ mod tests {
         G: SnowflakeGenerator<ID, T>,
         ID: Snowflake + fmt::Debug,
         T: TimeSource<ID::Ty> + Clone,
-        ID::Ty: std::hash::Hash,
     {
         for num_generators in [1, 2, 4, 8, 16, 32] {
             let clock = clock_factory(); // create one shared clock
