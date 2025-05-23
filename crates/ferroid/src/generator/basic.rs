@@ -62,7 +62,7 @@ where
     /// ```
     /// use ferroid::{BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
     ///
-    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
+    /// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
     /// let id = generator.next_id();
     /// ```
     ///
@@ -121,7 +121,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    /// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.next_id() {
@@ -158,7 +158,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    /// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.try_next_id() {

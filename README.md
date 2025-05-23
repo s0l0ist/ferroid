@@ -44,6 +44,8 @@ All generators produce **monotonically increasing**, **time-ordered**, and
 
 ### Generate an ID
 
+#### Synchronous
+
 Calling `next_id()` may yield `Pending` if the current sequence is exhausted. In
 that case, you can spin, yield, or sleep depending on your environment:
 
@@ -51,7 +53,7 @@ that case, you can spin, yield, or sleep depending on your environment:
 use ferroid::{MonotonicClock, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
 
 let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
-let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(1, clock);
+let generator = BasicSnowflakeGenerator::new(0, clock);
 
 let id: SnowflakeTwitterId = loop {
     match generator.next_id() {
@@ -61,7 +63,6 @@ let id: SnowflakeTwitterId = loop {
             std::hint::spin_loop();
             // Use `std::hint::spin_loop()` for single-threaded or per-thread generators.
             // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
-            // Use `tokio::time::sleep().await` in async contexts (e.g., Tokio thread pool).
         }
     }
 };
@@ -69,15 +70,30 @@ let id: SnowflakeTwitterId = loop {
 println!("Generated ID: {}", id);
 ```
 
-Or use another pre-built layout such as `Mastodon`:
+#### Asynchronous
+
+If you're in an async context (e.g., using [Tokio](https://tokio.rs/)), you can
+use the `async-tokio` feature and import the `SnowflakeGeneratorAsyncExt` trait
+to await a new ID:
 
 ```rust
-use ferroid::{MonotonicClock, MASTODON_EPOCH, BasicSnowflakeGenerator, SnowflakeMastodonId, IdGenStatus};
+use ferroid::{
+    MonotonicClock, Result, MASTODON_EPOCH, AtomicSnowflakeGenerator, SnowflakeMastodonId,
+    SnowflakeGeneratorAsyncExt, TokioSleep,
+};
 
-let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-let mut generator = BasicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(1, clock);
+#[tokio::main]
+async fn main() -> Result<()> {
+    let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+    let generator =  AtomicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(0, clock);
 
-// loop as above
+    // Generate a non-blocking ID that sleeps if the generator isn't ready.
+    let id = generator.try_next_id_async::<TokioSleep>().await?;
+    println!("Generated ID: {}", id);
+
+    Ok(())
+}
+
 ```
 
 ### Custom Layouts
@@ -85,6 +101,7 @@ let mut generator = BasicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(1, cl
 To define a custom Snowflake layout, implement `Snowflake`:
 
 ```rust
+use core::fmt;
 use ferroid::Snowflake;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -93,7 +110,13 @@ struct MyCustomId {
 }
 
 impl Snowflake for MyCustomId {
-    // impl required methods
+    // ...
+}
+
+impl fmt::Display for MyCustomId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.id)
+    }
 }
 ```
 
@@ -110,7 +133,7 @@ Use `.to_padded_string()` or `.encode()` (enabled with `base32` feature) for
 sortable representations:
 
 ```rust
-use ferroid::{SnowflakeTwitterId};
+use ferroid::{SnowflakeTwitterId, SnowflakeBase32Ext};
 
 let id = SnowflakeTwitterId::from(123456, 1, 42);
 println!("default: {id}");

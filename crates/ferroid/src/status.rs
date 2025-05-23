@@ -22,7 +22,7 @@ use crate::Snowflake;
 ///     }
 /// }
 ///
-/// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
+/// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
 /// match generator.next_id() {
 ///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
 ///     IdGenStatus::Pending { yield_for } => println!("Back off until: {yield_for}"),
@@ -37,8 +37,8 @@ pub enum IdGenStatus<T: Snowflake> {
     },
     /// The generator is not ready to produce a new ID yet.
     ///
-    /// Wait for the specified number of milliseconds (`yield_for`)
-    /// before trying again.
+    /// Wait for the specified number of milliseconds (`yield_for`) before
+    /// trying again.
     Pending {
         /// Milliseconds to wait before the next attempt.
         yield_for: T::Ty,
