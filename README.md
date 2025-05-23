@@ -106,7 +106,8 @@ impl Snowflake for MyCustomId {
 
 ### Serialize as padded string
 
-Use `.to_padded_string()` or `.encode()` for sortable representations:
+Use `.to_padded_string()` or `.encode()` (enabled with `base32` feature) for
+sortable representations:
 
 ```rust
 use ferroid::{SnowflakeTwitterId};
@@ -149,7 +150,9 @@ generator instance. This eliminates contention and allows every thread to issue
 IDs independently at full speed.
 
 The thread-safe generators are primarily for convenience, or for use cases where
-ID generation is not expected to be the performance bottleneck. To run:
+ID generation is not expected to be the performance bottleneck.
+
+To run:
 
 ```sh
 cargo criterion --all-features
@@ -167,8 +170,10 @@ cargo test --all-features
 
 Licensed under either of:
 
-- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) ([LICENSE-APACHE](LICENSE-APACHE))
-- [MIT License](https://opensource.org/licenses/MIT) ([LICENSE-MIT](LICENSE-MIT))
+- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  ([LICENSE-APACHE](LICENSE-APACHE))
+- [MIT License](https://opensource.org/licenses/MIT)
+  ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
 

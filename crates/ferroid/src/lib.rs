@@ -1,4 +1,3 @@
-mod army;
 #[cfg(feature = "base32")]
 mod base32;
 mod error;
@@ -9,7 +8,6 @@ mod id;
 mod status;
 mod time;
 
-pub use crate::army::*;
 #[cfg(feature = "base32")]
 pub use crate::base32::*;
 pub use crate::error::*;

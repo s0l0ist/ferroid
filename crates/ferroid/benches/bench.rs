@@ -1,6 +1,6 @@
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use ferroid::{
-    Army, AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
+    AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
     MonotonicClock, Result, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt,
     SnowflakeTwitterId, TimeSource, TokioSleep,
 };
@@ -220,55 +220,6 @@ fn bench_generator_threaded_yield<G, ID, T>(
     group.finish();
 }
 
-/// Benchmark a single `Army` with the specified number of generators.  Measures
-/// end-to-end sync ID generation with spin looping. This represents the max
-/// throughput you can achieve using a N generators per CPU.
-fn bench_single_army<G, ID, T>(
-    c: &mut Criterion,
-    group_name: &str,
-    generator_fn: impl Fn(u64, T) -> G,
-    clock_factory: impl Fn() -> T,
-) where
-    G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
-    T: TimeSource<ID::Ty> + Clone,
-{
-    let total_ids = TOTAL_IDS * 256; // Enough to simulate at least 256 Pending cycles
-    let mut group = c.benchmark_group(group_name);
-
-    for num_generators in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512] {
-        group.throughput(Throughput::Elements(total_ids as u64));
-        group.bench_function(
-            format!("elems/{}/generators/{}", total_ids, num_generators),
-            |b| {
-                b.iter_custom(|iters| {
-                    let clock = clock_factory(); // create one shared clock
-                    let generators: Vec<_> = (0..num_generators)
-                        .map(|machine_id| generator_fn(machine_id, clock.clone()))
-                        .collect();
-                    let army = Army::new(generators);
-
-                    let start = Instant::now();
-                    for _ in 0..iters {
-                        for _ in 0..total_ids {
-                            let id = loop {
-                                match army.next_id() {
-                                    IdGenStatus::Ready { id } => break id,
-                                    IdGenStatus::Pending { .. } => std::hint::spin_loop(),
-                                }
-                            };
-                            black_box(id);
-                        }
-                    }
-                    start.elapsed()
-                });
-            },
-        );
-    }
-
-    group.finish();
-}
-
 /// Benchmarks the `BasicSnowflakeGenerator` using a Tokio multithreaded
 /// runtime. Each task owns a generator with a unique machine ID. Measures
 /// end-to-end async ID generation with yielding/sleeping. This represents the
@@ -340,6 +291,7 @@ fn bench_generator_async_tokio<G, ID, T>(
 
     group.finish();
 }
+
 /// Benchmarks a basic, single-threaded generator using a mock clock that never
 /// advances. Always returns `Ready`, so this exercises the fastest possible hot
 /// path.
@@ -427,16 +379,6 @@ fn benchmark_mono_threaded_atomic(c: &mut Criterion) {
     });
 }
 
-/// Benchmarks a pool of N basic generators on a single CPU for max synchronous saturation
-fn benchmark_mono_sequential_army_basic(c: &mut Criterion) {
-    bench_single_army::<_, SnowflakeTwitterId, _>(
-        c,
-        "mono/sequential/army/basic",
-        |machine_id, clock| BasicSnowflakeGenerator::new(machine_id, clock),
-        || MonotonicClock::default(),
-    )
-}
-
 /// Benchmarks a pool of N basic generators over M workers for max async saturation
 fn benchmark_mono_tokio_lock(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
@@ -471,8 +413,6 @@ criterion_group!(
     benchmark_mono_sequential_atomic,
     benchmark_mono_threaded_lock,
     benchmark_mono_threaded_atomic,
-    // Sync benchmark, using monotonic clocks
-    benchmark_mono_sequential_army_basic,
     // Async benchmark, using monotonic clocks
     benchmark_mono_tokio_lock,
     benchmark_mono_tokio_atomic,
