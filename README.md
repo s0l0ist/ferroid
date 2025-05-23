@@ -16,8 +16,6 @@ Features:
 - 📐 Customizable layouts via the `Snowflake` trait
 - 🔢 Lexicographically sortable string encoding
 
----
-
 ## 📦 Supported Layouts
 
 | Platform  | Timestamp Bits | Machine ID Bits | Sequence Bits | Epoch                   |
@@ -37,8 +35,6 @@ Features:
 
 All generators produce **monotonically increasing**, **time-ordered**, and
 **unique** IDs.
-
----
 
 ## 🚀 Usage
 
@@ -63,6 +59,7 @@ let id: SnowflakeTwitterId = loop {
             std::hint::spin_loop();
             // Use `std::hint::spin_loop()` for single-threaded or per-thread generators.
             // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
+            // Use `std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())` to sleep.
         }
     }
 };
@@ -93,7 +90,6 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
-
 ```
 
 ### Custom Layouts

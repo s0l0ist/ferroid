@@ -239,10 +239,10 @@ fn bench_generator_async_tokio<G, ID, T>(
     group.sample_size(10);
     group.sampling_mode(criterion::SamplingMode::Flat);
 
-    let total_ids = TOTAL_IDS * 1024; // Enough to simulate at least 256 Pending cycles
+    let total_ids = TOTAL_IDS * 1024; // Enough to simulate at least 1 Pending cycles when num_gens is 1024
 
-    for num_workers in [4, 8, 16] {
-        for num_generators in [64, 128, 256, 512, 1024] {
+    for num_workers in [1, 2, 4, 8, 16] {
+        for num_generators in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
             let ids_per_generator = total_ids / num_generators;
 
             group.throughput(Throughput::Elements(total_ids as u64));
