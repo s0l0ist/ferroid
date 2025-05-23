@@ -1,4 +1,4 @@
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
     AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
     MonotonicClock, Result, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt,
@@ -6,6 +6,7 @@ use ferroid::{
 };
 use futures::future::try_join_all;
 use std::{
+    hint::black_box,
     sync::{Arc, Barrier},
     thread::{scope, yield_now},
     time::Instant,
