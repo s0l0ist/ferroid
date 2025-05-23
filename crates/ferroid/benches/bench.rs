@@ -221,10 +221,56 @@ fn bench_generator_threaded_yield<G, ID, T>(
     group.finish();
 }
 
-/// Benchmarks the `BasicSnowflakeGenerator` using a Tokio multithreaded
-/// runtime. Each task owns a generator with a unique machine ID. Measures
-/// end-to-end async ID generation with yielding/sleeping. This represents the
-/// max throughput you can achieve using a tokio task per generator.
+/// Benchmarks the thread-safe generators using a Tokio multithreaded runtime.
+/// This represents the max throughput you can achieve using a single generator
+/// in tokio.
+fn bench_generator_sequential_async_tokio<G, ID, T>(
+    c: &mut Criterion,
+    group_name: &str,
+    generator_fn: impl Fn(u64, T) -> G + Copy,
+    clock_factory: impl Fn() -> T + Copy,
+) where
+    G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
+    ID: Snowflake + Send,
+    T: TimeSource<ID::Ty> + Clone + Send,
+{
+    let mut group = c.benchmark_group(group_name);
+    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+
+    group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
+        let rt = Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(1)
+            .build()
+            .expect("failed to build runtime");
+
+        b.to_async(&rt).iter_custom(|iters| async move {
+            let clock = clock_factory();
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                let generator = generator_fn(0, clock.clone());
+                for _ in 0..TOTAL_IDS {
+                    let id = generator.try_next_id_async::<TokioSleep>().await.unwrap();
+                    black_box(id);
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+}
+
+/// Benchmarks a thread-safe generator using a Tokio multithreaded runtime. Each
+/// Tokio task owns its own generator, uniquely identified by a machine ID. This
+/// measures the maximum throughput achievable when using one async task per
+/// generator, simulating a fully parallelized workload across N tasks and M
+/// logical generators.
+///
+/// The benchmark varies both the number of worker threads in the Tokio runtime
+/// and the number of independent generators, scaling from 1 to 1024 generators.
 fn bench_generator_async_tokio<G, ID, T>(
     c: &mut Criterion,
     group_name: &str,
@@ -380,21 +426,42 @@ fn benchmark_mono_threaded_atomic(c: &mut Criterion) {
     });
 }
 
-/// Benchmarks a pool of N basic generators over M workers for max async saturation
+/// Benchmarks a single async lock-based generator
+fn benchmark_mono_sequential_tokio_lock(c: &mut Criterion) {
+    bench_generator_sequential_async_tokio::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/sequential/async/tokio/lock",
+        |machine_id, clock| LockSnowflakeGenerator::new(machine_id, clock),
+        || MonotonicClock::default(),
+    );
+}
+/// Benchmarks a single async lock-free generator
+fn benchmark_mono_sequential_tokio_atomic(c: &mut Criterion) {
+    bench_generator_sequential_async_tokio::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/sequential/async/tokio/atomic",
+        |machine_id, clock| AtomicSnowflakeGenerator::new(machine_id, clock),
+        || MonotonicClock::default(),
+    );
+}
+
+/// Benchmarks a pool of N basic generators over M workers for max async
+/// saturation
 fn benchmark_mono_tokio_lock(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
-        "mono/async/tokio/lock",
+        "mono/multi/async/tokio/lock",
         |machine_id, clock| LockSnowflakeGenerator::new(machine_id, clock),
         || MonotonicClock::default(),
     );
 }
 
-/// Benchmarks a pool of N basic generators over M workers for max async saturation
+/// Benchmarks a pool of N basic generators over M workers for max async
+/// saturation
 fn benchmark_mono_tokio_atomic(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
-        "mono/async/tokio/atomic",
+        "mono/multi/async/tokio/atomic",
         |machine_id, clock| AtomicSnowflakeGenerator::new(machine_id, clock),
         || MonotonicClock::default(),
     );
@@ -414,7 +481,10 @@ criterion_group!(
     benchmark_mono_sequential_atomic,
     benchmark_mono_threaded_lock,
     benchmark_mono_threaded_atomic,
-    // Async benchmark, using monotonic clocks
+    // Async single worker, single generator
+    benchmark_mono_sequential_tokio_lock,
+    benchmark_mono_sequential_tokio_atomic,
+    // Async multi worker, multi generator
     benchmark_mono_tokio_lock,
     benchmark_mono_tokio_atomic,
 );
