@@ -19,7 +19,7 @@ pub const DISCORD_EPOCH: Duration = Duration::from_millis(1_420_070_400_000);
 /// Instagram epoch: Saturday, January 1, 2011 00:00:00 UTC
 pub const INSTAGRAM_EPOCH: Duration = Duration::from_millis(1_293_840_000_000);
 
-/// Mastodon uses standard UNIX epoch: Thursday, January 1, 1970 00:00:00 UTC
+/// Mastodon epoch: Thursday, January 1, 1970 00:00:00 UTC
 pub const MASTODON_EPOCH: Duration = Duration::from_millis(0);
 
 /// A trait for time sources that return a monotonic or wall-clock timestamp.
@@ -123,18 +123,21 @@ impl MonotonicClock {
     ///
     /// std::thread::sleep(Duration::from_millis(5));
     ///
-    /// let ts = clock.current_millis();
+    /// let ts: u64 = clock.current_millis();
     ///
-    /// // Due to differences in timer resolution across operating systems,
-    /// // this may not yield exactly 5 milliseconds, but it will
-    /// // be monotonically increasing.
-    /// // For example, Windows may delay longer.
+    /// // On most systems, this will report a value near 5 ms. However, due to
+    /// // small differences in timer alignment and sleep accuracy, the counter
+    /// // may be slightly behind. It's common to observe values like 4–6 ms
+    /// // after sleeping for 5 ms. The value will never go backward and is
+    /// // guaranteed to increase monotonically.
     /// // assert!(ts >= 5);
     /// ```
     ///
     /// This allows you to control the timestamp layout (e.g., Snowflake-style
     /// ID encoding) by anchoring all generated times to a custom epoch of your
     /// choosing.
+    ///
+    /// [`current_millis`]: TimeSource::current_millis
     pub fn with_epoch(epoch: Duration) -> Self {
         let start = Instant::now();
         let system_now = SystemTime::now()
@@ -150,6 +153,12 @@ impl MonotonicClock {
             _handle: OnceLock::new(),
         });
 
+        // On most systems, this will report a value near 5 ms. However, due to
+        // small differences in timer alignment and sleep accuracy (especially
+        // on macOS and Windows), the counter may be slightly behind. It's
+        // common to observe values like 4–6 ms after sleeping for 5 ms. The
+        // value will never go backward and is guaranteed to increase
+        // monotonically.
         let weak_inner = Arc::downgrade(&inner);
         let handle = thread::spawn(move || {
             let start = start;
@@ -201,17 +210,10 @@ impl TimeSource<u64> for MonotonicClock {
     }
 }
 
-// I'm including this test to check if the drop causes the thread to terminate.
-// Run this test manually by inserting a println into the inner loop
-// #[cfg(test)] mod tests { use super::*;
-//
-//     #[test]
-//     fn test_monotonic_clock_drop_terminates_thread() {
-//         use std::time::Duration;
-//
-//         let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
-//         std::thread::sleep(Duration::from_millis(1));
-//
-//         drop(clock);
-//     }
-// }
+impl TimeSource<u128> for MonotonicClock {
+    /// Returns the number of milliseconds since the configured epoch, based on
+    /// the elapsed monotonic time since construction.
+    fn current_millis(&self) -> u128 {
+        self.epoch_offset as u128 + self.inner.current.load(Ordering::Acquire) as u128
+    }
+}

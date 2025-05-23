@@ -24,7 +24,7 @@ use tracing::instrument;
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
-/// - You want the lowest possible latency under light-to-moderate contention
+/// - Fair access is sacrificed for higher throughput
 ///
 /// ## See Also
 /// - [`BasicSnowflakeGenerator`]
@@ -121,7 +121,8 @@ where
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
     /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// clock has not advanced), it returns [`IdGenStatus::Pending`].
+    /// clock has not advanced, or CAS fails), it returns
+    /// [`IdGenStatus::Pending`].
     ///
     /// # Panics
     /// This method currently has no fallible code paths, but may panic if an
@@ -134,7 +135,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.next_id() {
@@ -142,10 +143,8 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     IdGenStatus::Pending { yield_until } => {
-    ///         // This should rarely happen on the first call, but if it does,
-    ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///     IdGenStatus::Pending { yield_for } => {
+    ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     /// }
     /// ```
@@ -157,13 +156,14 @@ where
     ///
     /// This method attempts to generate the next ID based on the current time
     /// and internal state. If successful, it returns [`IdGenStatus::Ready`]
-    /// with a newly generated ID. If the generator is temporarily exhausted, it
-    /// returns [`IdGenStatus::Pending`]. If an internal failure occurs (e.g., a
-    /// time source or lock error), it returns an error.
+    /// with a newly generated ID. If the generator is temporarily exhausted or
+    /// CAS fails, it returns [`IdGenStatus::Pending`]. If an internal failure
+    /// occurs (e.g., a time source or lock error), it returns an error.
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_until })`: Wait for time to advance
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
+    ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
     /// # Example
@@ -172,7 +172,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.try_next_id() {
@@ -180,10 +180,8 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_until }) => {
-    ///         // This should rarely happen on the first call, but if it does,
-    ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///     Ok(IdGenStatus::Pending { yield_for }) => {
+    ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     ///     Err(err) => eprintln!("Generator error: {}", err),
     /// }
@@ -200,18 +198,16 @@ where
 
         let (next_ts, next_seq) = match now.cmp(&current_ts) {
             cmp::Ordering::Less => {
-                return Ok(IdGenStatus::Pending {
-                    yield_until: current_ts,
-                });
+                let yield_for = current_ts - now;
+                debug_assert!(yield_for >= ID::ZERO);
+                return Ok(IdGenStatus::Pending { yield_for });
             }
             cmp::Ordering::Greater => (now, ID::ZERO),
             cmp::Ordering::Equal => {
                 if seq < ID::max_sequence() {
                     (current_ts, seq + ID::ONE)
                 } else {
-                    return Ok(IdGenStatus::Pending {
-                        yield_until: current_ts + ID::ONE,
-                    });
+                    return Ok(IdGenStatus::Pending { yield_for: ID::ONE });
                 }
             }
         };
@@ -224,10 +220,12 @@ where
             .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            return Ok(IdGenStatus::Ready { id: next_id });
+            Ok(IdGenStatus::Ready { id: next_id })
         } else {
+            // CAS failed - another thread won the race. Yield 0 to retry
+            // immediately.
             Ok(IdGenStatus::Pending {
-                yield_until: ID::ZERO, // retry immediately
+                yield_for: ID::ZERO,
             })
         }
     }

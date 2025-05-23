@@ -16,8 +16,6 @@ Features:
 - 📐 Customizable layouts via the `Snowflake` trait
 - 🔢 Lexicographically sortable string encoding
 
----
-
 ## 📦 Supported Layouts
 
 | Platform  | Timestamp Bits | Machine ID Bits | Sequence Bits | Epoch                   |
@@ -38,11 +36,11 @@ Features:
 All generators produce **monotonically increasing**, **time-ordered**, and
 **unique** IDs.
 
----
-
 ## 🚀 Usage
 
 ### Generate an ID
+
+#### Synchronous
 
 Calling `next_id()` may yield `Pending` if the current sequence is exhausted. In
 that case, you can spin, yield, or sleep depending on your environment:
@@ -51,17 +49,17 @@ that case, you can spin, yield, or sleep depending on your environment:
 use ferroid::{MonotonicClock, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
 
 let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
-let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(1, clock);
+let generator = BasicSnowflakeGenerator::new(0, clock);
 
 let id: SnowflakeTwitterId = loop {
     match generator.next_id() {
         IdGenStatus::Ready { id } => break id,
-        IdGenStatus::Pending { yield_until } => {
-            println!("Exhausted; wait until: {}", yield_until);
+        IdGenStatus::Pending { yield_for } => {
+            println!("Exhausted; wait for: {}ms", yield_for);
             std::hint::spin_loop();
             // Use `std::hint::spin_loop()` for single-threaded or per-thread generators.
             // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
-            // Use `tokio::time::sleep().await` in async contexts (e.g., Tokio thread pool).
+            // Use `std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())` to sleep.
         }
     }
 };
@@ -69,37 +67,53 @@ let id: SnowflakeTwitterId = loop {
 println!("Generated ID: {}", id);
 ```
 
-Or use another pre-built layout such as `Mastodon`:
+#### Asynchronous
+
+If you're in an async context (e.g., using [Tokio](https://tokio.rs/)), you can
+use the `async-tokio` feature and import the `SnowflakeGeneratorAsyncExt` trait
+to await a new ID:
 
 ```rust
-use ferroid::{MonotonicClock, MASTODON_EPOCH, BasicSnowflakeGenerator, SnowflakeMastodonId, IdGenStatus};
+use ferroid::{
+    MonotonicClock, Result, MASTODON_EPOCH, AtomicSnowflakeGenerator, SnowflakeMastodonId,
+    SnowflakeGeneratorAsyncExt, TokioSleep,
+};
 
-let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-let mut generator = BasicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(1, clock);
+#[tokio::main]
+async fn main() -> Result<()> {
+    let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+    let generator =  AtomicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(0, clock);
 
-// loop as above
+    // Generate a non-blocking ID that sleeps if the generator isn't ready.
+    let id = generator.try_next_id_async::<TokioSleep>().await?;
+    println!("Generated ID: {}", id);
+
+    Ok(())
+}
 ```
 
 ### Custom Layouts
 
-To define a custom Snowflake layout, implement `Snowflake` and optionally
-`Base32`:
+To define a custom Snowflake layout, implement `Snowflake`:
 
 ```rust
-use ferroid::{Snowflake, Base32};
+use core::fmt;
+use ferroid::Snowflake;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct MyCustomId {
     id: u64,
 }
 
-// required
 impl Snowflake for MyCustomId {
-    // impl required methods
+    // ...
 }
 
-// optional, only if you need it
-impl Base32 for MyCustomId {}
+impl fmt::Display for MyCustomId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.id)
+    }
+}
 ```
 
 ### Behavior
@@ -111,10 +125,11 @@ impl Base32 for MyCustomId {}
 
 ### Serialize as padded string
 
-Use `.to_padded_string()` or `.encode()` for sortable representations:
+Use `.to_padded_string()` or `.encode()` (enabled with `base32` feature) for
+sortable representations:
 
 ```rust
-use ferroid::{SnowflakeTwitterId};
+use ferroid::{SnowflakeTwitterId, SnowflakeBase32Ext};
 
 let id = SnowflakeTwitterId::from(123456, 1, 42);
 println!("default: {id}");
@@ -154,10 +169,12 @@ generator instance. This eliminates contention and allows every thread to issue
 IDs independently at full speed.
 
 The thread-safe generators are primarily for convenience, or for use cases where
-ID generation is not expected to be the performance bottleneck. To run:
+ID generation is not expected to be the performance bottleneck.
+
+To run:
 
 ```sh
-cargo criterion
+cargo criterion --all-features
 ```
 
 ## 🧪 Testing
@@ -172,8 +189,10 @@ cargo test --all-features
 
 Licensed under either of:
 
-- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) ([LICENSE-APACHE](LICENSE-APACHE))
-- [MIT License](https://opensource.org/licenses/MIT) ([LICENSE-MIT](LICENSE-MIT))
+- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  ([LICENSE-APACHE](LICENSE-APACHE))
+- [MIT License](https://opensource.org/licenses/MIT)
+  ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
 

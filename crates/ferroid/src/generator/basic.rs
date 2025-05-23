@@ -1,5 +1,5 @@
 use crate::{IdGenStatus, Result, Snowflake, TimeSource};
-use std::cmp::Ordering;
+use std::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -14,7 +14,7 @@ use tracing::instrument;
 /// - ✅ Safely implement any [`Snowflake`] layout
 ///
 /// ## Recommended When
-/// - You're in a single-threaded environment
+/// - You're in a single-threaded environment (no shared access)
 /// - You want the fastest generator
 ///
 /// ## See Also
@@ -28,7 +28,7 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
-    state: ID,
+    state: Cell<ID>,
     time: T,
 }
 
@@ -62,7 +62,7 @@ where
     /// ```
     /// use ferroid::{BasicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
     ///
-    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
+    /// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
     /// let id = generator.next_id();
     /// ```
     ///
@@ -99,7 +99,7 @@ where
     ) -> Self {
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
-            state: id,
+            state: Cell::new(id),
             time: clock,
         }
     }
@@ -121,7 +121,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    /// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.next_id() {
@@ -129,14 +129,12 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     IdGenStatus::Pending { yield_until } => {
-    ///         // This should rarely happen on the first call, but if it does,
-    ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///     IdGenStatus::Pending { yield_for } => {
+    ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     /// }
     /// ```
-    pub fn next_id(&mut self) -> IdGenStatus<ID> {
+    pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
     }
 
@@ -150,7 +148,8 @@ where
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_until })`: Wait for time to advance
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
+    ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
     /// # Example
@@ -159,7 +158,7 @@ where
     ///
     /// // Create a clock and a generator with machine_id = 0
     /// let clock = MonotonicClock::default();
-    /// let mut generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    /// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// match generator.try_next_id() {
@@ -167,35 +166,36 @@ where
     ///         println!("ID: {}", id);
     ///         assert_eq!(id.machine_id(), 0);
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_until }) => {
-    ///         // This should rarely happen on the first call, but if it does,
-    ///         // backoff or yield and try again.
-    ///         println!("Exhausted; wait until: {}", yield_until);
+    ///     Ok(IdGenStatus::Pending { yield_for }) => {
+    ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     ///     Err(err) => eprintln!("Generator error: {}", err),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&mut self) -> Result<IdGenStatus<ID>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
         let now = self.time.current_millis();
-        let current_ts = self.state.timestamp();
+        let state = self.state.get();
+        let current_ts = state.timestamp();
 
         let status = match now.cmp(&current_ts) {
-            Ordering::Less => IdGenStatus::Pending {
-                yield_until: current_ts,
-            },
+            Ordering::Less => {
+                let yield_for = current_ts - now;
+                debug_assert!(yield_for >= ID::ZERO);
+                IdGenStatus::Pending { yield_for }
+            }
             Ordering::Greater => {
-                self.state = self.state.rollover_to_timestamp(now);
-                IdGenStatus::Ready { id: self.state }
+                let updated = state.rollover_to_timestamp(now);
+                self.state.set(updated);
+                IdGenStatus::Ready { id: updated }
             }
             Ordering::Equal => {
-                if self.state.has_sequence_room() {
-                    self.state = self.state.increment_sequence();
-                    IdGenStatus::Ready { id: self.state }
+                if state.has_sequence_room() {
+                    let updated = state.increment_sequence();
+                    self.state.set(updated);
+                    IdGenStatus::Ready { id: updated }
                 } else {
-                    IdGenStatus::Pending {
-                        yield_until: current_ts + ID::ONE,
-                    }
+                    IdGenStatus::Pending { yield_for: ID::ONE }
                 }
             }
         };

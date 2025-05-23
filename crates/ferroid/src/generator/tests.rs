@@ -1,8 +1,8 @@
 use crate::{
-    IdGenStatus, MonotonicClock, Snowflake, SnowflakeDiscordId, SnowflakeTwitterId, TimeSource,
+    IdGenStatus, MonotonicClock, Snowflake, SnowflakeTwitterId, TimeSource, ToU64,
     generator::{
         AtomicSnowflakeGenerator, BasicSnowflakeGenerator, LockSnowflakeGenerator,
-        MultithreadedSnowflakeGenerator, SnowflakeGenerator,
+        SnowflakeGenerator,
     },
 };
 use core::fmt;
@@ -19,65 +19,61 @@ impl TimeSource<u64> for MockTime {
     }
 }
 
-fn run_id_sequence_increments_within_same_tick<G, ID, T>(mut generator: G)
+fn run_id_sequence_increments_within_same_tick<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
-    ID::Ty: fmt::Debug + fmt::Display,
     T: TimeSource<ID::Ty>,
 {
-    let id1 = generator.next().unwrap_ready();
-    let id2 = generator.next().unwrap_ready();
-    let id3 = generator.next().unwrap_ready();
+    let id1 = generator.next_id().unwrap_ready();
+    let id2 = generator.next_id().unwrap_ready();
+    let id3 = generator.next_id().unwrap_ready();
 
-    assert_eq!(id1.timestamp(), 42_u64.into());
-    assert_eq!(id2.timestamp(), 42_u64.into());
-    assert_eq!(id3.timestamp(), 42_u64.into());
-    assert_eq!(id1.sequence(), 0_u64.into());
-    assert_eq!(id2.sequence(), 1_u64.into());
-    assert_eq!(id3.sequence(), 2_u64.into());
+    assert_eq!(id1.timestamp().to_u64().unwrap(), 42);
+    assert_eq!(id2.timestamp().to_u64().unwrap(), 42);
+    assert_eq!(id3.timestamp().to_u64().unwrap(), 42);
+    assert_eq!(id1.sequence().to_u64().unwrap(), 0);
+    assert_eq!(id2.sequence().to_u64().unwrap(), 1);
+    assert_eq!(id3.sequence().to_u64().unwrap(), 2);
     assert!(id1 < id2 && id2 < id3);
 }
 
-fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(mut generator: G)
+fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
-    ID::Ty: fmt::Debug + fmt::Display,
     T: TimeSource<ID::Ty>,
 {
-    let yield_until = generator.next().unwrap_pending();
-    assert_eq!(yield_until, ID::ONE);
+    let yield_for = generator.next_id().unwrap_pending();
+    assert_eq!(yield_for, ID::ONE);
 }
 
-fn run_generator_handles_rollover<G, ID, T>(mut generator: G, shared_time: SharedMockStepTime)
+fn run_generator_handles_rollover<G, ID, T>(generator: G, shared_time: SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug + fmt::Display,
-    ID::Ty: fmt::Debug + fmt::Display,
     T: TimeSource<ID::Ty>,
 {
-    for i in 0..=ID::max_sequence().into() {
-        let id = generator.next().unwrap_ready();
-        assert_eq!(id.sequence(), i.into());
-        assert_eq!(id.timestamp(), 42_u64.into());
+    for i in 0..=ID::max_sequence().to_u64().unwrap() {
+        let id = generator.next_id().unwrap_ready();
+        assert_eq!(id.sequence().to_u64().unwrap(), i);
+        assert_eq!(id.timestamp().to_u64().unwrap(), 42);
     }
 
-    let yield_until = generator.next().unwrap_pending();
-    assert_eq!(yield_until, 43_u64.into());
+    let yield_for = generator.next_id().unwrap_pending();
+    assert_eq!(yield_for, ID::ONE);
 
     shared_time.clock.index.set(1);
 
-    let id = generator.next().unwrap_ready();
-    assert_eq!(id.timestamp(), 43_u64.into());
-    assert_eq!(id.sequence(), 0_u64.into());
+    let id = generator.next_id().unwrap_ready();
+    assert_eq!(id.timestamp().to_u64().unwrap(), 43);
+    assert_eq!(id.sequence().to_u64().unwrap(), 0);
 }
 
-fn run_generator_monotonic<G, ID, T>(mut generator: G)
+fn run_generator_monotonic<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake + fmt::Debug,
-    ID::Ty: fmt::Debug,
     T: TimeSource<ID::Ty>,
 {
     let mut last_timestamp = ID::ZERO;
@@ -86,7 +82,7 @@ where
 
     for _ in 0..TOTAL_IDS {
         loop {
-            match generator.next() {
+            match generator.next_id() {
                 IdGenStatus::Ready { id } => {
                     let ts = id.timestamp();
                     if ts > last_timestamp {
@@ -111,8 +107,8 @@ where
 
 fn run_generator_monotonic_threaded<G, ID, T>(make_generator: impl Fn() -> G)
 where
-    G: MultithreadedSnowflakeGenerator<ID, T> + Send + Sync,
-    ID: Snowflake + PartialEq + Eq + Hash + Send + Sync,
+    G: SnowflakeGenerator<ID, T> + Send + Sync,
+    ID: Snowflake + PartialEq + Eq + Hash + Send,
     T: TimeSource<ID::Ty>,
 {
     use std::collections::HashSet;
@@ -134,7 +130,7 @@ where
             s.spawn(move || {
                 for _ in 0..IDS_PER_THREAD {
                     loop {
-                        match generator.next() {
+                        match generator.next_id() {
                             IdGenStatus::Ready { id } => {
                                 let mut set = seen_ids.lock().unwrap();
                                 assert!(set.insert(id));
@@ -330,8 +326,8 @@ where
     fn unwrap_ready(self) -> T {
         match self {
             IdGenStatus::Ready { id } => id,
-            IdGenStatus::Pending { yield_until } => {
-                panic!("unexpected pending (yield until: {})", yield_until)
+            IdGenStatus::Pending { yield_for } => {
+                panic!("unexpected pending (yield for: {})", yield_for)
             }
         }
     }
@@ -339,16 +335,7 @@ where
     fn unwrap_pending(self) -> T::Ty {
         match self {
             IdGenStatus::Ready { id } => panic!("unexpected ready ({})", id),
-            IdGenStatus::Pending { yield_until } => yield_until,
+            IdGenStatus::Pending { yield_for } => yield_for,
         }
     }
-}
-
-#[test]
-fn snowflake_discord_id_extraction() {
-    let id = SnowflakeDiscordId::from(123456, 18, 4095);
-    assert_eq!(id.timestamp(), 123456);
-    assert_eq!(id.machine_id(), 18);
-    assert_eq!(id.sequence(), 4095);
-    assert_eq!(SnowflakeDiscordId::from_components(123456, 18, 4095), id);
 }

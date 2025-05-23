@@ -7,10 +7,14 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug, From)]
 pub enum Error {
     LockPoisoned,
+    FailedToU64,
     #[cfg(feature = "base32")]
     DecodeNonAsciiValue,
     #[cfg(feature = "base32")]
     DecodeInvalidLen,
+    #[cfg(feature = "async-tokio")]
+    #[from]
+    JoinError(tokio::task::JoinError),
 }
 
 impl fmt::Display for Error {

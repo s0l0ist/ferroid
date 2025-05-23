@@ -1,8 +1,49 @@
+use crate::{Error, Result};
 use core::fmt;
 use std::{
     hash::Hash,
     ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
+
+/// Trait for converting numeric-like values into a `u64`.
+///
+/// This is typically used to normalize custom duration types into milliseconds
+/// for compatibility with APIs like [`std::time::Duration::from_millis`], which
+/// are commonly required in async sleep contexts such as
+/// [`tokio::time::sleep`].
+pub trait ToU64 {
+    fn to_u64(self) -> Result<u64>;
+}
+
+impl ToU64 for u8 {
+    fn to_u64(self) -> Result<u64> {
+        Ok(self as u64)
+    }
+}
+
+impl ToU64 for u16 {
+    fn to_u64(self) -> Result<u64> {
+        Ok(self as u64)
+    }
+}
+
+impl ToU64 for u32 {
+    fn to_u64(self) -> Result<u64> {
+        Ok(self as u64)
+    }
+}
+
+impl ToU64 for u64 {
+    fn to_u64(self) -> Result<u64> {
+        Ok(self)
+    }
+}
+
+impl ToU64 for u128 {
+    fn to_u64(self) -> Result<u64> {
+        self.try_into().map_err(|_| Error::FailedToU64)
+    }
+}
 
 /// A trait representing a layout-compatible Snowflake ID generator.
 ///
@@ -25,8 +66,8 @@ pub trait Snowflake:
     Sized + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
     /// Scalar type for all bit fields (typically `u64`)
-    type Ty: Ord
-        + Copy
+    type Ty: Copy
+        + Clone
         + Add<Output = Self::Ty>
         + AddAssign
         + Sub<Output = Self::Ty>
@@ -36,12 +77,13 @@ pub trait Snowflake:
         + Div<Output = Self::Ty>
         + DivAssign
         + Into<Self::Ty>
-        + Into<u64>
         + From<Self::Ty>
-        + From<u8>
-        + From<u16>
-        + From<u32>
-        + From<u64>
+        + Ord
+        + PartialOrd
+        + Eq
+        + PartialEq
+        + Hash
+        + ToU64
         + fmt::Debug
         + fmt::Display;
 
@@ -101,15 +143,21 @@ pub trait Snowflake:
     fn to_padded_string(&self) -> String;
 }
 
-/// A 64-bit Snowflake ID using the classic Twitter layout
+/// A 64-bit Snowflake ID using the Twitter layout
 ///
-/// - 41 bits timestamp
-/// - 10 bits machine ID
+/// - 1 bit reserved
+/// - 41 bits timestamp (ms since [`TWITTER_EPOCH`])
+/// - 10 bits machine ID (worker ID (5) and process ID (5))
 /// - 12 bits sequence
 ///
 /// ```text
-/// | reserved (1) | timestamp (41) | machine_id (10) | sequence (12) |
+///  Bit Index:  63           63 62            22 21             12 11             0
+///              +--------------+----------------+-----------------+---------------+
+///  Field:      | reserved (1) | timestamp (41) | machine ID (10) | sequence (12) |
+///              +--------------+----------------+-----------------+---------------+
+///              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
 /// ```
+/// [`TWITTER_EPOCH`]: crate::TWITTER_EPOCH
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SnowflakeTwitterId {
@@ -117,8 +165,8 @@ pub struct SnowflakeTwitterId {
 }
 
 impl SnowflakeTwitterId {
-    /// Bitmask for extracting the 41-bit timestamp field from a packed ID.
-    /// Stored in bits 22 through 62 (excluding the sign bit at bit 63).
+    /// Bitmask for extracting the 41-bit timestamp field. Occupies bits 22
+    /// through 62.
     pub const TIMESTAMP_MASK: u64 = (1 << 41) - 1;
 
     /// Bitmask for extracting the 10-bit machine ID field. Occupies bits 12
@@ -129,14 +177,13 @@ impl SnowflakeTwitterId {
     /// through 11.
     pub const SEQUENCE_MASK: u64 = (1 << 12) - 1;
 
-    /// Number of bits to shift the timestamp to its correct position (bit 22).
+    /// Number of bits to shift the timestamp to its correct position (bit 23).
     pub const TIMESTAMP_SHIFT: u64 = 22;
 
-    /// Number of bits to shift the machine ID to its correct position (bit 12).
+    /// Number of bits to shift the machine ID to its correct position (bit 10).
     pub const MACHINE_ID_SHIFT: u64 = 12;
 
-    /// Number of bits to shift the sequence field (always 0, since it starts at
-    /// the LSB).
+    /// Number of bits to shift the sequence field (bit 0).
     pub const SEQUENCE_SHIFT: u64 = 0;
 
     pub const fn from(timestamp: u64, machine_id: u64, sequence: u64) -> Self {
@@ -227,17 +274,18 @@ impl fmt::Display for SnowflakeTwitterId {
 
 /// A 64-bit Snowflake ID using the Discord layout
 ///
-/// NOTE: To keep the API the same, we're collapsing their notation of machine
-/// and process id into the same number of bits.
-///
-/// - 42 bits timestamp (ms since Discord epoch: Jan 1, 2015 UTC)
-/// - 10 bits internal worker ID (5) and process ID (5), combined into
-///   machine_id (10)
+/// - 42 bits timestamp (ms since [`DISCORD_EPOCH`])
+/// - 10 bits machine ID (worker ID (5) and process ID (5))
 /// - 12 bits sequence
 ///
 /// ```text
-/// | timestamp (42) | machine_id (10) | sequence (12) |
+///  Bit Index:  63             22 21             12 11             0
+///              +----------------+-----------------+---------------+
+///  Field:      | timestamp (42) | machine ID (10) | sequence (12) |
+///              +----------------+-----------------+---------------+
+///              |<----- MSB ---------- 64 bits --------- LSB ----->|
 /// ```
+/// [`DISCORD_EPOCH`]: crate::DISCORD_EPOCH
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SnowflakeDiscordId {
@@ -245,8 +293,8 @@ pub struct SnowflakeDiscordId {
 }
 
 impl SnowflakeDiscordId {
-    /// Bitmask for extracting the 42-bit timestamp field from a packed ID.
-    /// Occupies bits 22 through 63 (most significant bits).
+    /// Bitmask for extracting the 42-bit timestamp field. Occupies bits 22
+    /// through 63.
     pub const TIMESTAMP_MASK: u64 = (1 << 42) - 1;
 
     /// Bitmask for extracting the 10-bit machine ID field. Occupies bits 12
@@ -257,15 +305,13 @@ impl SnowflakeDiscordId {
     /// through 11.
     pub const SEQUENCE_MASK: u64 = (1 << 12) - 1;
 
-    /// Number of bits to shift the timestamp to its correct position (starting
-    /// at bit 22).
+    /// Number of bits to shift the timestamp to its correct position (bit 22).
     pub const TIMESTAMP_SHIFT: u64 = 22;
 
-    /// Number of bits to shift the process/machine ID to its correct position.
+    /// Number of bits to shift the machine ID to its correct position (bit 12).
     pub const MACHINE_ID_SHIFT: u64 = 12;
 
-    /// Number of bits to shift the sequence field (starts at the least
-    /// significant bit).
+    /// Number of bits to shift the sequence field (bit 0).
     pub const SEQUENCE_SHIFT: u64 = 0;
 
     pub const fn from(timestamp: u64, machine_id: u64, sequence: u64) -> Self {
@@ -355,12 +401,17 @@ impl fmt::Display for SnowflakeDiscordId {
 
 /// A 64-bit Snowflake ID using the Mastodon layout
 ///
-/// - 48 bits timestamp (ms since UNIX epoch)
+/// - 48 bits timestamp (ms since [`MASTODON_EPOCH`])
 /// - 16 bits sequence
 ///
 /// ```text
-/// | timestamp (48) | sequence (16) |
+///  Bit Index:  63             16 15             0
+///              +----------------+---------------+
+///  Field:      | timestamp (48) | sequence (16) |
+///              +----------------+---------------+
+///              |<--- MSB --- 64 bits -- LSB --->|
 /// ```
+/// [`MASTODON_EPOCH`]: crate::MASTODON_EPOCH
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SnowflakeMastodonId {
@@ -368,19 +419,18 @@ pub struct SnowflakeMastodonId {
 }
 
 impl SnowflakeMastodonId {
-    /// Mask for 48-bit timestamp field (used to extract the upper 48 bits).
-    /// This corresponds to millisecond precision since the UNIX epoch.
+    /// Bitmask for extracting the 48-bit timestamp field. Occupies bits 16
+    /// through 63.
     pub const TIMESTAMP_MASK: u64 = (1 << 48) - 1;
 
-    /// Mask for 16-bit sequence field (used to extract the lower 16 bits). This
-    /// provides up to 65,536 unique IDs per millisecond.
+    /// Bitmask for extracting the 16-bit sequence field. Occupies bits 0
+    /// through 15.
     pub const SEQUENCE_MASK: u64 = (1 << 16) - 1;
 
-    /// Bit offset for timestamp (starts at bit 16, leaving room for 16-bit
-    /// sequence).
+    /// Number of bits to shift the timestamp to its correct position (bit 16).
     pub const TIMESTAMP_SHIFT: u64 = 16;
 
-    /// Bit offset for sequence (least significant 16 bits).
+    /// Number of bits to shift the sequence field (bit 0).
     pub const SEQUENCE_SHIFT: u64 = 0;
 
     pub const fn from(timestamp: u64, sequence: u64) -> Self {
@@ -463,13 +513,18 @@ impl fmt::Display for SnowflakeMastodonId {
 
 /// A 64-bit Snowflake ID using the Instagram layout
 ///
-/// - 41 bits timestamp (ms since UNIX epoch)
+/// - 41 bits timestamp (ms since [`INSTAGRAM_EPOCH`])
 /// - 13 bits machine ID
 /// - 10 bits sequence
 ///
 /// ```text
-/// | timestamp (41) | machine(13) | sequence (10) |
+///  Bit Index:  63             23 22             10 9              0
+///              +----------------+-----------------+---------------+
+///  Field:      | timestamp (41) | machine ID (13) | sequence (10) |
+///              +----------------+-----------------+---------------+
+///              |<----- MSB ---------- 64 bits --------- LSB ----->|
 /// ```
+/// [`INSTAGRAM_EPOCH`]: crate::INSTAGRAM_EPOCH
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SnowflakeInstagramId {
@@ -477,26 +532,25 @@ pub struct SnowflakeInstagramId {
 }
 
 impl SnowflakeInstagramId {
-    /// Mask for 41-bit timestamp field (milliseconds since a custom epoch).
-    /// Ensures timestamps stay within the expected range and fit in the upper
-    /// bits.
+    /// Bitmask for extracting the 41-bit timestamp field. Occupies bits 23
+    /// through 63.
     pub const TIMESTAMP_MASK: u64 = (1 << 41) - 1;
 
-    /// Mask for 13-bit machine ID field (shard or datacenter). Supports up to
-    /// 8192 unique machine IDs.
+    /// Bitmask for extracting the 13-bit machine ID field. Occupies bits 10
+    /// through 22.
     pub const MACHINE_ID_MASK: u64 = (1 << 13) - 1;
 
-    /// Mask for 10-bit sequence field. Allows up to 1024 unique IDs to be
-    /// generated per millisecond per machine.
+    /// Bitmask for extracting the 10-bit sequence field. Occupies bits 0
+    /// through 9.
     pub const SEQUENCE_MASK: u64 = (1 << 10) - 1;
 
-    /// Bit offset for timestamp (starts at bit 23).
+    /// Number of bits to shift the timestamp to its correct position (bit 23).
     pub const TIMESTAMP_SHIFT: u64 = 23;
 
-    /// Bit offset for machine ID (starts at bit 10).
+    /// Number of bits to shift the machine ID to its correct position (bit 10).
     pub const MACHINE_ID_SHIFT: u64 = 10;
 
-    /// Bit offset for sequence (least significant 10 bits).
+    /// Number of bits to shift the sequence field (bit 0).
     pub const SEQUENCE_SHIFT: u64 = 0;
 
     pub const fn from(timestamp: u64, machine_id: u64, sequence: u64) -> Self {
@@ -592,36 +646,146 @@ impl fmt::Display for SnowflakeInstagramId {
     }
 }
 
+/// A 128-bit Snowflake ID using a hybrid layout.
+///
+/// - 40 bits reserved
+/// - 48 bits timestamp (ms since [`CUSTOM_EPOCH`])
+/// - 20 bits machine ID
+/// - 20 bits sequence
+///
+/// ```text
+///  Bit Index:  127                88 87            40 39             20 19             0
+///              +--------------------+----------------+-----------------+---------------+
+///  Field:      | reserved (40 bits) | timestamp (48) | machine ID (20) | sequence (20) |
+///              +--------------------+----------------+-----------------+---------------+
+///              |<--- HI 64 bits --->|<------------------- LO 64 bits ----------------->|
+///              |<- MSB ------ LSB ->|<----- MSB ---------- 64 bits --------- LSB ----->|
+/// ```
+/// [`CUSTOM_EPOCH`]: crate::CUSTOM_EPOCH
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SnowflakeLongId {
+    id: u128,
+}
+
+impl SnowflakeLongId {
+    /// Bitmask for extracting the 48-bit timestamp field. Occupies bits 40
+    /// through 87.
+    pub const TIMESTAMP_MASK: u128 = (1 << 48) - 1;
+
+    /// Bitmask for extracting the 20-bit machine ID field. Occupies bits 20
+    /// through 39.
+    pub const MACHINE_ID_MASK: u128 = (1 << 20) - 1;
+
+    /// Bitmask for extracting the 20-bit sequence field. Occupies bits 0
+    /// through 19.
+    pub const SEQUENCE_MASK: u128 = (1 << 20) - 1;
+
+    /// Number of bits to shift the timestamp to its correct position (bit 40).
+    pub const TIMESTAMP_SHIFT: u128 = 40;
+
+    /// Number of bits to shift the machine ID to its correct position (bit 20).
+    pub const MACHINE_ID_SHIFT: u128 = 20;
+
+    /// Number of bits to shift the sequence field (bit 0).
+    pub const SEQUENCE_SHIFT: u128 = 0;
+
+    pub const fn from(timestamp: u128, machine_id: u128, sequence: u128) -> Self {
+        let timestamp = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
+        let machine_id = (machine_id & Self::MACHINE_ID_MASK) << Self::MACHINE_ID_SHIFT;
+        let sequence = (sequence & Self::SEQUENCE_MASK) << Self::SEQUENCE_SHIFT;
+        Self {
+            id: timestamp | machine_id | sequence,
+        }
+    }
+
+    /// Extracts the timestamp from the packed ID.
+    pub const fn timestamp(&self) -> u128 {
+        (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
+    }
+
+    /// Extracts the machine ID from the packed ID.
+    pub const fn machine_id(&self) -> u128 {
+        (self.id >> Self::MACHINE_ID_SHIFT) & Self::MACHINE_ID_MASK
+    }
+
+    /// Extracts the sequence number from the packed ID.
+    pub const fn sequence(&self) -> u128 {
+        (self.id >> Self::SEQUENCE_SHIFT) & Self::SEQUENCE_MASK
+    }
+
+    /// Returns the ID as a zero-padded 39-digit string.
+    pub fn to_padded_string(&self) -> String {
+        format!("{:039}", self.id)
+    }
+}
+
+impl Snowflake for SnowflakeLongId {
+    type Ty = u128;
+    const ZERO: Self::Ty = 0;
+    const ONE: Self::Ty = 1;
+
+    fn timestamp(&self) -> Self::Ty {
+        self.timestamp()
+    }
+
+    fn max_timestamp() -> Self::Ty {
+        Self::TIMESTAMP_MASK
+    }
+
+    fn machine_id(&self) -> Self::Ty {
+        self.machine_id()
+    }
+
+    fn max_machine_id() -> Self::Ty {
+        Self::MACHINE_ID_MASK
+    }
+
+    fn sequence(&self) -> Self::Ty {
+        self.sequence()
+    }
+
+    fn max_sequence() -> Self::Ty {
+        Self::SEQUENCE_MASK
+    }
+
+    fn from_components(timestamp: Self::Ty, machine_id: Self::Ty, sequence: Self::Ty) -> Self {
+        debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
+        debug_assert!(machine_id <= Self::MACHINE_ID_MASK, "machine_id overflow");
+        debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
+        Self::from(timestamp, machine_id, sequence)
+    }
+
+    fn to_raw(&self) -> Self::Ty {
+        self.id
+    }
+
+    fn from_raw(raw: Self::Ty) -> Self {
+        Self { id: raw }
+    }
+
+    fn increment_sequence(&self) -> Self {
+        Self::from_components(self.timestamp(), self.machine_id(), self.next_sequence())
+    }
+
+    fn rollover_to_timestamp(&self, ts: Self::Ty) -> Self {
+        Self::from_components(ts, self.machine_id(), Self::ZERO)
+    }
+
+    fn to_padded_string(&self) -> String {
+        self.to_padded_string()
+    }
+}
+
+impl fmt::Display for SnowflakeLongId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.id)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_snowflake_instagram_id_fields_and_bounds() {
-        let ts = SnowflakeInstagramId::max_timestamp();
-        let mid = SnowflakeInstagramId::max_machine_id();
-        let seq = SnowflakeInstagramId::max_sequence();
-
-        let id = SnowflakeInstagramId::from(ts, mid, seq);
-
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeInstagramId::from_components(ts, mid, seq), id);
-    }
-
-    #[test]
-    fn test_snowflake_mastodon_id_fields_and_bounds() {
-        let ts = SnowflakeMastodonId::max_timestamp();
-        let seq = SnowflakeMastodonId::max_sequence();
-
-        let id = SnowflakeMastodonId::from(ts, seq);
-
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), 0); // no machine_id
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeMastodonId::from_components(ts, 0, seq), id);
-    }
 
     #[test]
     fn test_snowflake_twitter_id_fields_and_bounds() {
@@ -649,6 +813,47 @@ mod tests {
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
         assert_eq!(SnowflakeDiscordId::from_components(ts, mid, seq), id);
+    }
+
+    #[test]
+    fn test_snowflake_mastodon_id_fields_and_bounds() {
+        let ts = SnowflakeMastodonId::max_timestamp();
+        let seq = SnowflakeMastodonId::max_sequence();
+
+        let id = SnowflakeMastodonId::from(ts, seq);
+
+        assert_eq!(id.timestamp(), ts);
+        assert_eq!(id.machine_id(), 0); // no machine_id
+        assert_eq!(id.sequence(), seq);
+        assert_eq!(SnowflakeMastodonId::from_components(ts, 0, seq), id);
+    }
+
+    #[test]
+    fn test_snowflake_instagram_id_fields_and_bounds() {
+        let ts = SnowflakeInstagramId::max_timestamp();
+        let mid = SnowflakeInstagramId::max_machine_id();
+        let seq = SnowflakeInstagramId::max_sequence();
+
+        let id = SnowflakeInstagramId::from(ts, mid, seq);
+
+        assert_eq!(id.timestamp(), ts);
+        assert_eq!(id.machine_id(), mid);
+        assert_eq!(id.sequence(), seq);
+        assert_eq!(SnowflakeInstagramId::from_components(ts, mid, seq), id);
+    }
+
+    #[test]
+    fn test_snowflake_long_id_fields_and_bounds() {
+        let ts = SnowflakeLongId::max_timestamp();
+        let mid = SnowflakeLongId::max_machine_id();
+        let seq = SnowflakeLongId::max_sequence();
+
+        let id = SnowflakeLongId::from(ts, mid, seq);
+
+        assert_eq!(id.timestamp(), ts);
+        assert_eq!(id.machine_id(), mid);
+        assert_eq!(id.sequence(), seq);
+        assert_eq!(SnowflakeLongId::from_components(ts, mid, seq), id);
     }
 
     #[test]
@@ -695,6 +900,20 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "timestamp overflow")]
+    fn mastodon_timestamp_overflow_panics() {
+        let ts = SnowflakeMastodonId::max_timestamp() + 1;
+        SnowflakeMastodonId::from_components(ts, 0, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "sequence overflow")]
+    fn mastodon_sequence_overflow_panics() {
+        let seq = SnowflakeMastodonId::max_sequence() + 1;
+        SnowflakeMastodonId::from_components(0, 0, seq);
+    }
+
+    #[test]
+    #[should_panic(expected = "timestamp overflow")]
     fn instagram_timestamp_overflow_panics() {
         let ts = SnowflakeInstagramId::max_timestamp() + 1;
         SnowflakeInstagramId::from_components(ts, 0, 0);
@@ -716,15 +935,22 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "timestamp overflow")]
-    fn mastodon_timestamp_overflow_panics() {
-        let ts = SnowflakeMastodonId::max_timestamp() + 1;
-        SnowflakeMastodonId::from_components(ts, 0, 0);
+    fn long_timestamp_overflow_panics() {
+        let ts = SnowflakeLongId::max_timestamp() + 1;
+        SnowflakeLongId::from_components(ts, 0, 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "machine_id overflow")]
+    fn long_machine_id_overflow_panics() {
+        let mid = SnowflakeLongId::max_machine_id() + 1;
+        SnowflakeLongId::from_components(0, mid, 0);
     }
 
     #[test]
     #[should_panic(expected = "sequence overflow")]
-    fn mastodon_sequence_overflow_panics() {
-        let seq = SnowflakeMastodonId::max_sequence() + 1;
-        SnowflakeMastodonId::from_components(0, 0, seq);
+    fn long_sequence_overflow_panics() {
+        let seq = SnowflakeLongId::max_sequence() + 1;
+        SnowflakeLongId::from_components(0, 0, seq);
     }
 }
