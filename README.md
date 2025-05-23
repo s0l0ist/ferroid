@@ -159,6 +159,44 @@ Benchmark scenarios include:
 - Single-threaded with/without a real clock
 - Multi-threaded with/without a real clock
 
+Here's a snapshot of peak single-core throughput on a MacBook Pro 14" M1 (8
+performance + 2 efficiency cores), measured under ideal conditions where the
+generator never yields. These numbers reflect the upper bounds of real-clock
+performance:
+
+```bash
+mono/sequential/basic/elems/4096
+    time:   [11.747 µs 11.809 µs 11.885 µs]
+    thrpt:  [344.63 Melem/s 346.85 Melem/s 348.69 Melem/s]
+
+mono/sequential/lock/elems/4096
+    time:   [38.026 µs 38.076 µs 38.134 µs]
+    thrpt:  [107.41 Melem/s 107.58 Melem/s 107.72 Melem/s]
+
+mono/sequential/atomic/elems/4096
+    time:   [13.016 µs 13.055 µs 13.104 µs]
+    thrpt:  [312.59 Melem/s 313.76 Melem/s 314.68 Melem/s]
+```
+
+And here's the equivalent theoretical maximum throughput in an async context
+using a `Tokio` runtime:
+
+```bash
+mono/sequential/async/tokio/lock/elems/4096
+    time:   [38.993 µs 39.033 µs 39.075 µs]
+    thrpt:  [104.82 Melem/s 104.94 Melem/s 105.04 Melem/s]
+
+mono/sequential/async/tokio/atomic/elems/4096
+    time:   [22.046 µs 22.097 µs 22.171 µs]
+    thrpt:  [184.74 Melem/s 185.36 Melem/s 185.80 Melem/s]
+```
+
+To run all benchmarks:
+
+```sh
+cargo criterion --all-features
+```
+
 **NOTE**: Shared generators (like `LockSnowflakeGenerator` and
 `AtomicSnowflakeGenerator`) can slow down under high thread contention. This
 happens because threads must coordinate access - either through mutex locks or
@@ -170,12 +208,6 @@ IDs independently at full speed.
 
 The thread-safe generators are primarily for convenience, or for use cases where
 ID generation is not expected to be the performance bottleneck.
-
-To run:
-
-```sh
-cargo criterion --all-features
-```
 
 ## 🧪 Testing
 
