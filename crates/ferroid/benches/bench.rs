@@ -406,8 +406,8 @@ fn benchmark_mono_sequential_tokio_lock(c: &mut Criterion) {
     bench_generator_sequential_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
         "mono/sequential/async/tokio/lock",
-        |machine_id, clock| LockSnowflakeGenerator::new(machine_id, clock),
-        || MonotonicClock::default(),
+        LockSnowflakeGenerator::new,
+        MonotonicClock::default,
     );
 }
 
@@ -417,8 +417,8 @@ fn benchmark_mono_sequential_tokio_atomic(c: &mut Criterion) {
     bench_generator_sequential_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
         "mono/sequential/async/tokio/atomic",
-        |machine_id, clock| AtomicSnowflakeGenerator::new(machine_id, clock),
-        || MonotonicClock::default(),
+        AtomicSnowflakeGenerator::new,
+        MonotonicClock::default,
     );
 }
 
@@ -428,8 +428,8 @@ fn benchmark_mono_tokio_lock(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
         "mono/multi/async/tokio/lock",
-        |machine_id, clock| LockSnowflakeGenerator::new(machine_id, clock),
-        || MonotonicClock::default(),
+        LockSnowflakeGenerator::new,
+        MonotonicClock::default,
     );
 }
 
@@ -439,8 +439,8 @@ fn benchmark_mono_tokio_atomic(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
         "mono/multi/async/tokio/atomic",
-        |machine_id, clock| AtomicSnowflakeGenerator::new(machine_id, clock),
-        || MonotonicClock::default(),
+        AtomicSnowflakeGenerator::new,
+        MonotonicClock::default,
     );
 }
 

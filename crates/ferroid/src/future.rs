@@ -25,7 +25,7 @@ pub trait SnowflakeGeneratorAsyncExt<ID, T> {
     /// # Errors
     ///
     /// This future may return an error if the generator encounters one.
-    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>>
+    fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID>>
     where
         Self: SnowflakeGenerator<ID, T>,
         ID: Snowflake,
@@ -169,8 +169,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_lock() -> Result<()> {
         test_many_unique_ids::<_, SnowflakeTwitterId, MonotonicClock>(
-            |machine_id, clock| LockSnowflakeGenerator::new(machine_id, clock),
-            || MonotonicClock::default(),
+            LockSnowflakeGenerator::new,
+            MonotonicClock::default,
         )
         .await
     }
@@ -178,8 +178,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic() -> Result<()> {
         test_many_unique_ids::<_, SnowflakeTwitterId, MonotonicClock>(
-            |machine_id, clock| AtomicSnowflakeGenerator::new(machine_id, clock),
-            || MonotonicClock::default(),
+            AtomicSnowflakeGenerator::new,
+            MonotonicClock::default,
         )
         .await
     }
@@ -216,8 +216,7 @@ mod tests {
         let all_ids: Vec<_> = try_join_all(tasks)
             .await?
             .into_iter()
-            .map(Result::unwrap)
-            .flatten()
+            .flat_map(Result::unwrap)
             .collect();
 
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
