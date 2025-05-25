@@ -21,6 +21,13 @@ impl SleepProvider for SmolSleep {
 }
 
 pin_project! {
+    /// Internal future returned by [`SmolSleep::sleep_for`].
+    ///
+    /// This type wraps a [`smol::Timer`] and implements [`Future`] with `Output =
+    /// ()`, discarding the timer's `Instant` result.
+    ///
+    /// You should not construct or use this type directly. It is only used
+    /// internally by the [`SleepProvider`] implementation for the Smol runtime.
     #[must_use = "futures do nothing unless you `.await` or poll them"]
     pub struct SmolSleepFuture {
         #[pin]

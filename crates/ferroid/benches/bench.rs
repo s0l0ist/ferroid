@@ -496,8 +496,8 @@ fn benchmark_mono_threaded_atomic(c: &mut Criterion) {
 
 // --- ASYNC (Tokio) ---
 
-/// Async benchmark for a single `LockSnowflakeGenerator` using
-/// `MonotonicClock` for tokio.
+/// Async benchmark for a single `LockSnowflakeGenerator` using `MonotonicClock`
+/// for tokio.
 fn benchmark_mono_sequential_tokio_lock(c: &mut Criterion) {
     bench_generator_sequential_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
@@ -518,8 +518,8 @@ fn benchmark_mono_sequential_tokio_atomic(c: &mut Criterion) {
     );
 }
 
-/// Async benchmark for a single `LockSnowflakeGenerator` using
-/// `MonotonicClock` for smol.
+/// Async benchmark for a single `LockSnowflakeGenerator` using `MonotonicClock`
+/// for smol.
 fn benchmark_mono_sequential_smol_lock(c: &mut Criterion) {
     bench_generator_sequential_async_smol::<_, SnowflakeTwitterId, _>(
         c,
@@ -540,8 +540,8 @@ fn benchmark_mono_sequential_smol_atomic(c: &mut Criterion) {
     );
 }
 
-/// Async benchmark for a pool of `LockSnowflakeGenerator`s distributed across tokio
-/// tasks.
+/// Async benchmark for a pool of `LockSnowflakeGenerator`s distributed across
+/// tokio tasks.
 fn benchmark_mono_tokio_lock(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
@@ -551,8 +551,8 @@ fn benchmark_mono_tokio_lock(c: &mut Criterion) {
     );
 }
 
-/// Async benchmark for a pool of `AtomicSnowflakeGenerator`s distributed across tokio
-/// tasks.
+/// Async benchmark for a pool of `AtomicSnowflakeGenerator`s distributed across
+/// tokio tasks.
 fn benchmark_mono_tokio_atomic(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
@@ -562,8 +562,8 @@ fn benchmark_mono_tokio_atomic(c: &mut Criterion) {
     );
 }
 
-/// Async benchmark for a pool of `LockSnowflakeGenerator`s distributed across smol
-/// tasks.
+/// Async benchmark for a pool of `LockSnowflakeGenerator`s distributed across
+/// smol tasks.
 fn benchmark_mono_smol_lock(c: &mut Criterion) {
     bench_generator_async_smol::<_, SnowflakeTwitterId, _>(
         c,
@@ -573,8 +573,8 @@ fn benchmark_mono_smol_lock(c: &mut Criterion) {
     );
 }
 
-/// Async benchmark for a pool of `AtomicSnowflakeGenerator`s distributed across smol
-/// tasks.
+/// Async benchmark for a pool of `AtomicSnowflakeGenerator`s distributed across
+/// smol tasks.
 fn benchmark_mono_smol_atomic(c: &mut Criterion) {
     bench_generator_async_smol::<_, SnowflakeTwitterId, _>(
         c,
@@ -597,7 +597,8 @@ criterion_group!(
     benchmark_mono_sequential_lock,
     benchmark_mono_sequential_atomic,
     benchmark_mono_threaded_lock,
-    benchmark_mono_threaded_atomic, // Async single worker, single generator
+    benchmark_mono_threaded_atomic,
+    // Async single worker, single generator
     benchmark_mono_sequential_tokio_lock,
     benchmark_mono_sequential_tokio_atomic,
     benchmark_mono_sequential_smol_lock,
