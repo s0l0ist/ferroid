@@ -83,14 +83,14 @@ Tokio Example
 
 ```rust
 use ferroid::{
-    AtomicSnowflakeGenerator, MonotonicClock, Result, SnowflakeGeneratorAsyncExt,
-    SnowflakeMastodonId, TokioSleep, MASTODON_EPOCH,
+    AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SnowflakeGeneratorAsyncExt,
+    SnowflakeMastodonId, TokioSleep,
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-    let generator = AtomicSnowflakeGeneratornew(0, clock);
+    let generator = AtomicSnowflakeGenerator::new(0, clock);
 
     let id: SnowflakeMastodonId = generator.try_next_id_async::<TokioSleep>().await?;
     println!("Generated ID: {}", id);
@@ -103,8 +103,8 @@ Smol Example
 
 ```rust
 use ferroid::{
-    AtomicSnowflakeGenerator, MonotonicClock, Result, SnowflakeGeneratorAsyncExt,
-    SnowflakeMastodonId, SmolSleep, MASTODON_EPOCH,
+    AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SmolSleep,
+    SnowflakeGeneratorAsyncExt, SnowflakeMastodonId,
 };
 
 fn main() -> Result<()> {
