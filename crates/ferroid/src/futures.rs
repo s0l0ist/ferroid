@@ -53,7 +53,7 @@ where
 /// contexts.
 ///
 /// This allows the generator to be generic over runtimes like `Tokio` or
-/// `async-std`.
+/// `Smol`.
 pub trait SleepProvider {
     type Sleep: Future<Output = ()>;
 
