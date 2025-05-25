@@ -24,9 +24,11 @@ base32 = { workspace = true, optional = true }
 futures = { workspace = true, optional = true, features = ["alloc"] }
 pin-project-lite = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["time", "rt-multi-thread", "macros"] }
+smol = { workspace = true, optional = true }
 
 [dev-dependencies]
-criterion = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
+num_cpus = { workspace = true }
 
 [[bench]]
 name = "bench"
@@ -38,4 +40,5 @@ tracing = ["dep:tracing"]
 serde = ["dep:serde"]
 base32 = ["dep:base32"]
 futures = ["dep:futures", "dep:pin-project-lite"]
-async-tokio = ["futures", "dep:tokio", "criterion/async_tokio"]
+async-tokio = ["futures", "dep:tokio"]
+async-smol = ["futures", "dep:smol"]

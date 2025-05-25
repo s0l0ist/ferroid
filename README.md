@@ -69,26 +69,54 @@ println!("Generated ID: {}", id);
 
 #### Asynchronous
 
-If you're in an async context (e.g., using [Tokio](https://tokio.rs/)), you can
-use the `async-tokio` feature and import the `SnowflakeGeneratorAsyncExt` trait
-to await a new ID:
+If you're in an async context (e.g., using [Tokio](https://tokio.rs/) or
+[Smol](https://github.com/smol-rs/smol)), you can enable one of the following
+features:
+
+- `async-tokio` - for integration with the Tokio runtime
+- `async-smol` - for integration with the Smol runtime
+
+Then, import the [SnowflakeGeneratorAsyncExt] trait to asynchronously request a
+new ID. The generator will yield (sleep_for) if it's not ready yet.
+
+Tokio Example
 
 ```rust
 use ferroid::{
-    MonotonicClock, Result, MASTODON_EPOCH, AtomicSnowflakeGenerator, SnowflakeMastodonId,
-    SnowflakeGeneratorAsyncExt, TokioSleep,
+    AtomicSnowflakeGenerator, MonotonicClock, Result, SnowflakeGeneratorAsyncExt,
+    SnowflakeMastodonId, TokioSleep, MASTODON_EPOCH,
 };
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-    let generator =  AtomicSnowflakeGenerator::<SnowflakeMastodonId, _>::new(0, clock);
+    let generator = AtomicSnowflakeGeneratornew(0, clock);
 
-    // Generate a non-blocking ID that sleeps if the generator isn't ready.
-    let id = generator.try_next_id_async::<TokioSleep>().await?;
+    let id: SnowflakeMastodonId = generator.try_next_id_async::<TokioSleep>().await?;
     println!("Generated ID: {}", id);
 
     Ok(())
+}
+```
+
+Smol Example
+
+```rust
+use ferroid::{
+    AtomicSnowflakeGenerator, MonotonicClock, Result, SnowflakeGeneratorAsyncExt,
+    SnowflakeMastodonId, SmolSleep, MASTODON_EPOCH,
+};
+
+fn main() -> Result<()> {
+    smol::block_on(async {
+        let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+        let generator = AtomicSnowflakeGenerator::new(0, clock);
+
+        let id: SnowflakeMastodonId = generator.try_next_id_async::<SmolSleep>().await?;
+        println!("Generated ID: {}", id);
+
+        Ok(())
+    })
 }
 ```
 
