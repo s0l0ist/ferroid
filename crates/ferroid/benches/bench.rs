@@ -1,10 +1,12 @@
+use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
     AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
-    MonotonicClock, Result, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt,
+    MonotonicClock, Result, SmolSleep, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt,
     SnowflakeTwitterId, TimeSource, TokioSleep,
 };
 use futures::future::try_join_all;
+use smol::Task;
 use std::{
     hint::black_box,
     sync::{Arc, Barrier},
@@ -251,6 +253,42 @@ fn bench_generator_sequential_async_tokio<G, ID, T>(
     group.finish();
 }
 
+/// Benchmarks a single async generator on one Smol thread.
+fn bench_generator_sequential_async_smol<G, ID, T>(
+    c: &mut Criterion,
+    group_name: &str,
+    generator_fn: impl Fn(u64, T) -> G + Copy,
+    clock_factory: impl Fn() -> T + Copy,
+) where
+    G: SnowflakeGenerator<ID, T>,
+    ID: Snowflake,
+    T: TimeSource<ID::Ty> + Clone,
+{
+    unsafe { std::env::remove_var("SMOL_THREADS") };
+
+    let mut group = c.benchmark_group(group_name);
+    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+
+    group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
+        b.to_async(SmolExecutor).iter_custom(|iters| async move {
+            let clock = clock_factory();
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                let generator = generator_fn(0, clock.clone());
+                for _ in 0..TOTAL_IDS {
+                    let id = generator.try_next_id_async::<SmolSleep>().await.unwrap();
+                    black_box(id);
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+}
+
 /// Benchmarks many async generators in parallel, each running in a separate
 /// task.
 fn bench_generator_async_tokio<G, ID, T>(
@@ -300,6 +338,64 @@ fn bench_generator_async_tokio<G, ID, T>(
                         for result in try_join_all(tasks).await.unwrap() {
                             result.unwrap();
                         }
+                    }
+
+                    start.elapsed()
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+/// Benchmarks many async generators in parallel, each running in a separate
+/// `smol` task.
+pub fn bench_generator_async_smol<G, ID, T>(
+    c: &mut Criterion,
+    group_name: &str,
+    generator_fn: impl Fn(u64, T) -> G + Copy,
+    clock_factory: impl Fn() -> T + Copy,
+) where
+    G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
+    ID: Snowflake + Send,
+    T: TimeSource<ID::Ty> + Clone + Send,
+{
+    // Use all CPUs
+    unsafe { std::env::set_var("SMOL_THREADS", num_cpus::get().to_string()) };
+
+    let mut group = c.benchmark_group(group_name);
+    group.sample_size(10);
+    group.sampling_mode(criterion::SamplingMode::Flat);
+
+    let total_ids = TOTAL_IDS * 1024;
+
+    for num_generators in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
+        let ids_per_task = total_ids / num_generators;
+
+        group.throughput(Throughput::Elements(total_ids as u64));
+        group.bench_function(
+            format!("elems/{}/gens/{}", total_ids, num_generators),
+            |b| {
+                b.to_async(SmolExecutor).iter_custom(|iters| async move {
+                    let clock = clock_factory();
+                    let start = Instant::now();
+
+                    for _ in 0..iters {
+                        let mut tasks: Vec<Task<Result<()>>> = Vec::with_capacity(num_generators);
+
+                        for i in 0..num_generators {
+                            let generator = generator_fn(i as u64, clock.clone());
+                            tasks.push(smol::spawn(async move {
+                                for _ in 0..ids_per_task {
+                                    let id = generator.try_next_id_async::<SmolSleep>().await?;
+                                    black_box(id);
+                                }
+                                Ok(())
+                            }));
+                        }
+
+                        try_join_all(tasks).await.unwrap();
                     }
 
                     start.elapsed()
@@ -400,8 +496,8 @@ fn benchmark_mono_threaded_atomic(c: &mut Criterion) {
 
 // --- ASYNC (Tokio) ---
 
-/// Async benchmark for a single `LockSnowflakeGenerator` using
-/// `MonotonicClock`.
+/// Async benchmark for a single `LockSnowflakeGenerator` using `MonotonicClock`
+/// for tokio.
 fn benchmark_mono_sequential_tokio_lock(c: &mut Criterion) {
     bench_generator_sequential_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
@@ -412,7 +508,7 @@ fn benchmark_mono_sequential_tokio_lock(c: &mut Criterion) {
 }
 
 /// Async benchmark for a single `AtomicSnowflakeGenerator` using
-/// `MonotonicClock`.
+/// `MonotonicClock` for tokio.
 fn benchmark_mono_sequential_tokio_atomic(c: &mut Criterion) {
     bench_generator_sequential_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
@@ -422,8 +518,30 @@ fn benchmark_mono_sequential_tokio_atomic(c: &mut Criterion) {
     );
 }
 
+/// Async benchmark for a single `LockSnowflakeGenerator` using `MonotonicClock`
+/// for smol.
+fn benchmark_mono_sequential_smol_lock(c: &mut Criterion) {
+    bench_generator_sequential_async_smol::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/sequential/async/smol/lock",
+        LockSnowflakeGenerator::new,
+        MonotonicClock::default,
+    );
+}
+
+/// Async benchmark for a single `AtomicSnowflakeGenerator` using
+/// `MonotonicClock` for smol.
+fn benchmark_mono_sequential_smol_atomic(c: &mut Criterion) {
+    bench_generator_sequential_async_smol::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/sequential/async/smol/atomic",
+        AtomicSnowflakeGenerator::new,
+        MonotonicClock::default,
+    );
+}
+
 /// Async benchmark for a pool of `LockSnowflakeGenerator`s distributed across
-/// tasks.
+/// tokio tasks.
 fn benchmark_mono_tokio_lock(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
@@ -434,11 +552,33 @@ fn benchmark_mono_tokio_lock(c: &mut Criterion) {
 }
 
 /// Async benchmark for a pool of `AtomicSnowflakeGenerator`s distributed across
-/// tasks.
+/// tokio tasks.
 fn benchmark_mono_tokio_atomic(c: &mut Criterion) {
     bench_generator_async_tokio::<_, SnowflakeTwitterId, _>(
         c,
         "mono/multi/async/tokio/atomic",
+        AtomicSnowflakeGenerator::new,
+        MonotonicClock::default,
+    );
+}
+
+/// Async benchmark for a pool of `LockSnowflakeGenerator`s distributed across
+/// smol tasks.
+fn benchmark_mono_smol_lock(c: &mut Criterion) {
+    bench_generator_async_smol::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/multi/async/smol/lock",
+        LockSnowflakeGenerator::new,
+        MonotonicClock::default,
+    );
+}
+
+/// Async benchmark for a pool of `AtomicSnowflakeGenerator`s distributed across
+/// smol tasks.
+fn benchmark_mono_smol_atomic(c: &mut Criterion) {
+    bench_generator_async_smol::<_, SnowflakeTwitterId, _>(
+        c,
+        "mono/multi/async/smol/atomic",
         AtomicSnowflakeGenerator::new,
         MonotonicClock::default,
     );
@@ -457,11 +597,16 @@ criterion_group!(
     benchmark_mono_sequential_lock,
     benchmark_mono_sequential_atomic,
     benchmark_mono_threaded_lock,
-    benchmark_mono_threaded_atomic, // Async single worker, single generator
+    benchmark_mono_threaded_atomic,
+    // Async single worker, single generator
     benchmark_mono_sequential_tokio_lock,
-    benchmark_mono_sequential_tokio_atomic, // Async multi worker, multi
-    // generator
+    benchmark_mono_sequential_tokio_atomic,
+    benchmark_mono_sequential_smol_lock,
+    benchmark_mono_sequential_smol_atomic,
+    // Async multi worker, multi generator
     benchmark_mono_tokio_lock,
     benchmark_mono_tokio_atomic,
+    benchmark_mono_smol_lock,
+    benchmark_mono_smol_atomic,
 );
 criterion_main!(benches);

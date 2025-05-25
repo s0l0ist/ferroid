@@ -51,7 +51,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: Snowflake + Send + fmt::Debug + 'static,
+        ID: Snowflake + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
     {
         let clock = clock_factory();
