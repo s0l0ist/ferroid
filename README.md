@@ -76,8 +76,8 @@ features:
 - `async-tokio` - for integration with the Tokio runtime
 - `async-smol` - for integration with the Smol runtime
 
-Then, import the corresponding [SnowflakeGeneratorAsyncTokioExt] or
-[SnowflakeGeneratorAsyncSmolExt] trait to asynchronously request a new ID
+Then, import the corresponding `SnowflakeGeneratorAsyncTokioExt` or
+`SnowflakeGeneratorAsyncSmolExt` trait to asynchronously request a new ID
 without blocking or spinning.
 
 Tokio Example

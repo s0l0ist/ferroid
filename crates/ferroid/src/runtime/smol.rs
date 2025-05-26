@@ -17,12 +17,15 @@ pub trait SnowflakeGeneratorAsyncSmolExt<ID, T> {
     /// the [`SmolSleep`] provider.
     ///
     /// Internally delegates to
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] with [`SmolSleep`] as
-    /// the sleep strategy.
+    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] method with
+    /// [`SmolSleep`] as the sleep strategy.
     ///
     /// # Errors
     ///
     /// This future may return an error if the underlying generator does.
+    ///
+    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
+    ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>
     where
         Self: SnowflakeGenerator<ID, T>,
