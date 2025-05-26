@@ -1,4 +1,39 @@
-use crate::SleepProvider;
+use crate::{Result, SleepProvider, Snowflake, SnowflakeGenerator, TimeSource};
+
+/// Extension trait for asynchronously generating Snowflake IDs using the
+/// [`tokio`](https://docs.rs/tokio) async runtime.
+///
+/// This trait provides a convenience method for using a [`SleepProvider`]
+/// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
+/// without specifying the sleep strategy manually.
+pub trait SnowflakeGeneratorAsyncTokioExt<ID, T> {
+    /// Returns a future that resolves to the next available Snowflake ID using
+    /// the [`TokioSleep`] provider.
+    ///
+    /// Internally delegates to
+    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] with [`TokioSleep`] as
+    /// the sleep strategy.
+    ///
+    /// # Errors
+    ///
+    /// This future may return an error if the underlying generator does.
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>
+    where
+        Self: SnowflakeGenerator<ID, T>,
+        ID: Snowflake,
+        T: TimeSource<ID::Ty>;
+}
+
+impl<G, ID, T> SnowflakeGeneratorAsyncTokioExt<ID, T> for G
+where
+    G: SnowflakeGenerator<ID, T>,
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+        <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<TokioSleep>(self)
+    }
+}
 
 /// An implementation of [`SleepProvider`] using Tokio’s timer.
 ///
@@ -17,7 +52,7 @@ mod tests {
     use super::*;
     use crate::{
         AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, Snowflake,
-        SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, TimeSource,
+        SnowflakeGenerator, SnowflakeTwitterId, TimeSource,
     };
     use core::fmt;
     use futures::future::try_join_all;
@@ -66,7 +101,7 @@ mod tests {
                 tokio::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = g.try_next_id_async::<TokioSleep>().await?;
+                        let id = g.try_next_id_async().await?;
                         ids.push(id);
                     }
                     Ok(ids)

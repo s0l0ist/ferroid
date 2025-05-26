@@ -1,10 +1,45 @@
-use crate::SleepProvider;
+use crate::{Result, SleepProvider, Snowflake, SnowflakeGenerator, TimeSource};
 use pin_project_lite::pin_project;
 use smol::Timer;
 use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+
+/// Extension trait for asynchronously generating Snowflake IDs using the
+/// [`smol`](https://docs.rs/smol) async runtime.
+///
+/// This trait provides a convenience method for using a [`SleepProvider`]
+/// backed by the `smol` runtime, allowing you to call `.try_next_id_async()`
+/// without needing to specify the sleep strategy manually.
+pub trait SnowflakeGeneratorAsyncSmolExt<ID, T> {
+    /// Returns a future that resolves to the next available Snowflake ID using
+    /// the [`SmolSleep`] provider.
+    ///
+    /// Internally delegates to
+    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] with [`SmolSleep`] as
+    /// the sleep strategy.
+    ///
+    /// # Errors
+    ///
+    /// This future may return an error if the underlying generator does.
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>
+    where
+        Self: SnowflakeGenerator<ID, T>,
+        ID: Snowflake,
+        T: TimeSource<ID::Ty>;
+}
+
+impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
+where
+    G: SnowflakeGenerator<ID, T>,
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+        <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<SmolSleep>(self)
+    }
+}
 
 /// An implementation of [`SleepProvider`] using Smol's timer.
 ///
@@ -23,8 +58,8 @@ impl SleepProvider for SmolSleep {
 pin_project! {
     /// Internal future returned by [`SmolSleep::sleep_for`].
     ///
-    /// This type wraps a [`smol::Timer`] and implements [`Future`] with `Output =
-    /// ()`, discarding the timer's `Instant` result.
+    /// This type wraps a [`smol::Timer`] and implements [`Future`] with `Output
+    /// = ()`, discarding the timer's `Instant` result.
     ///
     /// You should not construct or use this type directly. It is only used
     /// internally by the [`SleepProvider`] implementation for the Smol runtime.
@@ -51,7 +86,7 @@ mod tests {
     use super::*;
     use crate::{
         AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, Snowflake,
-        SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, TimeSource,
+        SnowflakeGenerator, SnowflakeTwitterId, TimeSource,
     };
     use core::fmt;
     use futures::future::try_join_all;
@@ -104,7 +139,7 @@ mod tests {
                 smol::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = g.try_next_id_async::<SmolSleep>().await?;
+                        let id = g.try_next_id_async().await?;
                         ids.push(id);
                     }
                     Ok(ids)

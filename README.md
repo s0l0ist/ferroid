@@ -76,14 +76,14 @@ features:
 - `async-tokio` - for integration with the Tokio runtime
 - `async-smol` - for integration with the Smol runtime
 
-Then, import the [SnowflakeGeneratorAsyncExt] trait to asynchronously request a
-new ID. The generator will yield (sleep_for) if it's not ready yet.
+Then, import the corresponding [SnowflakeGeneratorAsync<Runtime>Ext] trait to
+asynchronously request a new ID.
 
 Tokio Example
 
 ```rust
 use ferroid::{
-    AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SnowflakeGeneratorAsyncExt,
+    AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SnowflakeGeneratorAsyncTokioExt,
     SnowflakeMastodonId, TokioSleep,
 };
 
@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
     let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
     let generator = AtomicSnowflakeGenerator::new(0, clock);
 
-    let id: SnowflakeMastodonId = generator.try_next_id_async::<TokioSleep>().await?;
+    let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
     println!("Generated ID: {}", id);
 
     Ok(())
@@ -104,7 +104,7 @@ Smol Example
 ```rust
 use ferroid::{
     AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SmolSleep,
-    SnowflakeGeneratorAsyncExt, SnowflakeMastodonId,
+    SnowflakeGeneratorAsyncSmolExt, SnowflakeMastodonId,
 };
 
 fn main() -> Result<()> {
@@ -112,7 +112,7 @@ fn main() -> Result<()> {
         let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
         let generator = AtomicSnowflakeGenerator::new(0, clock);
 
-        let id: SnowflakeMastodonId = generator.try_next_id_async::<SmolSleep>().await?;
+        let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
         println!("Generated ID: {}", id);
 
         Ok(())
