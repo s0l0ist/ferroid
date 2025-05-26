@@ -16,6 +16,20 @@ Features:
 - 📐 Customizable layouts via the `Snowflake` trait
 - 🔢 Lexicographically sortable string encoding
 
+[![Crates.io][crates-badge]][crates-url]
+[![MIT licensed][mit-badge]][mit-url]
+[![Apache 2.0 licensed][apache-badge]][apache-url]
+[![CI][ci-badge]][ci-url]
+
+[crates-badge]: https://img.shields.io/crates/v/ferroid.svg
+[crates-url]: https://crates.io/crates/ferroid
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: https://github.com/s0l0ist/ferroid/blob/main/LICENSE-MIT
+[apache-badge]: https://img.shields.io/badge/license-Apache%202.0-blue.svg
+[apache-url]: https://github.com/s0l0ist/ferroid/blob/main/LICENSE-APACHE
+[ci-badge]: https://github.com/s0l0ist/ferroid/actions/workflows/ci.yml/badge.svg?branch=main
+[ci-url]: https://github.com/s0l0ist/ferroid/actions/workflows/ci.yml
+
 ## 📦 Supported Layouts
 
 | Platform  | Timestamp Bits | Machine ID Bits | Sequence Bits | Epoch                   |
