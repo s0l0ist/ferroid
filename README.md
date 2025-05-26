@@ -76,8 +76,9 @@ features:
 - `async-tokio` - for integration with the Tokio runtime
 - `async-smol` - for integration with the Smol runtime
 
-Then, import the corresponding [SnowflakeGeneratorAsync<Runtime>Ext] trait to
-asynchronously request a new ID.
+Then, import the corresponding [SnowflakeGeneratorAsyncTokioExt] or
+[SnowflakeGeneratorAsyncSmolExt] trait to asynchronously request a new ID
+without blocking or spinning.
 
 Tokio Example
 
@@ -207,7 +208,7 @@ mono/sequential/atomic/elems/4096
 ```
 
 And here's the equivalent theoretical maximum throughput in an async context
-using a `Tokio` runtime:
+using `Tokio` and `Smol` runtimes:
 
 ```bash
 mono/sequential/async/tokio/lock/elems/4096
@@ -217,6 +218,13 @@ mono/sequential/async/tokio/lock/elems/4096
 mono/sequential/async/tokio/atomic/elems/4096
     time:   [22.046 µs 22.097 µs 22.171 µs]
     thrpt:  [184.74 Melem/s 185.36 Melem/s 185.80 Melem/s]
+
+mono/sequential/async/smol/lock/elems/4096
+    time:   [38.958 µs 39.085 µs 39.241 µs]
+    thrpt:  [104.38 Melem/s 104.80 Melem/s 105.14 Melem/s]
+mono/sequential/async/smol/atomic/elems/4096
+    time:   [21.719 µs 21.864 µs 22.136 µs]
+    thrpt:  [185.04 Melem/s 187.34 Melem/s 188.59 Melem/s]
 ```
 
 To run all benchmarks:
