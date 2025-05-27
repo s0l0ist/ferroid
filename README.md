@@ -228,7 +228,6 @@ using `Tokio` and `Smol` runtimes:
 mono/sequential/async/tokio/lock/elems/4096
     time:   [38.993 µs 39.033 µs 39.075 µs]
     thrpt:  [104.82 Melem/s 104.94 Melem/s 105.04 Melem/s]
-
 mono/sequential/async/tokio/atomic/elems/4096
     time:   [22.046 µs 22.097 µs 22.171 µs]
     thrpt:  [184.74 Melem/s 185.36 Melem/s 185.80 Melem/s]
