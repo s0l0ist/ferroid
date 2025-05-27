@@ -12,7 +12,11 @@ use std::{
 /// This trait provides a convenience method for using a [`SleepProvider`]
 /// backed by the `smol` runtime, allowing you to call `.try_next_id_async()`
 /// without needing to specify the sleep strategy manually.
-pub trait SnowflakeGeneratorAsyncSmolExt<ID, T> {
+pub trait SnowflakeGeneratorAsyncSmolExt<ID, T>
+where
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
     /// Returns a future that resolves to the next available Snowflake ID using
     /// the [`SmolSleep`] provider.
     ///
@@ -26,11 +30,7 @@ pub trait SnowflakeGeneratorAsyncSmolExt<ID, T> {
     ///
     /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>
-    where
-        Self: SnowflakeGenerator<ID, T>,
-        ID: Snowflake,
-        T: TimeSource<ID::Ty>;
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
 }
 
 impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
