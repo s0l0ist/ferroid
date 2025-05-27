@@ -79,7 +79,6 @@ let id: SnowflakeTwitterId = loop {
 };
 
 println!("Generated ID: {}", id);
-println!("Timestamp: {}, Machine ID: {}, Sequence: {}", id.timestamp(), id.machine_id(), id.sequence());
 ```
 
 #### Asynchronous
