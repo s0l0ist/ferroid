@@ -6,7 +6,11 @@ use crate::{Result, SleepProvider, Snowflake, SnowflakeGenerator, TimeSource};
 /// This trait provides a convenience method for using a [`SleepProvider`]
 /// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
 /// without specifying the sleep strategy manually.
-pub trait SnowflakeGeneratorAsyncTokioExt<ID, T> {
+pub trait SnowflakeGeneratorAsyncTokioExt<ID, T>
+where
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
     /// Returns a future that resolves to the next available Snowflake ID using
     /// the [`TokioSleep`] provider.
     ///
@@ -20,11 +24,7 @@ pub trait SnowflakeGeneratorAsyncTokioExt<ID, T> {
     ///
     /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>
-    where
-        Self: SnowflakeGenerator<ID, T>,
-        ID: Snowflake,
-        T: TimeSource<ID::Ty>;
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
 }
 
 impl<G, ID, T> SnowflakeGeneratorAsyncTokioExt<ID, T> for G

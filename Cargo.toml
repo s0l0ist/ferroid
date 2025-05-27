@@ -5,7 +5,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.2"
+version = "0.3.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Angelou <angelou.nick@gmail.com>"]
@@ -25,4 +25,4 @@ futures = { version = "0.3", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
 tokio = { version = "1.45", default-features = false }
 smol = { version = "2.0", default-features = false }
-num_cpus = { version = "1.16", default-feautres = false }
+num_cpus = { version = "1.16", default-features = false }
