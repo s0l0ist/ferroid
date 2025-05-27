@@ -273,12 +273,22 @@ impl fmt::Display for SnowflakeTwitterId {
 }
 
 impl fmt::Debug for SnowflakeTwitterId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = std::any::type_name::<Self>()
-            .rsplit("::")
-            .next()
-            .unwrap_or("Unknown");
-        write_bit_layout_debug(f, self, name)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let full = std::any::type_name::<Self>();
+        let name = full.rsplit("::").next().unwrap_or(full);
+
+        if f.alternate() {
+            // Pretty-print with layout visualization
+            write_bit_layout_debug(f, self, name)
+        } else {
+            // Compact debug fallback
+            f.debug_struct(name)
+                .field("id", &self.id())
+                .field("timestamp", &self.timestamp())
+                .field("machine_id", &self.machine_id())
+                .field("sequence", &self.sequence())
+                .finish()
+        }
     }
 }
 
@@ -410,12 +420,22 @@ impl fmt::Display for SnowflakeDiscordId {
 }
 
 impl fmt::Debug for SnowflakeDiscordId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = std::any::type_name::<Self>()
-            .rsplit("::")
-            .next()
-            .unwrap_or("Unknown");
-        write_bit_layout_debug(f, self, name)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let full = std::any::type_name::<Self>();
+        let name = full.rsplit("::").next().unwrap_or(full);
+
+        if f.alternate() {
+            // Pretty-print with layout visualization
+            write_bit_layout_debug(f, self, name)
+        } else {
+            // Compact debug fallback
+            f.debug_struct(name)
+                .field("id", &self.id())
+                .field("timestamp", &self.timestamp())
+                .field("machine_id", &self.machine_id())
+                .field("sequence", &self.sequence())
+                .finish()
+        }
     }
 }
 
@@ -532,12 +552,22 @@ impl fmt::Display for SnowflakeMastodonId {
 }
 
 impl fmt::Debug for SnowflakeMastodonId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = std::any::type_name::<Self>()
-            .rsplit("::")
-            .next()
-            .unwrap_or("Unknown");
-        write_bit_layout_debug(f, self, name)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let full = std::any::type_name::<Self>();
+        let name = full.rsplit("::").next().unwrap_or(full);
+
+        if f.alternate() {
+            // Pretty-print with layout visualization
+            write_bit_layout_debug(f, self, name)
+        } else {
+            // Compact debug fallback
+            f.debug_struct(name)
+                .field("id", &self.id())
+                .field("timestamp", &self.timestamp())
+                .field("machine_id", &self.machine_id())
+                .field("sequence", &self.sequence())
+                .finish()
+        }
     }
 }
 
@@ -677,12 +707,22 @@ impl fmt::Display for SnowflakeInstagramId {
 }
 
 impl fmt::Debug for SnowflakeInstagramId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let name = std::any::type_name::<Self>()
-            .rsplit("::")
-            .next()
-            .unwrap_or("Unknown");
-        write_bit_layout_debug(f, self, name)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let full = std::any::type_name::<Self>();
+        let name = full.rsplit("::").next().unwrap_or(full);
+
+        if f.alternate() {
+            // Pretty-print with layout visualization
+            write_bit_layout_debug(f, self, name)
+        } else {
+            // Compact debug fallback
+            f.debug_struct(name)
+                .field("id", &self.id())
+                .field("timestamp", &self.timestamp())
+                .field("machine_id", &self.machine_id())
+                .field("sequence", &self.sequence())
+                .finish()
+        }
     }
 }
 
@@ -824,49 +864,70 @@ impl fmt::Display for SnowflakeLongId {
 }
 
 impl fmt::Debug for SnowflakeLongId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct(std::any::type_name::<Self>())
-            .field("id", &self.id)
-            .field("timestamp", &self.timestamp())
-            .field("machine_id", &self.machine_id())
-            .field("sequence", &self.sequence())
-            .finish()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let full = std::any::type_name::<Self>();
+        let name = full.rsplit("::").next().unwrap_or(full);
+
+        if f.alternate() {
+            // Pretty-print with layout visualization
+            write_bit_layout_debug(f, self, name)
+        } else {
+            // Compact debug fallback
+            f.debug_struct(name)
+                .field("id", &self.id())
+                .field("timestamp", &self.timestamp())
+                .field("machine_id", &self.machine_id())
+                .field("sequence", &self.sequence())
+                .finish()
+        }
     }
 }
 
-pub struct FieldLayout {
-    pub name: &'static str,
-    pub bits: u8,
-    pub value: u64,
+/// Represents a concrete bit field value for layout rendering.
+#[derive(Debug, Clone)]
+struct FieldLayout<T> {
+    name: &'static str,
+    bits: u8,
+    value: T,
 }
 
-pub trait SnowflakeBitLayout {
-    fn id(&self) -> u64;
-    fn fields(&self) -> Vec<FieldLayout>;
+/// Trait used to support debug table rendering of bit fields.
+trait SnowflakeBitLayout {
+    type Ty: fmt::LowerHex + fmt::Display + ToString + Copy;
+
+    fn id(&self) -> Self::Ty;
+    fn fields(&self) -> Vec<FieldLayout<Self::Ty>>;
     fn to_padded_string(&self) -> String;
+
     #[cfg(feature = "base32")]
     fn encode(&self) -> String;
 }
 
-pub fn write_bit_layout_debug(
+fn write_bit_layout_debug<L>(
     f: &mut fmt::Formatter<'_>,
-    id_type: &impl SnowflakeBitLayout,
+    id_type: &L,
     type_name: &str,
-) -> fmt::Result {
+) -> fmt::Result
+where
+    L: SnowflakeBitLayout,
+{
     let visible_fields: Vec<_> = id_type
         .fields()
         .into_iter()
         .filter(|field| field.bits > 0)
         .collect();
 
-    // Compute max width per column: label, dec, hex
     let columns: Vec<usize> = visible_fields
         .iter()
         .map(|field| {
             let label_len = format!("{} ({})", field.name, field.bits).len();
             let dec_len = field.value.to_string().len();
             let hex_len = format!("0x{:x}", field.value).len();
-            *[label_len, dec_len, hex_len].iter().max().unwrap() + 2 // +2 for padding
+            [label_len, dec_len, hex_len]
+                .into_iter()
+                .max()
+                .unwrap_or_default()
+                + 2
         })
         .collect();
 
@@ -885,56 +946,50 @@ pub fn write_bit_layout_debug(
     writeln!(f, "{} {{", type_name)?;
     writeln!(
         f,
-        "    raw id     : 0x{:016x} ({})",
+        "    raw id     : 0x{:x} ({})",
         id_type.id(),
         id_type.id()
     )?;
     writeln!(f, "    padded     : {}", id_type.to_padded_string())?;
 
     #[cfg(feature = "base32")]
-    {
-        writeln!(f, "    base32     : {}", id_type.encode())?;
-    }
+    writeln!(f, "    base32     : {}", id_type.encode())?;
 
     writeln!(f, "    layout     :")?;
-
-    // Top border
     write!(f, "        +")?;
     for &w in &columns {
         write!(f, "{}+", "-".repeat(w))?;
     }
     writeln!(f)?;
 
-    // Field labels
     write!(f, "        |")?;
     for (field, &w) in visible_fields.iter().zip(&columns) {
-        let label = format!("{} ({})", field.name, field.bits);
-        write!(f, "{}|", center(label, w))?;
+        write!(
+            f,
+            "{}|",
+            center(format!("{} ({})", field.name, field.bits), w)
+        )?;
     }
     writeln!(f)?;
 
-    // Mid border
     write!(f, "        +")?;
     for &w in &columns {
         write!(f, "{}+", "-".repeat(w))?;
     }
     writeln!(f)?;
 
-    // Decimal values
     write!(f, "        |")?;
     for (field, &w) in visible_fields.iter().zip(&columns) {
         write!(f, "{}|", center(field.value, w))?;
     }
     writeln!(f)?;
 
-    // Hex values
     write!(f, "        |")?;
     for (field, &w) in visible_fields.iter().zip(&columns) {
         write!(f, "{}|", center(format!("0x{:x}", field.value), w))?;
     }
     writeln!(f)?;
 
-    // Bottom border
     write!(f, "        +")?;
     for &w in &columns {
         write!(f, "{}+", "-".repeat(w))?;
@@ -945,11 +1000,13 @@ pub fn write_bit_layout_debug(
 }
 
 impl SnowflakeBitLayout for SnowflakeTwitterId {
-    fn id(&self) -> u64 {
+    type Ty = u64;
+
+    fn id(&self) -> Self::Ty {
         self.id
     }
 
-    fn fields(&self) -> Vec<FieldLayout> {
+    fn fields(&self) -> Vec<FieldLayout<Self::Ty>> {
         vec![
             FieldLayout {
                 name: "reserved",
@@ -986,11 +1043,13 @@ impl SnowflakeBitLayout for SnowflakeTwitterId {
 }
 
 impl SnowflakeBitLayout for SnowflakeDiscordId {
-    fn id(&self) -> u64 {
+    type Ty = u64;
+
+    fn id(&self) -> Self::Ty {
         self.id
     }
 
-    fn fields(&self) -> Vec<FieldLayout> {
+    fn fields(&self) -> Vec<FieldLayout<Self::Ty>> {
         vec![
             FieldLayout {
                 name: "timestamp",
@@ -1022,11 +1081,13 @@ impl SnowflakeBitLayout for SnowflakeDiscordId {
 }
 
 impl SnowflakeBitLayout for SnowflakeMastodonId {
-    fn id(&self) -> u64 {
+    type Ty = u64;
+
+    fn id(&self) -> Self::Ty {
         self.id
     }
 
-    fn fields(&self) -> Vec<FieldLayout> {
+    fn fields(&self) -> Vec<FieldLayout<Self::Ty>> {
         vec![
             FieldLayout {
                 name: "timestamp",
@@ -1053,11 +1114,13 @@ impl SnowflakeBitLayout for SnowflakeMastodonId {
 }
 
 impl SnowflakeBitLayout for SnowflakeInstagramId {
-    fn id(&self) -> u64 {
+    type Ty = u64;
+
+    fn id(&self) -> Self::Ty {
         self.id
     }
 
-    fn fields(&self) -> Vec<FieldLayout> {
+    fn fields(&self) -> Vec<FieldLayout<Self::Ty>> {
         vec![
             FieldLayout {
                 name: "timestamp",
@@ -1088,6 +1151,49 @@ impl SnowflakeBitLayout for SnowflakeInstagramId {
     }
 }
 
+impl SnowflakeBitLayout for SnowflakeLongId {
+    type Ty = u128;
+
+    fn id(&self) -> Self::Ty {
+        self.id
+    }
+
+    fn fields(&self) -> Vec<FieldLayout<Self::Ty>> {
+        vec![
+            FieldLayout {
+                name: "reserved",
+                bits: 40,
+                value: 0,
+            },
+            FieldLayout {
+                name: "timestamp",
+                bits: 48,
+                value: self.timestamp(),
+            },
+            FieldLayout {
+                name: "machine_id",
+                bits: 20,
+                value: self.machine_id(),
+            },
+            FieldLayout {
+                name: "sequence",
+                bits: 20,
+                value: self.sequence(),
+            },
+        ]
+    }
+
+    #[cfg(feature = "base32")]
+    fn encode(&self) -> String {
+        use crate::SnowflakeBase32Ext;
+        <Self as SnowflakeBase32Ext>::encode(self)
+    }
+
+    fn to_padded_string(&self) -> String {
+        self.to_padded_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1099,7 +1205,7 @@ mod tests {
         let seq = SnowflakeTwitterId::max_sequence();
 
         let id = SnowflakeTwitterId::from(ts, mid, seq);
-        println!("ID: {:?}", id);
+        println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
@@ -1113,7 +1219,7 @@ mod tests {
         let seq = SnowflakeDiscordId::max_sequence();
 
         let id = SnowflakeDiscordId::from(ts, mid, seq);
-        println!("ID: {:?}", id);
+        println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
@@ -1126,7 +1232,7 @@ mod tests {
         let seq = SnowflakeMastodonId::max_sequence();
 
         let id = SnowflakeMastodonId::from(ts, seq);
-        println!("ID: {:?}", id);
+        println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), 0); // no machine_id
         assert_eq!(id.sequence(), seq);
@@ -1140,7 +1246,7 @@ mod tests {
         let seq = SnowflakeInstagramId::max_sequence();
 
         let id = SnowflakeInstagramId::from(ts, mid, seq);
-        println!("ID: {:?}", id);
+        println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
@@ -1154,7 +1260,7 @@ mod tests {
         let seq = SnowflakeLongId::max_sequence();
 
         let id = SnowflakeLongId::from(ts, mid, seq);
-
+        println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
