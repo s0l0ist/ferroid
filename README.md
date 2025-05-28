@@ -16,10 +16,8 @@ Features:
 - 📐 Customizable layouts via the `Snowflake` trait
 - 🔢 Lexicographically sortable string encoding
 
-[![Crates.io][crates-badge]][crates-url]
-[![MIT licensed][mit-badge]][mit-url]
-[![Apache 2.0 licensed][apache-badge]][apache-url]
-[![CI][ci-badge]][ci-url]
+[![Crates.io][crates-badge]][crates-url] [![MIT licensed][mit-badge]][mit-url]
+[![Apache 2.0 licensed][apache-badge]][apache-url] [![CI][ci-badge]][ci-url]
 
 [crates-badge]: https://img.shields.io/crates/v/ferroid.svg
 [crates-url]: https://crates.io/crates/ferroid
@@ -137,26 +135,28 @@ fn main() -> Result<()> {
 
 ### Custom Layouts
 
-To define a custom Snowflake layout, implement `Snowflake`:
+To define a custom Snowflake layout, use the `define_snowflake_id` macro:
 
 ```rust
-use core::fmt;
-use ferroid::Snowflake;
+use ferroid::define_snowflake_id;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct MyCustomId {
-    id: u64,
-}
+// A Twitter-like ID
+define_snowflake_id!(
+    MyCustomId, u64,
+    reserved: 1,
+    timestamp: 41,
+    machine_id: 10,
+    sequence: 12
+);
 
-impl Snowflake for MyCustomId {
-    // ...
-}
-
-impl fmt::Display for MyCustomId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id)
-    }
-}
+// Or a 128-bit ID
+define_snowflake_id!(
+    MyCustomLongId, u128,
+    reserved: 40,
+    timestamp: 48,
+    machine_id: 20,
+    sequence: 20
+);
 ```
 
 ### Behavior

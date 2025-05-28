@@ -38,7 +38,7 @@ where
     }
 }
 
-/// An implementation of [`SleepProvider`] using Tokio’s timer.
+/// An implementation of [`SleepProvider`] using Tokio's timer.
 ///
 /// This is the default provider for use in async applications built on Tokio.
 pub struct TokioSleep;
