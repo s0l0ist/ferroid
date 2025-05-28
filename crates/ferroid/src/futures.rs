@@ -1,12 +1,12 @@
 use crate::{IdGenStatus, Result, SnowflakeGenerator, TimeSource, ToU64, id::Snowflake};
-use core::time::Duration;
-use pin_project_lite::pin_project;
-use std::{
+use core::{
     future::Future,
     marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
+    time::Duration,
 };
+use pin_project_lite::pin_project;
 
 /// Extension trait for asynchronously generating Snowflake IDs.
 ///

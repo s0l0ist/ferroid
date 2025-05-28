@@ -1,10 +1,10 @@
 use crate::{Result, SleepProvider, Snowflake, SnowflakeGenerator, TimeSource};
-use pin_project_lite::pin_project;
-use smol::Timer;
-use std::{
+use core::{
     pin::Pin,
     task::{Context, Poll},
 };
+use pin_project_lite::pin_project;
+use smol::Timer;
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
@@ -51,7 +51,7 @@ pub struct SmolSleep;
 impl SleepProvider for SmolSleep {
     type Sleep = SmolSleepFuture;
 
-    fn sleep_for(dur: std::time::Duration) -> Self::Sleep {
+    fn sleep_for(dur: core::time::Duration) -> Self::Sleep {
         SmolSleepFuture {
             timer: Timer::after(dur),
         }
