@@ -105,7 +105,7 @@ mod tests {
         println!("machine id: 0x{:x}", id.machine_id());
         println!("sequence:   0x{:x}", id.sequence());
         println!("encoded:    {}", encoded);
-        println!("decoded:    {:?}", decoded);
+        println!("decoded:    {}", decoded);
 
         assert_eq!(id, decoded, "{} roundtrip failed for {}", label, type_name);
     }
