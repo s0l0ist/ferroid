@@ -159,6 +159,9 @@ define_snowflake_id!(
 );
 ```
 
+> Note: All four sections (`reserved`, `timestamp`, `machine_id`, and
+> `sequence`) must be included in the macro, even if a section uses 0 bits.
+
 ### Behavior
 
 - If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
@@ -192,15 +195,6 @@ assert_eq!(id, decoded);
 ## 📈 Benchmarks
 
 `ferroid` ships with Criterion benchmarks to measure ID generation performance:
-
-- `BasicSnowflakeGenerator`: single-threaded generator
-- `LockSnowflakeGenerator`: mutex-based, thread-safe generator
-- `AtomicSnowflakeGenerator`: lock-free, thread-safe generator
-
-Benchmark scenarios include:
-
-- Single-threaded with/without a real clock
-- Multi-threaded with/without a real clock
 
 Here's a snapshot of peak single-core throughput on a MacBook Pro 14" M1 (8
 performance + 2 efficiency cores), measured under ideal conditions where the
