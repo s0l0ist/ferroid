@@ -150,16 +150,25 @@ pub trait Snowflake:
 /// and `sequence`.
 ///
 /// These components are always laid out from **most significant bit (MSB)** to
-/// **least significant bit (LSB)** — in that exact order.
+/// **least significant bit (LSB)** - in that exact order.
 ///
 /// - The first field (`reserved`) occupies the highest bits.
 /// - The last field (`sequence`) occupies the lowest bits.
 /// - The total number of bits **must exactly equal** the size of the backing
-///   integer type (`u64`, `u128`, etc.). If it doesn’t, the macro will trigger
+///   integer type (`u64`, `u128`, etc.). If it doesn't, the macro will trigger
 ///   a compile-time assertion failure.
 ///
-/// ## Example: Twitter-like Layout
+/// ```text
+/// define_snowflake_id!(
+///     <TypeName>, <IntegerType>,
+///     reserved: <bits>,
+///     timestamp: <bits>,
+///     machine_id: <bits>,
+///     sequence: <bits>
+/// );
+///```
 ///
+/// ## Example: A Twitter-like layout
 /// ```rust
 /// use ferroid::{define_snowflake_id, Snowflake};
 ///

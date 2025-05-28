@@ -48,7 +48,7 @@ impl MonotonicClock {
     /// monotonic timer (`Instant`) to measure elapsed time since startup.
     ///
     /// On each call to [`current_millis`], the clock returns the current tick
-    /// value plus a fixed offset — the precomputed difference between the
+    /// value plus a fixed offset - the precomputed difference between the
     /// current wall-clock time (`SystemTime::now()`) and the given epoch.
     ///
     /// This design avoids syscalls on the hot path and ensures that time never
