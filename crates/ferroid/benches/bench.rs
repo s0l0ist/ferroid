@@ -1,3 +1,4 @@
+use core::hint::black_box;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
@@ -8,7 +9,6 @@ use ferroid::{
 use futures::future::try_join_all;
 use smol::Task;
 use std::{
-    hint::black_box,
     sync::{Arc, Barrier},
     thread::{scope, yield_now},
     time::Instant,
@@ -89,7 +89,7 @@ fn bench_generator_yield<G, ID, T>(
                                 black_box(id);
                                 break;
                             }
-                            IdGenStatus::Pending { .. } => std::hint::spin_loop(),
+                            IdGenStatus::Pending { .. } => core::hint::spin_loop(),
                         }
                     }
                 }

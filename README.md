@@ -68,8 +68,8 @@ let id: SnowflakeTwitterId = loop {
         IdGenStatus::Ready { id } => break id,
         IdGenStatus::Pending { yield_for } => {
             println!("Exhausted; wait for: {}ms", yield_for);
-            std::hint::spin_loop();
-            // Use `std::hint::spin_loop()` for single-threaded or per-thread generators.
+            core::hint::spin_loop();
+            // Use `core::hint::spin_loop()` for single-threaded or per-thread generators.
             // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
             // Use `std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())` to sleep.
         }

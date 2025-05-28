@@ -5,9 +5,11 @@ use crate::{
         SnowflakeGenerator,
     },
 };
-use core::fmt;
+use core::{cell::Cell, fmt, hash::Hash};
+use std::collections::HashSet;
 use std::rc::Rc;
-use std::{cell::Cell, hash::Hash};
+use std::sync::{Arc, Mutex};
+use std::thread::scope;
 
 struct MockTime {
     millis: u64,
@@ -98,7 +100,7 @@ where
                     break;
                 }
                 IdGenStatus::Pending { .. } => {
-                    std::hint::spin_loop();
+                    core::hint::spin_loop();
                 }
             }
         }
@@ -111,10 +113,6 @@ where
     ID: Snowflake + PartialEq + Eq + Hash + Send,
     T: TimeSource<ID::Ty>,
 {
-    use std::collections::HashSet;
-    use std::sync::{Arc, Mutex};
-    use std::thread::scope;
-
     const THREADS: usize = 8;
     const TOTAL_IDS: usize = 4096 * 256;
     const IDS_PER_THREAD: usize = TOTAL_IDS / THREADS;

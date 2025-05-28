@@ -1,5 +1,5 @@
-use crate::{IdGenStatus, Result, Snowflake, TimeSource};
-use std::{
+use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use core::{
     cmp,
     marker::PhantomData,
     sync::atomic::{AtomicU64, Ordering},
@@ -228,5 +228,23 @@ where
                 yield_for: ID::ZERO,
             })
         }
+    }
+}
+
+impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
+where
+    ID: Snowflake<Ty = u64>,
+    T: TimeSource<ID::Ty>,
+{
+    fn new(machine_id: ID::Ty, clock: T) -> Self {
+        Self::new(machine_id, clock)
+    }
+
+    fn next_id(&self) -> IdGenStatus<ID> {
+        self.next_id()
+    }
+
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+        self.try_next_id()
     }
 }

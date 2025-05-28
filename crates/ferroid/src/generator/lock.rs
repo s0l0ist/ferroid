@@ -1,8 +1,6 @@
-use crate::{IdGenStatus, Result, Snowflake, TimeSource};
-use std::{
-    cmp::Ordering,
-    sync::{Arc, Mutex},
-};
+use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use core::cmp::Ordering;
+use std::sync::{Arc, Mutex};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -202,5 +200,23 @@ where
         };
 
         Ok(status)
+    }
+}
+
+impl<ID, T> SnowflakeGenerator<ID, T> for LockSnowflakeGenerator<ID, T>
+where
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
+{
+    fn new(machine_id: ID::Ty, clock: T) -> Self {
+        Self::new(machine_id, clock)
+    }
+
+    fn next_id(&self) -> IdGenStatus<ID> {
+        self.next_id()
+    }
+
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+        self.try_next_id()
     }
 }

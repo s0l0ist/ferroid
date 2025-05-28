@@ -1,10 +1,10 @@
 use crate::{Error, Result, Snowflake};
 use base32::{Alphabet, decode, encode};
-use std::convert::TryInto;
+use core::convert::TryInto;
 
-const U32_SIZE: usize = std::mem::size_of::<u32>();
-const U64_SIZE: usize = std::mem::size_of::<u64>();
-const U128_SIZE: usize = std::mem::size_of::<u128>();
+const U32_SIZE: usize = core::mem::size_of::<u32>();
+const U64_SIZE: usize = core::mem::size_of::<u64>();
+const U128_SIZE: usize = core::mem::size_of::<u128>();
 
 /// A trait for types that can be encoded to and decoded from big-endian bytes.
 pub trait BeBytes: Sized {
