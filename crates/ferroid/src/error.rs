@@ -5,6 +5,7 @@ use std::sync::{MutexGuard, PoisonError};
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(Debug, From)]
+#[non_exhaustive]
 pub enum Error {
     LockPoisoned,
     FailedToU64,
@@ -12,9 +13,6 @@ pub enum Error {
     DecodeNonAsciiValue,
     #[cfg(feature = "base32")]
     DecodeInvalidLen,
-    #[cfg(feature = "async-tokio")]
-    #[from]
-    JoinError(tokio::task::JoinError),
 }
 
 impl fmt::Display for Error {

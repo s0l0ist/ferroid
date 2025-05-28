@@ -56,7 +56,7 @@ impl BeBytes for u128 {
 
 /// A trait for types that can be encoded to and decoded from base32 (crockford)
 /// strings.
-pub trait SnowflakeBase32Ext: Snowflake + Sized
+pub trait SnowflakeBase32Ext: Snowflake
 where
     Self::Ty: BeBytes,
 {
@@ -74,7 +74,7 @@ where
 
 impl<ID> SnowflakeBase32Ext for ID
 where
-    ID: Snowflake + Sized,
+    ID: Snowflake,
     ID::Ty: BeBytes,
 {
 }

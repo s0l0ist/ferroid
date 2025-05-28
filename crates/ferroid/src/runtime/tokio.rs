@@ -113,7 +113,8 @@ mod tests {
             .collect();
 
         let all_ids: Vec<_> = try_join_all(tasks)
-            .await?
+            .await
+            .unwrap()
             .into_iter()
             .flat_map(Result::unwrap)
             .collect();
