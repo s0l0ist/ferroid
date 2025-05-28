@@ -1,10 +1,9 @@
 use core::fmt;
-use derive_more::From;
 use std::sync::{MutexGuard, PoisonError};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug, From)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {
     LockPoisoned,

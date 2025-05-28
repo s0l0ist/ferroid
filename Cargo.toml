@@ -18,7 +18,6 @@ keywords = ["id", "snowflake", "ulid", "uuid", "monotonic"]
 [workspace.dependencies]
 base32 = { version = "0.5", default-features = false }
 criterion = { version = "0.6", default-features = false }
-derive_more = { version = "2.0", default-features = false }
 futures = { version = "0.3", default-features = false }
 num_cpus = { version = "1.16", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
