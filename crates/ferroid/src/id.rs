@@ -63,7 +63,7 @@ impl ToU64 for u128 {
 /// assert_eq!(id.sequence(), 1);
 /// ```
 pub trait Snowflake:
-    Sized + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
+    Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
     /// Scalar type for all bit fields (typically `u64`)
     type Ty: Copy

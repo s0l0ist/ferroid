@@ -18,7 +18,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 base32 = { workspace = true, optional = true }
-derive_more = { workspace = true, features = ["from"] }
 futures = { workspace = true, optional = true }
 pin-project-lite = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }

@@ -140,7 +140,13 @@ To define a custom Snowflake layout, use the `define_snowflake_id` macro:
 ```rust
 use ferroid::define_snowflake_id;
 
-// A Twitter-like ID
+// Example: a 64-bit Twitter-like ID layout
+//
+//  Bit Index:  63           63 62            22 21             12 11             0
+//              +--------------+----------------+-----------------+---------------+
+//  Field:      | reserved (1) | timestamp (41) | machine ID (10) | sequence (12) |
+//              +--------------+----------------+-----------------+---------------+
+//              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
 define_snowflake_id!(
     MyCustomId, u64,
     reserved: 1,
@@ -149,7 +155,15 @@ define_snowflake_id!(
     sequence: 12
 );
 
-// Or a 128-bit ID
+
+// Example: a 128-bit extended ID layout:
+//
+//  Bit Index:  127                88 87            40 39             20 19             0
+//              +--------------------+----------------+-----------------+---------------+
+//  Field:      | reserved (40 bits) | timestamp (48) | machine ID (20) | sequence (20) |
+//              +--------------------+----------------+-----------------+---------------+
+//              |<--- HI 64 bits --->|<------------------- LO 64 bits ----------------->|
+//              |<- MSB ------ LSB ->|<----- MSB ---------- 64 bits --------- LSB ----->|
 define_snowflake_id!(
     MyCustomLongId, u128,
     reserved: 40,
@@ -158,6 +172,10 @@ define_snowflake_id!(
     sequence: 20
 );
 ```
+
+> Note: All four sections (`reserved`, `timestamp`, `machine_id`, and `sequence`) must be
+> specified in the macro, even if a section uses 0 bits. `reserved` bits are always
+> stored as **zero** and can be used for future expansion.
 
 ### Behavior
 
@@ -191,18 +209,9 @@ assert_eq!(id, decoded);
 
 ## 📈 Benchmarks
 
-`ferroid` ships with Criterion benchmarks to measure ID generation performance:
+`ferroid` ships with Criterion benchmarks to measure ID generation performance.
 
-- `BasicSnowflakeGenerator`: single-threaded generator
-- `LockSnowflakeGenerator`: mutex-based, thread-safe generator
-- `AtomicSnowflakeGenerator`: lock-free, thread-safe generator
-
-Benchmark scenarios include:
-
-- Single-threaded with/without a real clock
-- Multi-threaded with/without a real clock
-
-Here's a snapshot of peak single-core throughput on a MacBook Pro 14" M1 (8
+Here's a snapshot of peak **single-core** throughput on a MacBook Pro 14" M1 (8
 performance + 2 efficiency cores), measured under ideal conditions where the
 generator never yields. These numbers reflect the upper bounds of real-clock
 performance:

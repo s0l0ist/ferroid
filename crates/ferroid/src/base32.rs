@@ -56,7 +56,7 @@ impl BeBytes for u128 {
 
 /// A trait for types that can be encoded to and decoded from base32 (crockford)
 /// strings.
-pub trait SnowflakeBase32Ext: Snowflake + Sized
+pub trait SnowflakeBase32Ext: Snowflake
 where
     Self::Ty: BeBytes,
 {
@@ -74,7 +74,7 @@ where
 
 impl<ID> SnowflakeBase32Ext for ID
 where
-    ID: Snowflake + Sized,
+    ID: Snowflake,
     ID::Ty: BeBytes,
 {
 }
@@ -105,7 +105,7 @@ mod tests {
         println!("machine id: 0x{:x}", id.machine_id());
         println!("sequence:   0x{:x}", id.sequence());
         println!("encoded:    {}", encoded);
-        println!("decoded:    {:?}", decoded);
+        println!("decoded:    {}", decoded);
 
         assert_eq!(id, decoded, "{} roundtrip failed for {}", label, type_name);
     }
