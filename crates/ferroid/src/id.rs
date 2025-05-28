@@ -143,6 +143,44 @@ pub trait Snowflake:
     fn to_padded_string(&self) -> String;
 }
 
+/// # Field Ordering Semantics
+///
+/// The `define_snowflake_id!` macro defines a bit layout for a custom Snowflake
+/// ID using four required components: `reserved`, `timestamp`, `machine_id`,
+/// and `sequence`.
+///
+/// These components are always laid out from **most significant bit (MSB)** to
+/// **least significant bit (LSB)** — in that exact order.
+///
+/// - The first field (`reserved`) occupies the highest bits.
+/// - The last field (`sequence`) occupies the lowest bits.
+/// - The total number of bits **must exactly equal** the size of the backing
+///   integer type (`u64`, `u128`, etc.). If it doesn’t, the macro will trigger
+///   a compile-time assertion failure.
+///
+/// ## Example: Twitter-like Layout
+///
+/// ```rust
+/// use ferroid::{define_snowflake_id, Snowflake};
+///
+/// define_snowflake_id!(
+///     MyCustomId, u64,
+///     reserved: 1,
+///     timestamp: 41,
+///     machine_id: 10,
+///     sequence: 12
+/// );
+/// ```
+///
+/// Which expands to the following bit layout:
+///
+/// ```text
+///  Bit Index:  63           63 62            22 21             12 11             0
+///              +--------------+----------------+-----------------+---------------+
+///  Field:      | reserved (1) | timestamp (41) | machine ID (10) | sequence (12) |
+///              +--------------+----------------+-----------------+---------------+
+///              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
+/// ```
 #[macro_export]
 macro_rules! define_snowflake_id {
     (
@@ -160,9 +198,10 @@ macro_rules! define_snowflake_id {
         }
 
         const _: () = {
-            // Compile-time check: total bit width must not exceed backing type
+            // Compile-time check: total bit width _must_ equal the backing
+            // type. This is to avoid aliasing surprises.
             assert!(
-                $reserved_bits + $timestamp_bits + $machine_bits + $sequence_bits <= <$int>::BITS,
+                $reserved_bits + $timestamp_bits + $machine_bits + $sequence_bits == <$int>::BITS,
                 "Snowflake layout overflows the underlying integer type"
             );
         };
@@ -271,12 +310,21 @@ macro_rules! define_snowflake_id {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 let full = core::any::type_name::<Self>();
                 let name = full.rsplit("::").next().unwrap_or(full);
-                f.debug_struct(name)
-                    .field("id", &self.to_raw())
-                    .field("timestamp", &self.timestamp())
-                    .field("machine_id", &self.machine_id())
-                    .field("sequence", &self.sequence())
-                    .finish()
+                let mut dbg = f.debug_struct(name);
+                dbg.field("id", &format_args!("{:} (0x{:x})", self.to_raw(), self.to_raw()));
+                dbg.field("padded", &self.to_padded_string());
+
+                #[cfg(feature = "base32")]
+                {
+                    use $crate::SnowflakeBase32Ext;
+                    dbg.field("base32", &self.encode());
+                }
+
+                dbg.field("timestamp", &format_args!("{:} (0x{:x})", self.timestamp(), self.timestamp()));
+                dbg.field("machine_id", &format_args!("{:} (0x{:x})", self.machine_id(), self.machine_id()));
+                dbg.field("sequence", &format_args!("{:} (0x{:x})", self.sequence(), self.sequence()));
+
+                dbg.finish()
             }
         }
     };
@@ -518,6 +566,13 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "machine_id overflow")]
+    fn mastodon_machine_id_overflow_panics() {
+        let mid = SnowflakeMastodonId::max_machine_id() + 1;
+        SnowflakeMastodonId::from_components(0, mid, 0);
+    }
+
+    #[test]
     #[should_panic(expected = "sequence overflow")]
     fn mastodon_sequence_overflow_panics() {
         let seq = SnowflakeMastodonId::max_sequence() + 1;
@@ -564,5 +619,113 @@ mod tests {
     fn long_sequence_overflow_panics() {
         let seq = SnowflakeLongId::max_sequence() + 1;
         SnowflakeLongId::from_components(0, 0, seq);
+    }
+
+    #[test]
+    fn twitter_low_bit_fields() {
+        let id = SnowflakeTwitterId::from_components(0, 0, 0);
+        assert_eq!(id.timestamp(), 0);
+        assert_eq!(id.machine_id(), 0);
+        assert_eq!(id.sequence(), 0);
+
+        let id = SnowflakeTwitterId::from_components(1, 1, 1);
+        assert_eq!(id.timestamp(), 1);
+        assert_eq!(id.machine_id(), 1);
+        assert_eq!(id.sequence(), 1);
+    }
+
+    #[test]
+    fn discord_low_bit_fields() {
+        let id = SnowflakeDiscordId::from_components(0, 0, 0);
+        assert_eq!(id.timestamp(), 0);
+        assert_eq!(id.machine_id(), 0);
+        assert_eq!(id.sequence(), 0);
+
+        let id = SnowflakeDiscordId::from_components(1, 1, 1);
+        assert_eq!(id.timestamp(), 1);
+        assert_eq!(id.machine_id(), 1);
+        assert_eq!(id.sequence(), 1);
+    }
+
+    #[test]
+    fn mastodon_low_bit_fields() {
+        let id = SnowflakeMastodonId::from_components(0, 0, 0);
+        assert_eq!(id.timestamp(), 0);
+        assert_eq!(id.machine_id(), 0);
+        assert_eq!(id.sequence(), 0);
+
+        let id = SnowflakeMastodonId::from_components(1, 0, 1);
+        assert_eq!(id.timestamp(), 1);
+        assert_eq!(id.machine_id(), 0); // always zero
+        assert_eq!(id.sequence(), 1);
+    }
+
+    #[test]
+    fn instagram_low_bit_fields() {
+        let id = SnowflakeInstagramId::from_components(0, 0, 0);
+        assert_eq!(id.timestamp(), 0);
+        assert_eq!(id.machine_id(), 0);
+        assert_eq!(id.sequence(), 0);
+
+        let id = SnowflakeInstagramId::from_components(1, 1, 1);
+        assert_eq!(id.timestamp(), 1);
+        assert_eq!(id.machine_id(), 1);
+        assert_eq!(id.sequence(), 1);
+    }
+
+    #[test]
+    fn long_low_bit_fields() {
+        let id = SnowflakeLongId::from_components(0, 0, 0);
+        assert_eq!(id.timestamp(), 0);
+        assert_eq!(id.machine_id(), 0);
+        assert_eq!(id.sequence(), 0);
+
+        let id = SnowflakeLongId::from_components(1, 1, 1);
+        assert_eq!(id.timestamp(), 1);
+        assert_eq!(id.machine_id(), 1);
+        assert_eq!(id.sequence(), 1);
+    }
+
+    #[test]
+    fn twitter_edge_rollover() {
+        let id = SnowflakeTwitterId::from_components(0, 0, SnowflakeTwitterId::max_sequence());
+        assert_eq!(id.sequence(), SnowflakeTwitterId::max_sequence());
+
+        let id = SnowflakeTwitterId::from_components(0, SnowflakeTwitterId::max_machine_id(), 0);
+        assert_eq!(id.machine_id(), SnowflakeTwitterId::max_machine_id());
+    }
+
+    #[test]
+    fn discord_edge_rollover() {
+        let id = SnowflakeDiscordId::from_components(0, 0, SnowflakeDiscordId::max_sequence());
+        assert_eq!(id.sequence(), SnowflakeDiscordId::max_sequence());
+
+        let id = SnowflakeDiscordId::from_components(0, SnowflakeDiscordId::max_machine_id(), 0);
+        assert_eq!(id.machine_id(), SnowflakeDiscordId::max_machine_id());
+    }
+
+    #[test]
+    fn mastodon_edge_rollover() {
+        let id = SnowflakeMastodonId::from_components(0, 0, SnowflakeMastodonId::max_sequence());
+        assert_eq!(id.sequence(), SnowflakeMastodonId::max_sequence());
+    }
+
+    #[test]
+    fn instagram_edge_rollover() {
+        let id = SnowflakeInstagramId::from_components(0, 0, SnowflakeInstagramId::max_sequence());
+        assert_eq!(id.sequence(), SnowflakeInstagramId::max_sequence());
+
+        let id =
+            SnowflakeInstagramId::from_components(0, SnowflakeInstagramId::max_machine_id(), 0);
+        assert_eq!(id.machine_id(), SnowflakeInstagramId::max_machine_id());
+    }
+
+    #[test]
+    fn long_edge_rollover() {
+        let id = SnowflakeLongId::from_components(0, 0, SnowflakeLongId::max_sequence());
+        assert_eq!(id.sequence(), SnowflakeLongId::max_sequence());
+
+        let id = SnowflakeLongId::from_components(0, SnowflakeLongId::max_machine_id(), 0);
+        assert_eq!(id.machine_id(), SnowflakeLongId::max_machine_id());
     }
 }
