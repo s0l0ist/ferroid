@@ -170,7 +170,7 @@ pub trait Snowflake:
 ///
 /// ## Example: A Twitter-like layout
 /// ```rust
-/// use ferroid::{define_snowflake_id, Snowflake};
+/// use ferroid::define_snowflake_id;
 ///
 /// define_snowflake_id!(
 ///     MyCustomId, u64,
@@ -321,6 +321,8 @@ macro_rules! define_snowflake_id {
                 let name = full.rsplit("::").next().unwrap_or(full);
                 let mut dbg = f.debug_struct(name);
                 dbg.field("id", &format_args!("{:} (0x{:x})", self.to_raw(), self.to_raw()));
+
+                use $crate::Snowflake;
                 dbg.field("padded", &self.to_padded_string());
 
                 #[cfg(feature = "base32")]
