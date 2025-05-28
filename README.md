@@ -156,7 +156,7 @@ define_snowflake_id!(
 );
 
 
-// Example: a 128-bit extended ID layout:
+// Example: a 128-bit extended ID layout
 //
 //  Bit Index:  127                88 87            40 39             20 19             0
 //              +--------------------+----------------+-----------------+---------------+
