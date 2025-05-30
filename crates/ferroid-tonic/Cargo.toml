@@ -9,7 +9,7 @@ description.workspace = true
 repository.workspace = true
 documentation.workspace = true
 keywords.workspace = true
-private = true
+publish = false
 
 [[bin]]
 name = "ferroid-tonic-server"
