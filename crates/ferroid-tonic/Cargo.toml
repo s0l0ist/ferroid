@@ -1,0 +1,36 @@
+[package]
+name = "ferroid-tonic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+readme.workspace = true
+description.workspace = true
+repository.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+private = true
+
+[[bin]]
+name = "ferroid-tonic-server"
+path = "src/server.rs"
+
+[[bin]] 
+name = "ferroid-tonic-client"
+path = "src/client.rs"
+
+
+[dependencies]
+ferroid = { path = "../ferroid", features = ["base32", "async-tokio", "async-smol"] }
+tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd"] }
+tokio = { workspace = true, features = ["parking_lot", "rt-multi-thread", "signal"] }
+prost = { workspace = true, features = ["derive", "std"] }
+prost-types = { workspace = true, features = ["std"] }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+tokio-util = { workspace = true }
+rand = { workspace = true, features = ["thread_rng", "std_rng"] }
+bytes = { workspace = true }
+
+[build-dependencies]
+tonic-build = { workspace = true, features = ["prost"] }

@@ -2,6 +2,8 @@
 resolver = "3"
 members = [
     "crates/ferroid",
+    "crates/ferroid-tonic",
+    "crates/ferroid-axum",
 ]
 
 [workspace.package]
@@ -25,3 +27,13 @@ serde = { version = "1.0", default-features = false }
 smol = { version = "2.0", default-features = false }
 tokio = { version = "1.45", default-features = false }
 tracing = { version = "0.1", default-features = false }
+tonic = { version = "0.13", default-features = false }
+tonic-build = { version = "0.13", default-features = false }
+prost = { version = "0.13", default-features = false }
+prost-types = { version = "0.13", default-features = false }
+axum = { version = "0.8", default-features = false }
+hyper = { version = "1.6.0", default-features = false }
+tokio-stream = { version = "0.1", default-features = false }
+tokio-util = { version = "0.7", default-features = false }
+rand = { version = "0.9", default-features = false }
+bytes = { version = "1.10", default-features = false }
