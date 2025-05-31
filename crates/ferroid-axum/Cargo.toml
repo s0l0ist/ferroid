@@ -12,11 +12,11 @@ keywords.workspace = true
 publish = false
 
 [[bin]]
-name = "ferroid-axum-server"
+name = "server"
 path = "src/server.rs"
 
 [[bin]] 
-name = "ferroid-axum-client"
+name = "client"
 path = "src/client.rs"
 
 

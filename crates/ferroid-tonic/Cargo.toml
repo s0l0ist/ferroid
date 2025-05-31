@@ -12,13 +12,12 @@ keywords.workspace = true
 publish = false
 
 [[bin]]
-name = "ferroid-tonic-server"
+name = "server"
 path = "src/server.rs"
 
 [[bin]] 
-name = "ferroid-tonic-client"
+name = "client"
 path = "src/client.rs"
-
 
 [dependencies]
 ferroid = { path = "../ferroid", features = ["base32", "async-tokio", "async-smol"] }

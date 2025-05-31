@@ -11,9 +11,8 @@ use idgen::{
     IdStreamRequest, IdUnitResponseChunk,
     id_gen_server::{IdGen, IdGenServer},
 };
-use rand::SeedableRng;
 use rand::rngs::StdRng;
-use rand::seq::IndexedRandom;
+use rand::{Rng, SeedableRng};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, wrappers::ReceiverStream};
@@ -38,11 +37,11 @@ struct IdService {
 }
 
 /// Number of worker tasks processing ID generation requests concurrently.
-const NUM_WORKERS: usize = 128;
+const NUM_WORKERS: usize = 512;
 /// Buffer capacity for each worker's mpsc channel.
 const DEFAULT_WORK_REQUEST_BUFF: usize = 256;
 /// Default number of IDs generated per chunk.
-const DEFAULT_CHUNK_SIZE: usize = 4096;
+const DEFAULT_CHUNK_SIZE: usize = 4096 << 5;
 /// Default number of chunks buffered in the response stream.
 const DEFAULT_STREAM_BUFFER_SIZE: usize = 8;
 
@@ -158,37 +157,28 @@ impl IdGen for IdService {
         let cancellation_token = Arc::new(CancellationToken::new());
         let total_ids = req.get_ref().count as usize;
         let num_workers = self.workers.len();
-        let ids_per_worker = if num_workers > 0 {
-            total_ids / num_workers
-        } else {
-            0
-        };
-        let remainder = if num_workers > 0 {
-            total_ids % num_workers
-        } else {
-            0
-        };
 
+        // Calculate number of chunks needed based on DEFAULT_CHUNK_SIZE
+        let chunks_needed = (total_ids + DEFAULT_CHUNK_SIZE - 1) / DEFAULT_CHUNK_SIZE; // Ceiling division
         let mut streams = SelectAll::new();
         let mut rng = StdRng::from_rng(&mut rand::rng());
+        let offset = rng.random_range(0..num_workers);
 
-        for (i, tx) in self
-            .workers
-            .choose_multiple(&mut rng, num_workers)
-            .enumerate()
-        {
-            let worker_count = if i < remainder {
-                ids_per_worker + 1
-            } else {
-                ids_per_worker
-            };
-            if worker_count == 0 {
-                continue;
+        let mut remaining_ids = total_ids;
+
+        for chunk_idx in 0..chunks_needed {
+            let chunk_size = std::cmp::min(remaining_ids, DEFAULT_CHUNK_SIZE);
+            if chunk_size == 0 {
+                break;
             }
+
+            // Round-robin worker selection with some random offset
+            let worker_idx = (offset + chunk_idx) % num_workers;
+            let tx = &self.workers[worker_idx];
 
             let (resp_tx, resp_rx) = mpsc::channel(DEFAULT_STREAM_BUFFER_SIZE);
             tx.send(WorkRequest::Stream {
-                count: worker_count,
+                count: chunk_size,
                 tx: resp_tx,
                 cancelled: cancellation_token.clone(),
             })
@@ -196,6 +186,7 @@ impl IdGen for IdService {
             .map_err(|e| Status::unavailable(format!("Service overloaded: {}", e)))?;
 
             streams.push(ReceiverStream::new(resp_rx));
+            remaining_ids -= chunk_size;
         }
 
         let cancel_future = Box::pin(async move {
