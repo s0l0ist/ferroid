@@ -12,20 +12,22 @@ pub mod idgen {
 #[derive(Debug)]
 struct BenchmarkResult {
     label: String,
-    count: usize,
+    target_count: usize,
+    total_received: usize,
     duration: Duration,
 }
 
 impl BenchmarkResult {
     fn throughput(&self) -> f64 {
-        self.count as f64 / self.duration.as_secs_f64()
+        self.total_received as f64 / self.duration.as_secs_f64()
     }
 
     fn report(&self) {
         println!(
-            "{:<25} | {:>10} items | {:>8.2} ms | {:>10.2} items/sec",
+            "{:<25} | {:>10} target | {:>10} total | {:>8.2} ms | {:>10.2} ID/sec",
             self.label,
-            self.count,
+            self.target_count,
+            self.total_received,
             self.duration.as_secs_f64() * 1000.0,
             self.throughput()
         );
@@ -57,8 +59,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     results.push(run_parallel_stream(100000, 50).await?);
     results.push(run_parallel_stream(1000000, 50).await?);
     results.push(run_parallel_stream(10000000, 50).await?);
-    results.push(run_parallel_stream(100000000, 50).await?);
-    results.push(run_parallel_stream(1000000000, 50).await?);
+    // results.push(run_parallel_stream(100000000, 50).await?);
+    // results.push(run_parallel_stream(1000000000, 50).await?);
 
     // === Final Summary Table ===
     println!("\n=== Benchmark Summary ===");
@@ -78,7 +80,7 @@ async fn run_parallel_stream(
     target_count: u64,
     concurrency: usize,
 ) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
-    let per_stream = target_count / concurrency as u64;
+    // let per_stream = target_count / concurrency as u64;
     let start = Instant::now();
 
     let mut tasks = FuturesUnordered::new();
@@ -92,21 +94,28 @@ async fn run_parallel_stream(
                 .send_compressed(CompressionEncoding::Zstd);
 
             let mut stream = client
-                .get_stream_ids(IdStreamRequest { count: per_stream })
+                .get_stream_ids(IdStreamRequest {
+                    count: target_count,
+                })
                 .await?
                 .into_inner();
 
-            // let mut machine_id_counts = HashMap::new();
-            // let mut received = HashSet::with_capacity(target_count as usize);
+            type Ty = <SnowflakeTwitterId as Snowflake>::Ty;
+            let ty_size = size_of::<Ty>();
+
             let mut received = 0;
             while let Some(resp) = TokioStreamExt::next(&mut stream).await {
                 let raw = resp?.packed_ids;
                 let bytes = raw.as_ref();
 
-                assert_eq!(bytes.len() % 8, 0, "Corrupt chunk: not a multiple of 8");
+                assert_eq!(
+                    bytes.len() % ty_size,
+                    0,
+                    "Corrupt chunk: not a multiple of {ty_size}"
+                );
 
-                for chunk in bytes.chunks_exact(8) {
-                    let raw_id = u64::from_le_bytes(chunk.try_into().unwrap());
+                for chunk in bytes.chunks_exact(ty_size) {
+                    let raw_id = Ty::from_le_bytes(chunk.try_into().unwrap());
                     let _id = SnowflakeTwitterId::from_raw(raw_id);
                     received += 1;
                 }
@@ -128,7 +137,8 @@ async fn run_parallel_stream(
 
     Ok(BenchmarkResult {
         label: format!("Parallel stream x{}", concurrency),
-        count: total_received,
+        target_count: target_count as usize,
+        total_received,
         duration,
     })
 }
