@@ -41,60 +41,9 @@
 //!   streaming logic.
 //! - [`idgen`] - Generated Protobuf service and message definitions.
 //!
-//! ## Related Crates
-//!
-//! - [`ferroid`](https://crates.io/crates/ferroid): Embedded Snowflake
-//!   generator.
-//! - [`tonic`](https://crates.io/crates/tonic): gRPC transport over HTTP/2.
 
 pub mod common;
 pub mod server;
-
-/// gRPC service and message definitions generated from `proto/idgen.proto`.
-///
-/// This module defines the streaming API for high-throughput ID generation.
-///
-/// ## Service
-///
-/// - [`GetStreamIds`] - Streams back a client-specified number of unique IDs as
-///   binary chunks.
-///
-/// ## Message Format
-///
-/// - [`IdStreamRequest`] - Specifies how many IDs to generate.
-/// - [`IdUnitResponseChunk`] - Contains a `packed_ids` byte buffer with
-///   serialized Snowflake IDs.
-///
-/// The server uses a raw binary format for performance:
-/// - IDs are fixed-width (typically 8 or 16 bytes).
-/// - Encoded in little-endian order.
-/// - Packed into a contiguous `bytes` buffer per chunk.
-///
-/// ### Example Client Deserialization (Rust)
-/// ```rust
-/// use ferroid::{Snowflake, SnowflakeTwitterId};
-///
-/// for chunk in response_stream {
-///     for bytes in chunk.packed_ids.chunks_exact(size_of::<<SnowflakeTwitterId as Snowflake>::Ty>()) {
-///         let raw_id = u64::from_le_bytes(bytes.try_into().unwrap());
-///          let id = SnowflakeTwitterId::from_raw(raw_id);
-///         // use ID...
-///     }
-/// }
-/// ```
-///
-/// Clients must match their decode width (`u64`, `u128`) with the server
-/// configuration.
-///
-/// ## Invariants
-/// - `packed_ids.len() % ID_SIZE == 0`
-/// - Each chunk contains ≥ 1 complete ID
-///
-/// See `proto/idgen.proto` for full schema and comments.
-///
-/// [`GetStreamIds`]: [`crate::idgen::GetStreamIds`]
-/// [`IdStreamRequest`]: [`crate::idgen::IdStreamRequest`]
-/// [`IdUnitResponseChunk`]: [`crate::idgen::IdUnitResponseChunk`]
 pub mod idgen {
     tonic::include_proto!("idgen");
 }

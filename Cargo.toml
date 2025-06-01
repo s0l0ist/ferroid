@@ -39,6 +39,8 @@ rand = { version = "0.9", default-features = false }
 bytes = { version = "1.10", default-features = false }
 thiserror = { version = "2.0", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
+clap = { version = "4.5", default-features = false }
+anyhow = { version = "1.0", default-features = false }
 
 [profile.bin-release]
 inherits = "release"

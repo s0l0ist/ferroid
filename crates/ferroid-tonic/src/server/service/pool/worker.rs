@@ -23,9 +23,12 @@
 //! This module is used internally by the worker pool and should not be invoked
 //! directly outside of pool orchestration.
 
-use crate::server::service::{
-    config::SnowflakeGeneratorType,
-    streaming::{processor::handle_stream_request, request::WorkRequest},
+use crate::server::{
+    config::ServerConfig,
+    service::{
+        config::SnowflakeGeneratorType,
+        streaming::{processor::handle_stream_request, request::WorkRequest},
+    },
 };
 use tokio::sync::mpsc;
 
@@ -51,6 +54,7 @@ pub(crate) async fn worker_loop(
     worker_id: usize,
     mut rx: mpsc::Receiver<WorkRequest>,
     mut generator: SnowflakeGeneratorType,
+    config: ServerConfig,
 ) {
     #[cfg(feature = "tracing")]
     tracing::debug!("Worker {} started", worker_id);
@@ -63,7 +67,8 @@ pub(crate) async fn worker_loop(
                     tx,
                     cancelled,
                 } => {
-                    handle_stream_request(worker_id, count, tx, cancelled, &mut generator).await;
+                    handle_stream_request(worker_id, count, tx, cancelled, &mut generator, &config)
+                        .await;
                 }
                 WorkRequest::Shutdown { response } => {
                     #[cfg(feature = "tracing")]

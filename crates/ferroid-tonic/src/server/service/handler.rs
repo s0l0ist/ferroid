@@ -18,17 +18,16 @@
 //! - [`crate::server::service::streaming`] - stream coordination and chunk
 //!   processing.
 
-use super::pool::manager::WorkerPool;
 use crate::{
     common::{error::IdServiceError, types::SnowflakeIdType},
     idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
-    server::service::{
-        config::{
-            ClockType, DEFAULT_STREAM_BUFFER_SIZE, DEFAULT_WORK_REQUEST_BUFFER_SIZE,
-            MAX_ALLOWED_IDS, SHARD_OFFSET, SnowflakeGeneratorType,
+    server::{
+        config::ServerConfig,
+        service::{
+            config::{ClockType, SnowflakeGeneratorType},
+            pool::{manager::WorkerPool, worker::worker_loop},
+            streaming::coordinator::feed_chunks,
         },
-        pool::worker::worker_loop,
-        streaming::coordinator::feed_chunks,
     },
 };
 use core::pin::Pin;
@@ -47,6 +46,7 @@ use tonic::{Request, Response, Status};
 /// chunked work to a pool of background worker tasks.
 #[derive(Clone)]
 pub struct IdService {
+    config: ServerConfig,
     worker_pool: Arc<WorkerPool>,
 }
 
@@ -56,30 +56,37 @@ impl IdService {
     /// Each worker is assigned a unique Snowflake machine ID and runs its own
     /// generator and bounded channel. All workers share a global shutdown
     /// token.
-    #[cfg_attr(feature = "tracing", tracing::instrument(name = "id_service_new", fields(num_workers = num_workers)))]
-    pub fn new(num_workers: usize) -> Self {
+    #[cfg_attr(feature = "tracing", tracing::instrument(name = "id_service_new", fields(num_workers = config.num_workers)))]
+    pub fn new(config: ServerConfig) -> Self {
         #[cfg(feature = "tracing")]
-        tracing::info!("Initializing ID service with {} workers", num_workers);
+        tracing::info!(
+            "Initializing ID service with {} workers",
+            config.num_workers
+        );
 
-        let mut workers = Vec::with_capacity(num_workers);
+        let mut workers = Vec::with_capacity(config.num_workers);
         let clock = ClockType::default();
         let shutdown_token = CancellationToken::new();
 
-        for worker_id in 0..num_workers {
-            let (tx, rx) = mpsc::channel(DEFAULT_WORK_REQUEST_BUFFER_SIZE);
+        for worker_id in 0..config.num_workers {
+            let (tx, rx) = mpsc::channel(config.work_request_buffer_size);
             workers.push(tx);
 
             let generator = SnowflakeGeneratorType::new(
-                (SHARD_OFFSET + worker_id) as <SnowflakeIdType as Snowflake>::Ty,
+                (config.shard_offset + worker_id) as <SnowflakeIdType as Snowflake>::Ty,
                 clock.clone(),
             );
 
-            tokio::spawn(worker_loop(worker_id, rx, generator));
+            let config = config.clone();
+            tokio::spawn(worker_loop(worker_id, rx, generator, config));
         }
 
-        let worker_pool = Arc::new(WorkerPool::new(Arc::new(workers), shutdown_token));
+        let worker_pool = WorkerPool::new(Arc::new(workers), shutdown_token);
 
-        Self { worker_pool }
+        Self {
+            config,
+            worker_pool: Arc::new(worker_pool),
+        }
     }
 
     /// Initiates graceful shutdown of the worker pool.
@@ -118,11 +125,11 @@ impl IdGen for IdService {
             .into());
         }
 
-        if total_ids > MAX_ALLOWED_IDS {
+        if total_ids > self.config.max_allowed_ids {
             return Err(IdServiceError::InvalidRequest {
                 reason: format!(
                     "Count {} exceeds maximum allowed ({})",
-                    total_ids, MAX_ALLOWED_IDS
+                    total_ids, self.config.max_allowed_ids
                 ),
             }
             .into());
@@ -130,13 +137,13 @@ impl IdGen for IdService {
 
         let cancellation_token = Arc::new(CancellationToken::new());
         let (resp_tx, resp_rx) =
-            mpsc::channel::<Result<IdUnitResponseChunk, Status>>(DEFAULT_STREAM_BUFFER_SIZE);
+            mpsc::channel::<Result<IdUnitResponseChunk, Status>>(self.config.stream_buffer_size);
 
         let worker_pool = Arc::clone(&self.worker_pool);
         let cancel = cancellation_token.clone();
-
+        let config = self.config.clone();
         tokio::spawn(async move {
-            feed_chunks(total_ids, worker_pool, resp_tx, cancel).await;
+            feed_chunks(total_ids, worker_pool, resp_tx, cancel, config).await;
         });
 
         let cancel_future = Box::pin(async move {

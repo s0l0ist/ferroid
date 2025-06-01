@@ -29,37 +29,36 @@
 //! ```
 //!
 
+use clap::Parser;
 use ferroid_tonic::{
     idgen::id_gen_server::IdGenServer,
     server::{
-        service::{
-            config::{
-                DEFAULT_IDS_PER_CHUNK, DEFAULT_WORK_REQUEST_BUFFER_SIZE, MAX_ALLOWED_IDS,
-                NUM_WORKERS,
-            },
-            handler::IdService,
-        },
+        config::{CliArgs, ServerConfig},
+        service::handler::IdService,
         telemetry::init_tracing,
     },
 };
 use tonic::{codec::CompressionEncoding, transport::Server};
 
 /// Launches the gRPC streaming ID generation service.
-///
-/// Initializes tracing, configures the worker pool, and begins serving requests
-/// on `127.0.0.1:50051`. Handles graceful shutdown on Ctrl+C by canceling
-/// in-flight streams and waiting for workers to terminate.
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> anyhow::Result<()> {
+    let args = CliArgs::try_parse()?;
+    let config = ServerConfig::try_from(args)?;
+
     init_tracing();
 
     let addr = "127.0.0.1:50051".parse()?;
     println!(
         "Starting ID service on {} with {} workers (chunk = {}, buffer = {}, max = {})",
-        addr, NUM_WORKERS, DEFAULT_IDS_PER_CHUNK, DEFAULT_WORK_REQUEST_BUFFER_SIZE, MAX_ALLOWED_IDS,
+        addr,
+        config.num_workers,
+        config.ids_per_chunk,
+        config.work_request_buffer_size,
+        config.max_allowed_ids,
     );
 
-    let service = IdService::new(NUM_WORKERS);
+    let service = IdService::new(config);
     let service_for_shutdown = service.clone();
 
     let server = Server::builder()

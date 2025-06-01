@@ -20,7 +20,7 @@
 use super::request::WorkRequest;
 use crate::{
     idgen::IdUnitResponseChunk,
-    server::service::{config::DEFAULT_IDS_PER_CHUNK, pool::manager::WorkerPool},
+    server::{config::ServerConfig, service::pool::manager::WorkerPool},
 };
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -56,6 +56,7 @@ pub(crate) async fn feed_chunks(
     worker_pool: Arc<WorkerPool>,
     resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
     cancel: Arc<CancellationToken>,
+    config: ServerConfig,
 ) {
     let mut remaining = total_ids;
 
@@ -66,7 +67,7 @@ pub(crate) async fn feed_chunks(
             break;
         }
 
-        let chunk_size = remaining.min(DEFAULT_IDS_PER_CHUNK);
+        let chunk_size = remaining.min(config.ids_per_chunk);
         remaining -= chunk_size;
 
         let (chunk_tx, mut chunk_rx) = mpsc::channel(2);

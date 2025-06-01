@@ -22,7 +22,7 @@
 use crate::{
     common::{error::IdServiceError, types::SNOWFLAKE_ID_SIZE},
     idgen::IdUnitResponseChunk,
-    server::service::config::{DEFAULT_CHUNK_BYTES, SnowflakeGeneratorType},
+    server::{config::ServerConfig, service::config::SnowflakeGeneratorType},
 };
 use ferroid::{IdGenStatus, Snowflake};
 use std::sync::Arc;
@@ -62,8 +62,9 @@ pub async fn handle_stream_request(
     tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
     cancelled: Arc<CancellationToken>,
     generator: &mut SnowflakeGeneratorType,
+    config: &ServerConfig,
 ) {
-    let mut chunk_buf = [0_u8; DEFAULT_CHUNK_BYTES];
+    let mut chunk_buf = vec![0_u8; config.chunk_bytes];
     let mut buf_pos = 0;
     let mut generated = 0;
 
@@ -76,7 +77,7 @@ pub async fn handle_stream_request(
                 chunk_buf[buf_pos..buf_pos + SNOWFLAKE_ID_SIZE].copy_from_slice(&id_bytes);
                 buf_pos += SNOWFLAKE_ID_SIZE;
 
-                if buf_pos == DEFAULT_CHUNK_BYTES {
+                if buf_pos == config.chunk_bytes {
                     if should_stop(&cancelled, &tx) {
                         #[cfg(feature = "tracing")]
                         tracing::debug!("Worker {} stopping before chunk send", _worker_id);

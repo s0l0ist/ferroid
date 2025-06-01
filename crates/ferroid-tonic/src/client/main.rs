@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     results.push(run_parallel_stream(100000, 50).await?);
     results.push(run_parallel_stream(1000000, 50).await?);
     results.push(run_parallel_stream(10000000, 50).await?);
-    results.push(run_parallel_stream(100000000, 50).await?);
+    // results.push(run_parallel_stream(100000000, 50).await?);
     // results.push(run_parallel_stream(1000000000, 50).await?);
 
     // === Final Summary Table ===
@@ -81,7 +81,6 @@ async fn run_parallel_stream(
     target_count: u64,
     concurrency: usize,
 ) -> Result<BenchmarkResult, Box<dyn std::error::Error + Send + Sync>> {
-    // let per_stream = target_count / concurrency as u64;
     let start = Instant::now();
 
     let mut tasks = FuturesUnordered::new();
@@ -92,7 +91,7 @@ async fn run_parallel_stream(
                 .connect()
                 .await?;
             let mut client = IdGenClient::new(channel)
-                .accept_compressed(CompressionEncoding::Zstd)
+                // .accept_compressed(CompressionEncoding::Zstd)
                 .send_compressed(CompressionEncoding::Zstd);
 
             let mut stream = client

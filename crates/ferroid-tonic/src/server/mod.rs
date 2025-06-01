@@ -14,5 +14,6 @@
 //! These components are wired together in the server's `main.rs` and used to
 //! serve the `IdGen` gRPC service defined in [`crate::idgen`].
 
+pub mod config;
 pub mod service;
 pub mod telemetry;
