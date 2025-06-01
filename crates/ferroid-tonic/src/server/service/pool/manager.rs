@@ -1,20 +1,24 @@
-//! Worker pool abstraction for load-balanced and cancellable Snowflake ID
-//! generation.
+//! Worker pool management for concurrent, cancellable Snowflake ID generation.
 //!
-//! This module defines the [`WorkerPool`] struct, which manages a fixed set of
-//! Tokio tasks, each responsible for generating Snowflake IDs. The pool
-//! enables:
+//! This module defines the [`WorkerPool`] struct, which orchestrates a fixed
+//! set of asynchronous worker tasks. Each worker is backed by its own bounded
+//! MPSC channel and is responsible for handling `WorkRequest`s such as
+//! generating Snowflake IDs or handling shutdown commands.
 //!
-//! - Load-balanced distribution of work requests via round-robin routing.
-//! - Backpressure-aware channel handling to avoid memory blow-up.
-//! - Cooperative cancellation via a shared [`CancellationToken`].
-//! - Graceful shutdown coordination through one-shot channels.
+//! ## Responsibilities
 //!
-//! The pool is used internally by the gRPC `IdService` to delegate streaming or
-//! batched ID generation tasks to worker tasks.
+//! - Load-balanced routing of incoming work via round-robin distribution.
+//! - Backpressure-aware task delegation using `try_send()` with bounded
+//!   fallback.
+//! - Cooperative cancellation through a shared [`CancellationToken`].
+//! - Graceful, coordinated shutdown via `WorkRequest::Shutdown` messages.
+//!
+//! This component is used internally by the gRPC
+//! [`IdService`](crate::server::service::handler::IdService) to distribute
+//! stream-based and batched ID generation requests across a pool of
+//! long-running tasks.
 
-use super::request::WorkRequest;
-use crate::common::error::IdServiceError;
+use crate::{common::error::IdServiceError, server::service::streaming::request::WorkRequest};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -22,11 +26,11 @@ use std::sync::{
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-/// A pool of worker tasks that generate Snowflake IDs.
+/// Manages a pool of asynchronous workers for handling [`WorkRequest`]s.
 ///
-/// Each worker is a Tokio task running a `worker_loop` and listening on its own
-/// MPSC channel. This pool maintains round-robin routing and graceful shutdown
-/// coordination.
+/// Each worker operates independently, listening for incoming messages on a
+/// bounded MPSC channel. The pool distributes requests using round-robin
+/// scheduling and supports graceful, cooperative shutdown.
 pub struct WorkerPool {
     workers: Arc<Vec<mpsc::Sender<WorkRequest>>>,
     next_worker: AtomicUsize,
@@ -34,8 +38,8 @@ pub struct WorkerPool {
 }
 
 impl WorkerPool {
-    /// Constructs a new [`WorkerPool`] with a given set of channels and a
-    /// shared shutdown token.
+    /// Creates a new [`WorkerPool`] from a pre-initialized list of worker
+    /// channels and a shared shutdown token.
     pub fn new(
         workers: Arc<Vec<mpsc::Sender<WorkRequest>>>,
         shutdown_token: CancellationToken,
@@ -47,17 +51,20 @@ impl WorkerPool {
         }
     }
 
-    /// Returns the next worker index using a relaxed atomic round-robin
-    /// counter.
+    /// Computes the next worker index using relaxed atomic round-robin logic.
     pub(crate) fn next_worker_index(&self) -> usize {
         self.next_worker.fetch_add(1, Ordering::Relaxed) % self.workers.len()
     }
 
-    /// Sends a [`WorkRequest`] to the next available worker.
+    /// Attempts to send a [`WorkRequest`] to the next worker in the pool.
     ///
-    /// Uses `try_send()` for fast-path success, falling back to a bounded
-    /// `send()` call with a timeout (100ms). If the shutdown token is already
-    /// cancelled, returns [`IdServiceError::ServiceShutdown`].
+    /// Fast-path uses `try_send()` to avoid awaiting when possible. If the
+    /// worker’s queue is full, falls back to `send()` with a 100ms timeout.
+    ///
+    /// Returns an error if:
+    /// - The shutdown token has been triggered.
+    /// - The worker’s channel is closed.
+    /// - Sending times out due to backpressure.
     pub(crate) async fn send_to_next_worker(
         &self,
         request: WorkRequest,
@@ -93,24 +100,26 @@ impl WorkerPool {
         }
     }
 
-    /// Initiates cooperative shutdown of all workers in the pool.
+    /// Broadcasts a shutdown signal to all workers and waits for
+    /// acknowledgement.
     ///
-    /// Broadcasts a shutdown signal via the shared [`CancellationToken`] and
-    /// sends a [`WorkRequest::Shutdown`] to each worker. Waits for a response
-    /// from each worker (with a timeout of 5 seconds).
+    /// - Cancels the shared [`CancellationToken`] to prevent further work
+    ///   dispatch.
+    /// - Sends a [`WorkRequest::Shutdown`] to each worker, along with a
+    ///   one-shot response channel.
+    /// - Waits up to 3 seconds per worker for confirmation.
+    ///
+    /// This is typically invoked during service shutdown.
     pub(crate) async fn shutdown(&self) -> Result<(), IdServiceError> {
         #[cfg(feature = "tracing")]
         tracing::info!("Initiating worker pool shutdown");
 
-        // Stop producing more work from existing streams
         self.shutdown_token.cancel();
-
         let mut shutdown_handles = Vec::new();
 
         for (_i, worker) in self.workers.iter().enumerate() {
             let (tx, rx) = oneshot::channel();
             if let Err(_e) = worker.send(WorkRequest::Shutdown { response: tx }).await {
-                // typically: "channel closed"
                 #[cfg(feature = "tracing")]
                 tracing::debug!("Failed to send shutdown signal to worker {}: {}", _i, _e);
             } else {
@@ -122,15 +131,15 @@ impl WorkerPool {
             match tokio::time::timeout(tokio::time::Duration::from_secs(3), handle).await {
                 Ok(Ok(())) => {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {} shut down gracefully", _i)
+                    tracing::debug!("Worker {} shut down gracefully", _i);
                 }
                 Ok(Err(_e)) => {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {} shutdown response: {}", _i, _e)
+                    tracing::debug!("Worker {} shutdown response: {}", _i, _e);
                 }
                 Err(_) => {
                     #[cfg(feature = "tracing")]
-                    tracing::warn!("Worker {} shutdown timeout", _i)
+                    tracing::warn!("Worker {} shutdown timeout", _i);
                 }
             }
         }

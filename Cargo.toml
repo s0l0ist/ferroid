@@ -39,3 +39,16 @@ rand = { version = "0.9", default-features = false }
 bytes = { version = "1.10", default-features = false }
 thiserror = { version = "2.0", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
+
+[profile.bin-release]
+inherits = "release"
+codegen-units = 1           # reduce size and help opt
+debug = "full"              # no one needs an undebuggable release binary
+lto = true                  # reduce size and help opt
+opt-level = 3               # optimize for perf
+panic = "abort"             # reduces binary size by ~50% in combination with -Zbuild-std-features=panic_immediate_abort
+split-debuginfo = "packed"  # generates a separate *.dwp/*.dSYM so the binary can get stripped
+strip = "symbols"           # See split-debuginfo - allows us to drop the size by ~65%
+incremental = true          # Improves re-compile times
+
+

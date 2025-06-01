@@ -12,15 +12,15 @@ keywords.workspace = true
 publish = false
 
 [[bin]]
-name = "server"
+name = "tonic-server"
 path = "src/server/main.rs"
 
 [[bin]] 
-name = "client"
+name = "tonic-client"
 path = "src/client/main.rs"
 
 [dependencies]
-ferroid = { path = "../ferroid", features = ["base32", "async-tokio", "async-smol"] }
+ferroid = { path = "../ferroid", features = ["async-tokio"] }
 tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd"] }
 tokio = { workspace = true, features = ["parking_lot", "rt-multi-thread", "signal"] }
 prost = { workspace = true, features = ["derive", "std"] }
@@ -28,7 +28,6 @@ prost-types = { workspace = true, features = ["std"] }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
 tokio-util = { workspace = true }
-rand = { workspace = true, features = ["thread_rng", "std_rng"] }
 bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, optional = true }

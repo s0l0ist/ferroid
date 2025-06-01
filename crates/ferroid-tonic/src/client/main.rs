@@ -92,7 +92,7 @@ async fn run_parallel_stream(
                 .connect()
                 .await?;
             let mut client = IdGenClient::new(channel)
-                // .accept_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Zstd)
                 .send_compressed(CompressionEncoding::Zstd);
 
             let mut stream = client

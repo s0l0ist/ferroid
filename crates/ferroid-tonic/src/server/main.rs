@@ -1,34 +1,54 @@
-//! # ferroid-tonic Server
+//! # `ferroid-tonic` Server
 //!
-//! This binary launches a high-performance, gRPC-based Snowflake ID generation
-//! service using [`ferroid`] for ID generation and [`tonic`] for gRPC
-//! infrastructure.
+//! This binary launches a high-throughput, gRPC-based Snowflake ID generation
+//! service using [`ferroid`] for ID generation and [`tonic`] for the transport
+//! layer.
 //!
-//! The server provides single and streaming endpoints for clients to request
-//! batches of Snowflake-like unique IDs. It is designed to handle massive
-//! throughput with backpressure, cancellation, and compression support.
+//! The server exposes a **streaming-only** endpoint that allows clients to
+//! request a large number of Snowflake-like IDs, returned in compressed,
+//! backpressure-aware chunks.
 //!
-//! ## Features
+//! ## Key Features
 //!
-//! - Streamed or single-response ID generation.
-//! - Fully asynchronous, backpressure-aware worker pool.
-//! - Graceful shutdown with signal handling.
-//! - Adaptive HTTP/2 flow control for high-throughput gRPC traffic.
-//! - Compressed responses with Zstd support.
+//! - **Streaming ID Generation Only**: Optimized for large-batch use cases.
+//! - **Async Worker Pool**: Fixed number of concurrent workers with unique
+//!   generator state.
+//! - **Backpressure Handling**: All channels are bounded to prevent memory
+//!   overcommitment.
+//! - **Cooperative Cancellation**: Streams terminate early when the client
+//!   disconnects.
+//! - **Graceful Shutdown**: Workers are shut down cleanly on `SIGINT` (Ctrl+C).
+//! - **Efficient Transport**:
+//!   - gRPC over HTTP/2 with adaptive windowing.
+//!   - Zstd compression support for streaming responses.
 //!
-//! ## Example
+//! ## Running the Server
 //!
 //! ```bash
 //! cargo run --bin server --release
 //! ```
+//!
 
 use ferroid_tonic::{
     idgen::id_gen_server::IdGenServer,
-    server::{config::NUM_WORKERS, service::IdService, telemetry::init_tracing},
+    server::{
+        service::{
+            config::{
+                DEFAULT_IDS_PER_CHUNK, DEFAULT_WORK_REQUEST_BUFFER_SIZE, MAX_ALLOWED_IDS,
+                NUM_WORKERS,
+            },
+            handler::IdService,
+        },
+        telemetry::init_tracing,
+    },
 };
 use tonic::{codec::CompressionEncoding, transport::Server};
 
-/// Entry point for the ID generation server.
+/// Launches the gRPC streaming ID generation service.
+///
+/// Initializes tracing, configures the worker pool, and begins serving requests
+/// on `127.0.0.1:50051`. Handles graceful shutdown on Ctrl+C by canceling
+/// in-flight streams and waiting for workers to terminate.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing();
@@ -36,11 +56,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "127.0.0.1:50051".parse()?;
     println!(
         "Starting ID service on {} with {} workers (chunk = {}, buffer = {}, max = {})",
-        addr,
-        NUM_WORKERS,
-        ferroid_tonic::server::config::DEFAULT_IDS_PER_CHUNK,
-        ferroid_tonic::server::config::DEFAULT_WORK_REQUEST_BUFFER_SIZE,
-        ferroid_tonic::server::config::MAX_ALLOWED_IDS,
+        addr, NUM_WORKERS, DEFAULT_IDS_PER_CHUNK, DEFAULT_WORK_REQUEST_BUFFER_SIZE, MAX_ALLOWED_IDS,
     );
 
     let service = IdService::new(NUM_WORKERS);
@@ -57,6 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::signal::ctrl_c()
                 .await
                 .expect("Failed to install CTRL+C signal handler");
+
             println!("Shutdown signal received, terminating gracefully...");
 
             if let Err(_e) = service_for_shutdown.shutdown().await {
