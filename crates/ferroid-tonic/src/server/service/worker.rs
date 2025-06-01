@@ -14,10 +14,10 @@
 
 use super::request::WorkRequest;
 use crate::{
-    common::SNOWFLAKE_ID_SIZE,
-    config::{DEFAULT_CHUNK_BYTES, SnowflakeGeneratorType},
-    error::IdServiceError,
+    common::error::IdServiceError,
+    common::types::SNOWFLAKE_ID_SIZE,
     idgen::IdUnitResponseChunk,
+    server::config::{DEFAULT_CHUNK_BYTES, SnowflakeGeneratorType},
 };
 use ferroid::{IdGenStatus, Snowflake};
 use std::sync::Arc;

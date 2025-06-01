@@ -14,7 +14,7 @@
 //! batched ID generation tasks to worker tasks.
 
 use super::request::WorkRequest;
-use crate::error::IdServiceError;
+use crate::common::error::IdServiceError;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},

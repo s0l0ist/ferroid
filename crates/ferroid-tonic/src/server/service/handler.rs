@@ -17,13 +17,13 @@
 
 use super::{pool::WorkerPool, request::WorkRequest, stream::feed_chunks, worker::worker_loop};
 use crate::{
-    common::SnowflakeIdType,
-    config::{
+    common::error::IdServiceError,
+    common::types::SnowflakeIdType,
+    idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
+    server::config::{
         ClockType, DEFAULT_STREAM_BUFFER_SIZE, DEFAULT_WORK_REQUEST_BUFFER_SIZE, MAX_ALLOWED_IDS,
         SHARD_OFFSET, SnowflakeGeneratorType,
     },
-    error::IdServiceError,
-    idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
 };
 use core::pin::Pin;
 use ferroid::Snowflake;
@@ -36,9 +36,9 @@ use tonic::{Request, Response, Status};
 
 /// gRPC ID generation service.
 ///
-/// Owns a [`WorkerPool`] and implements [`IdGen`] to handle chunked streaming
-/// of Snowflake IDs. Each request is split into fixed-size chunks that are
-/// asynchronously processed by worker tasks.
+/// Implements [`IdGen`] to handle chunked streaming of Snowflake IDs. Each
+/// request is split into fixed-size chunks that are asynchronously processed by
+/// worker tasks.
 #[derive(Clone)]
 pub struct IdService {
     worker_pool: Arc<WorkerPool>,

@@ -23,19 +23,12 @@
 //! ```
 
 use ferroid_tonic::{
-    config::NUM_WORKERS, idgen::id_gen_server::IdGenServer, service::IdService,
-    telemetry::init_tracing,
+    idgen::id_gen_server::IdGenServer,
+    server::{config::NUM_WORKERS, service::IdService, telemetry::init_tracing},
 };
 use tonic::{codec::CompressionEncoding, transport::Server};
 
 /// Entry point for the ID generation server.
-///
-/// This function:
-/// - Initializes tracing subscriber with structured logs.
-/// - Spawns the `IdService` with a worker pool.
-/// - Binds a gRPC server on the configured address.
-/// - Enables Zstd compression and adaptive HTTP/2 windows.
-/// - Installs a shutdown hook to clean up the worker pool on SIGINT.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing();
@@ -45,9 +38,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Starting ID service on {} with {} workers (chunk = {}, buffer = {}, max = {})",
         addr,
         NUM_WORKERS,
-        ferroid_tonic::config::DEFAULT_IDS_PER_CHUNK,
-        ferroid_tonic::config::DEFAULT_WORK_REQUEST_BUFFER_SIZE,
-        ferroid_tonic::config::MAX_ALLOWED_IDS,
+        ferroid_tonic::server::config::DEFAULT_IDS_PER_CHUNK,
+        ferroid_tonic::server::config::DEFAULT_WORK_REQUEST_BUFFER_SIZE,
+        ferroid_tonic::server::config::MAX_ALLOWED_IDS,
     );
 
     let service = IdService::new(NUM_WORKERS);

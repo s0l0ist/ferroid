@@ -11,7 +11,7 @@
 //! - Abort cleanly on cancellation or backpressure failures.
 
 use super::{pool::WorkerPool, request::WorkRequest};
-use crate::{config::DEFAULT_IDS_PER_CHUNK, idgen::IdUnitResponseChunk};
+use crate::{idgen::IdUnitResponseChunk, server::config::DEFAULT_IDS_PER_CHUNK};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;

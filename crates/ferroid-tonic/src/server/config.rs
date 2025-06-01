@@ -23,7 +23,7 @@
 //! workers does not exceed the available Snowflake machine ID space, which
 //! would otherwise introduce ID collisions.
 
-use crate::common::{SNOWFLAKE_ID_SIZE, SnowflakeIdType};
+use crate::common::types::{SNOWFLAKE_ID_SIZE, SnowflakeIdType};
 use ferroid::{BasicSnowflakeGenerator, MonotonicClock};
 
 /// Offset used when assigning Snowflake worker IDs. Used to avoid overlap if

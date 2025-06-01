@@ -1,12 +1,10 @@
 use ferroid::Snowflake;
+use ferroid_tonic::common::types::{SNOWFLAKE_ID_SIZE, SnowflakeIdTy, SnowflakeIdType};
 use futures::stream::{FuturesUnordered, StreamExt as FuturesStreamExt};
 use idgen::{IdStreamRequest, id_gen_client::IdGenClient};
 use std::time::{Duration, Instant};
 use tokio_stream::StreamExt as TokioStreamExt;
 use tonic::{codec::CompressionEncoding, transport::Channel};
-
-pub mod common;
-use common::{SNOWFLAKE_ID_SIZE, SnowflakeIdTy, SnowflakeIdType};
 
 pub mod idgen {
     tonic::include_proto!("idgen");
@@ -37,7 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     results.push(run_parallel_stream(100000, 50).await?);
     results.push(run_parallel_stream(1000000, 50).await?);
     results.push(run_parallel_stream(10000000, 50).await?);
-    // results.push(run_parallel_stream(100000000, 50).await?);
+    results.push(run_parallel_stream(100000000, 50).await?);
     // results.push(run_parallel_stream(1000000000, 50).await?);
 
     // === Final Summary Table ===
@@ -87,6 +85,7 @@ async fn run_parallel_stream(
     let start = Instant::now();
 
     let mut tasks = FuturesUnordered::new();
+
     for _ in 0..concurrency {
         tasks.push(tokio::spawn(async move {
             let channel = Channel::from_static("http://127.0.0.1:50051")

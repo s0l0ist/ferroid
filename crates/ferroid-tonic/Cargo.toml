@@ -13,11 +13,11 @@ publish = false
 
 [[bin]]
 name = "server"
-path = "src/server.rs"
+path = "src/server/main.rs"
 
 [[bin]] 
 name = "client"
-path = "src/client.rs"
+path = "src/client/main.rs"
 
 [dependencies]
 ferroid = { path = "../ferroid", features = ["base32", "async-tokio", "async-smol"] }
