@@ -317,7 +317,7 @@ macro_rules! define_snowflake_id {
                 let mut n = max;
                 let mut digits = 1;
                 while n >= 10 {
-                    n = n / 10;
+                    n /= 10;
                     digits += 1;
                 }
                 format!("{:0width$}", self.to_raw(), width = digits)
