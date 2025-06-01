@@ -15,14 +15,14 @@
 //! - [`SNOWFLAKE_ID_SIZE`]: The number of bytes required to encode a single
 //!       Snowflake ID.
 
-use ferroid::{Snowflake, SnowflakeLongId, SnowflakeTwitterId};
+use ferroid::{Snowflake, SnowflakeTwitterId};
 use std::mem::size_of;
 
 /// [CHANGEME] The concrete Snowflake ID type used throughout the system.
 ///
 /// Currently set to `SnowflakeTwitterId`, but feel free to override with any
 /// custom implementation.
-pub type SnowflakeIdType = SnowflakeLongId;
+pub type SnowflakeIdType = SnowflakeTwitterId;
 
 /// The primitive integer representation of the Snowflake ID (usually `u64`).
 pub type SnowflakeIdTy = <SnowflakeIdType as Snowflake>::Ty;
