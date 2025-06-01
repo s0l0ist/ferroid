@@ -4,7 +4,7 @@
 
 use core::pin::Pin;
 use ferroid::{BasicSnowflakeGenerator, IdGenStatus, MonotonicClock, Snowflake};
-use futures::{StreamExt, stream::SelectAll};
+use futures::StreamExt;
 use idgen::{
     IdStreamRequest, IdUnitResponseChunk,
     id_gen_server::{IdGen, IdGenServer},
@@ -106,10 +106,10 @@ const NUM_WORKERS: usize = 1024;
 
 /// Buffer capacity for each worker's mpsc channel. Controls how many work
 /// requests can be queued per worker before backpressure kicks in.
-const DEFAULT_WORK_REQUEST_BUFFER_SIZE: usize = 256;
+const DEFAULT_WORK_REQUEST_BUFFER_SIZE: usize = 1;
 
 /// Number of Snowflake IDs packed into each response chunk.
-const DEFAULT_IDS_PER_CHUNK: usize = 4096;
+const DEFAULT_IDS_PER_CHUNK: usize = 2048;
 
 /// Size in bytes of packed ID data in each chunk.
 const DEFAULT_CHUNK_BYTES: usize = DEFAULT_IDS_PER_CHUNK * SNOWFLAKE_ID_SIZE;
@@ -254,73 +254,83 @@ impl IdGen for IdService {
 
         // Validate request
         if total_ids == 0 {
-            let error = IdServiceError::InvalidRequest {
+            return Err(IdServiceError::InvalidRequest {
                 reason: "Count must be greater than 0".to_string(),
-            };
-            return Err(error.into());
+            }
+            .into());
         }
 
-        if total_ids > 10_000_000 {
-            let error = IdServiceError::InvalidRequest {
-                reason: format!("Count {} exceeds maximum allowed (10M)", total_ids),
-            };
-            return Err(error.into());
+        if total_ids > 1_000_000_000 {
+            return Err(IdServiceError::InvalidRequest {
+                reason: format!("Count {} exceeds maximum allowed (1B)", total_ids),
+            }
+            .into());
         }
 
         let cancellation_token = Arc::new(CancellationToken::new());
-        let num_workers = self.workers.len();
+        let (resp_tx, resp_rx) =
+            mpsc::channel::<Result<IdUnitResponseChunk, Status>>(DEFAULT_STREAM_BUFFER_SIZE);
 
-        // Calculate chunks needed (ceiling div)
-        let chunks_needed = (total_ids + DEFAULT_IDS_PER_CHUNK - 1) / DEFAULT_IDS_PER_CHUNK;
-        let mut streams = SelectAll::new();
-        let mut rng = StdRng::from_rng(&mut rand::rng());
-        let offset = rng.random_range(0..num_workers);
-
-        info!(
-            chunks_needed = chunks_needed,
-            "Distributing work across workers"
-        );
-
-        let mut remaining_ids = total_ids;
-        for chunk_idx in 0..chunks_needed {
-            let chunk_size = std::cmp::min(remaining_ids, DEFAULT_IDS_PER_CHUNK);
-            if chunk_size == 0 {
-                break;
-            }
-
-            // Round-robin worker selection with random offset
-            let worker_idx = (offset + chunk_idx) % num_workers;
-            let tx = &self.workers[worker_idx];
-            let (resp_tx, resp_rx) = mpsc::channel(DEFAULT_STREAM_BUFFER_SIZE);
-
-            let work_request = WorkRequest::Stream {
-                count: chunk_size,
-                tx: resp_tx,
-                cancelled: cancellation_token.clone(),
-            };
-
-            if let Err(e) = tx.send(work_request).await {
-                let error = IdServiceError::WorkerChannelSend {
-                    message: e.to_string(),
-                };
-                error!(
-                    worker_idx = worker_idx,
-                    error = %error,
-                    "Failed to send work to worker"
-                );
-                return Err(error.into());
-            }
-
-            streams.push(ReceiverStream::new(resp_rx));
-            remaining_ids -= chunk_size;
-        }
+        // Spawn the per-stream chunk feeder
+        let workers = Arc::clone(&self.workers);
+        let cancel = cancellation_token.clone();
+        tokio::spawn(feed_chunks(total_ids, workers, resp_tx, cancel));
 
         let cancel_future = Box::pin(async move {
             cancellation_token.cancelled().await;
         });
 
-        let stream = streams.take_until(cancel_future);
+        let stream = ReceiverStream::new(resp_rx).take_until(cancel_future);
         Ok(Response::new(Box::pin(stream)))
+    }
+}
+
+async fn feed_chunks(
+    total_ids: usize,
+    workers: Arc<Vec<mpsc::Sender<WorkRequest>>>,
+    resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
+    cancel: Arc<CancellationToken>,
+) {
+    let mut remaining = total_ids;
+    let mut rng = StdRng::from_rng(&mut rand::rng());
+
+    while remaining > 0 {
+        let chunk_size = remaining.min(DEFAULT_IDS_PER_CHUNK);
+        remaining -= chunk_size;
+
+        let (chunk_tx, mut chunk_rx) = mpsc::channel(2);
+        let worker_idx = rng.random_range(0..workers.len());
+        let worker = &workers[worker_idx];
+
+        // Try dispatching work
+        if let Err(e) = worker
+            .send(WorkRequest::Stream {
+                count: chunk_size,
+                tx: chunk_tx,
+                cancelled: cancel.clone(),
+            })
+            .await
+        {
+            error!("Failed to dispatch to worker {worker_idx}: {e}");
+
+            if let Err(e) = resp_tx
+                .send(Err(Status::unavailable("Worker send failed")))
+                .await
+            {
+                error!("Failed to forward err to client: {e}");
+                return;
+            }
+
+            return;
+        }
+
+        // Try receiving work
+        while let Some(msg) = chunk_rx.recv().await {
+            if let Err(e) = resp_tx.send(msg).await {
+                error!("Failed to forward chunk to client: {e}");
+                return;
+            }
+        }
     }
 }
 
