@@ -3,7 +3,7 @@ use std::sync::{MutexGuard, PoisonError};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum Error {
     LockPoisoned,

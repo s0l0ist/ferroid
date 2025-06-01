@@ -3,9 +3,7 @@
 //! support.
 
 use core::pin::Pin;
-use ferroid::{
-    BasicSnowflakeGenerator, IdGenStatus, MonotonicClock, Snowflake, SnowflakeTwitterId,
-};
+use ferroid::{BasicSnowflakeGenerator, IdGenStatus, MonotonicClock, Snowflake};
 use futures::{StreamExt, stream::SelectAll};
 use idgen::{
     IdStreamRequest, IdUnitResponseChunk,
@@ -14,13 +12,75 @@ use idgen::{
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status, codec::CompressionEncoding, transport::Server};
+use tracing::{debug, error, info, instrument, warn};
+
+pub mod common;
+use common::{SNOWFLAKE_ID_SIZE, SnowflakeIdType};
 
 pub mod idgen {
     tonic::include_proto!("idgen");
+}
+
+/// Custom error types for the ID generation service
+#[derive(Error, Debug)]
+pub enum IdServiceError {
+    #[error("Worker channel send failed: {message}")]
+    WorkerChannelSend { message: String },
+
+    #[error("Response channel send failed: {message}")]
+    ResponseChannelSend { message: String },
+
+    #[error("ID generation failed: {0}")]
+    IdGeneration(#[from] ferroid::Error),
+
+    #[error("Service is overloaded: {details}")]
+    ServiceOverloaded { details: String },
+
+    #[error("Request cancelled by client")]
+    RequestCancelled,
+
+    #[error("Invalid request: {reason}")]
+    InvalidRequest { reason: String },
+
+    #[error("Worker task failure: {worker_id}, reason: {reason}")]
+    WorkerTaskFailure { worker_id: usize, reason: String },
+
+    #[error("Stream buffer overflow: {buffer_size} exceeded")]
+    StreamBufferOverflow { buffer_size: usize },
+}
+
+impl From<IdServiceError> for Status {
+    fn from(err: IdServiceError) -> Self {
+        match err {
+            IdServiceError::WorkerChannelSend { message } => {
+                Status::unavailable(format!("Worker unavailable: {}", message))
+            }
+            IdServiceError::ResponseChannelSend { message } => {
+                Status::internal(format!("Response delivery failed: {}", message))
+            }
+            IdServiceError::IdGeneration(err) => {
+                Status::internal(format!("ID generation error: {}", err))
+            }
+            IdServiceError::ServiceOverloaded { details } => {
+                Status::resource_exhausted(format!("Service overloaded: {}", details))
+            }
+            IdServiceError::RequestCancelled => Status::cancelled("Request was cancelled"),
+            IdServiceError::InvalidRequest { reason } => {
+                Status::invalid_argument(format!("Invalid request: {}", reason))
+            }
+            IdServiceError::WorkerTaskFailure { worker_id, reason } => {
+                Status::internal(format!("Worker {} failed: {}", worker_id, reason))
+            }
+            IdServiceError::StreamBufferOverflow { buffer_size } => {
+                Status::resource_exhausted(format!("Stream buffer overflow: {}", buffer_size))
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -36,66 +96,47 @@ struct IdService {
     workers: Arc<Vec<mpsc::Sender<WorkRequest>>>,
 }
 
-/// ID type used by this server instance
-type ServerIdType = SnowflakeTwitterId;
-
 /// The offset to shard the generators
 const SHARD_OFFSET: usize = 0;
+
 /// Number of worker tasks processing ID generation requests concurrently. Each
 /// worker handles one generation request at a time but can process multiple
-/// chunks within that request. This
+/// chunks within that request.
 const NUM_WORKERS: usize = 1024;
-// Increase this number helps when concurrency is high at the cost of more memory
-// for in-flight streams.
 
 /// Buffer capacity for each worker's mpsc channel. Controls how many work
-/// requests can be queued per worker before backpressure kicks in. This is
-/// measured in requests, not memory usage.
+/// requests can be queued per worker before backpressure kicks in.
 const DEFAULT_WORK_REQUEST_BUFFER_SIZE: usize = 256;
 
-/// Number of Snowflake IDs packed into each response chunk. 4096 IDs per chunk
-/// This balances network efficiency with memory pressure.
-const DEFAULT_IDS_PER_CHUNK: usize = 1024;
-// The higher this number, the fewer dispatched WorkRequest's when the ID count
-// is high which saves a ton of memory. The catch, is this wastes memory on low
-// ID count requests, but they don't tend to stay in memory very long.
+/// Number of Snowflake IDs packed into each response chunk.
+const DEFAULT_IDS_PER_CHUNK: usize = 4096;
 
-/// Size in bytes of each Snowflake ID when serialized. Computed at compile time
-/// from the actual ID type.
-const SNOWFLAKE_ID_SIZE: usize = size_of::<<ServerIdType as Snowflake>::Ty>();
-
-/// Size in bytes of packed ID data in each chunk. 4,096 IDs × 8 bytes =
-/// 32,768 bytes (32 KiB) per chunk
+/// Size in bytes of packed ID data in each chunk.
 const DEFAULT_CHUNK_BYTES: usize = DEFAULT_IDS_PER_CHUNK * SNOWFLAKE_ID_SIZE;
 
-/// Number of chunks buffered in each response stream before blocking. Controls
-/// how much data can be sent ahead of client consumption. Total buffer per
-/// stream: 8 chunks × 32 KiB = 2 MiB
+/// Number of chunks buffered in each response stream before blocking.
 const DEFAULT_STREAM_BUFFER_SIZE: usize = 8;
 
-/// Upper bound on total memory used by all active streams if all workers are
-/// generating simultaneously: NUM_WORKERS × DEFAULT_STREAM_BUFFER_SIZE ×
-/// DEFAULT_CHUNK_BYTES = 1024 × 8 × 32 KiB = 2 GiB theoretical maximum
-///
-/// In practice, this is much lower since:
-/// - Not all workers generate simultaneously
-/// - Chunks are consumed as they're produced
-/// - Most requests don't utilize all workers
-
 impl IdService {
+    #[instrument(name = "id_service_new", fields(num_workers = num_workers))]
     fn new(num_workers: usize) -> Self {
+        info!("Initializing ID service with {} workers", num_workers);
+
         let mut workers = Vec::with_capacity(num_workers);
         let clock = MonotonicClock::default();
 
         for worker_id in 0..num_workers {
             let (tx, mut rx) = mpsc::channel::<WorkRequest>(DEFAULT_WORK_REQUEST_BUFFER_SIZE);
             workers.push(tx);
-            let generator = BasicSnowflakeGenerator::<ServerIdType, _>::new(
-                (SHARD_OFFSET + worker_id) as u64,
+            let generator = BasicSnowflakeGenerator::<SnowflakeIdType, _>::new(
+                (SHARD_OFFSET + worker_id) as <SnowflakeIdType as Snowflake>::Ty,
                 clock.clone(),
             );
 
+            // Spawn worker task with proper error handling
             tokio::spawn(async move {
+                debug!("Worker {} started", worker_id);
+
                 while let Some(work) = rx.recv().await {
                     match work {
                         WorkRequest::Stream {
@@ -103,7 +144,7 @@ impl IdService {
                             tx,
                             cancelled,
                         } => {
-                            let mut chunk_buf = [0u8; DEFAULT_CHUNK_BYTES];
+                            let mut chunk_buf = [0_u8; DEFAULT_CHUNK_BYTES];
                             let mut buf_pos = 0; // Current position in buffer
                             let mut generated = 0;
 
@@ -122,18 +163,26 @@ impl IdService {
 
                                         // Check if buffer is full
                                         if buf_pos == DEFAULT_CHUNK_BYTES {
-                                            if cancelled.is_cancelled() || tx.is_closed() {
+                                            if cancelled.is_cancelled() {
+                                                warn!("Worker {} cancelled", worker_id);
+                                                break;
+                                            }
+                                            if tx.is_closed() {
+                                                warn!("Worker {} closed", worker_id);
                                                 break;
                                             }
 
                                             // Send the full buffer
                                             let bytes = bytes::Bytes::copy_from_slice(&chunk_buf);
-                                            if tx
+                                            if let Err(e) = tx
                                                 .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
                                                 .await
-                                                .is_err()
                                             {
-                                                println!("Failed to send res");
+                                                warn!(
+                                                    "Worker {} failed to send res: {}",
+                                                    worker_id, e
+                                                );
+
                                                 break;
                                             }
 
@@ -147,18 +196,22 @@ impl IdService {
                                     }
 
                                     Err(e) => {
-                                        if cancelled.is_cancelled() || tx.is_closed() {
+                                        if cancelled.is_cancelled() {
+                                            warn!("Worker {} cancelled", worker_id);
                                             break;
                                         }
-                                        if tx
+                                        if tx.is_closed() {
+                                            warn!("Worker {} closed", worker_id);
+                                            break;
+                                        }
+                                        if let Err(e) = tx
                                             .send(Err(Status::internal(format!(
                                                 "ID generation failed: {}",
                                                 e
                                             ))))
                                             .await
-                                            .is_err()
                                         {
-                                            println!("Failed to send res");
+                                            warn!("Worker {} failed to send err: {}", worker_id, e);
                                             break;
                                         }
                                     }
@@ -168,12 +221,10 @@ impl IdService {
                             // Send remaining partial buffer if not empty
                             if buf_pos > 0 && !cancelled.is_cancelled() && !tx.is_closed() {
                                 let bytes = bytes::Bytes::copy_from_slice(&chunk_buf[..buf_pos]);
-                                if tx
-                                    .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
-                                    .await
-                                    .is_err()
+                                if let Err(e) =
+                                    tx.send(Ok(IdUnitResponseChunk { packed_ids: bytes })).await
                                 {
-                                    println!("Failed to send res");
+                                    error!("Worker {} failed to send res: {}", worker_id, e);
                                 }
                             }
                         }
@@ -193,40 +244,72 @@ impl IdGen for IdService {
     type GetStreamIdsStream =
         Pin<Box<dyn Stream<Item = Result<IdUnitResponseChunk, Status>> + Send>>;
 
+    #[instrument(name = "get_stream_ids", skip_all, fields(count = req.get_ref().count))]
     async fn get_stream_ids(
         &self,
         req: Request<IdStreamRequest>,
     ) -> Result<Response<Self::GetStreamIdsStream>, Status> {
-        let cancellation_token = Arc::new(CancellationToken::new());
         let total_ids = req.get_ref().count as usize;
+        info!(total_ids = total_ids, "Received stream request");
+
+        // Validate request
+        if total_ids == 0 {
+            let error = IdServiceError::InvalidRequest {
+                reason: "Count must be greater than 0".to_string(),
+            };
+            return Err(error.into());
+        }
+
+        if total_ids > 10_000_000 {
+            let error = IdServiceError::InvalidRequest {
+                reason: format!("Count {} exceeds maximum allowed (10M)", total_ids),
+            };
+            return Err(error.into());
+        }
+
+        let cancellation_token = Arc::new(CancellationToken::new());
         let num_workers = self.workers.len();
 
-        // Calculate number of chunks needed based on DEFAULT_CHUNK_SIZE
-        let chunks_needed = (total_ids + DEFAULT_CHUNK_BYTES - 1) / DEFAULT_CHUNK_BYTES; // Ceiling division
+        // Calculate chunks needed (ceiling div)
+        let chunks_needed = (total_ids + DEFAULT_IDS_PER_CHUNK - 1) / DEFAULT_IDS_PER_CHUNK;
         let mut streams = SelectAll::new();
         let mut rng = StdRng::from_rng(&mut rand::rng());
         let offset = rng.random_range(0..num_workers);
 
-        let mut remaining_ids = total_ids;
+        info!(
+            chunks_needed = chunks_needed,
+            "Distributing work across workers"
+        );
 
+        let mut remaining_ids = total_ids;
         for chunk_idx in 0..chunks_needed {
-            let chunk_size = std::cmp::min(remaining_ids, DEFAULT_CHUNK_BYTES);
+            let chunk_size = std::cmp::min(remaining_ids, DEFAULT_IDS_PER_CHUNK);
             if chunk_size == 0 {
                 break;
             }
 
-            // Round-robin worker selection with some random offset
+            // Round-robin worker selection with random offset
             let worker_idx = (offset + chunk_idx) % num_workers;
             let tx = &self.workers[worker_idx];
-
             let (resp_tx, resp_rx) = mpsc::channel(DEFAULT_STREAM_BUFFER_SIZE);
-            tx.send(WorkRequest::Stream {
+
+            let work_request = WorkRequest::Stream {
                 count: chunk_size,
                 tx: resp_tx,
                 cancelled: cancellation_token.clone(),
-            })
-            .await
-            .map_err(|e| Status::unavailable(format!("Service overloaded: {}", e)))?;
+            };
+
+            if let Err(e) = tx.send(work_request).await {
+                let error = IdServiceError::WorkerChannelSend {
+                    message: e.to_string(),
+                };
+                error!(
+                    worker_idx = worker_idx,
+                    error = %error,
+                    "Failed to send work to worker"
+                );
+                return Err(error.into());
+            }
 
             streams.push(ReceiverStream::new(resp_rx));
             remaining_ids -= chunk_size;
@@ -243,15 +326,31 @@ impl IdGen for IdService {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize tracing
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
+        .with_target(false)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true)
+        .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc_3339())
+        .pretty()
+        .init();
     let addr = "127.0.0.1:50051".parse()?;
-    println!(
-        "Starting ID generation service with {} workers",
-        NUM_WORKERS
+
+    info!(
+        workers = NUM_WORKERS,
+        address = %addr,
+        chunk_size = DEFAULT_IDS_PER_CHUNK,
+        buffer_size = DEFAULT_WORK_REQUEST_BUFFER_SIZE,
+        "Starting ID generation service"
     );
 
     let service = IdService::new(NUM_WORKERS);
 
-    println!("gRPC ID service listening on {}", addr);
+    info!("gRPC ID service listening on {}", addr);
 
     Server::builder()
         .add_service(
@@ -263,9 +362,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tokio::signal::ctrl_c()
                 .await
                 .expect("Failed to install CTRL+C signal handler");
-            println!("Shutdown signal received, terminating...");
+            info!("Shutdown signal received, terminating gracefully...");
         })
         .await?;
 
+    info!("Service shut down successfully");
     Ok(())
 }

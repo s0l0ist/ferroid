@@ -1,9 +1,12 @@
-use ferroid::{Snowflake, SnowflakeTwitterId};
+use ferroid::Snowflake;
 use futures::stream::{FuturesUnordered, StreamExt as FuturesStreamExt};
 use idgen::{IdStreamRequest, id_gen_client::IdGenClient};
 use std::time::{Duration, Instant};
 use tokio_stream::StreamExt as TokioStreamExt;
 use tonic::{codec::CompressionEncoding, transport::Channel};
+
+pub mod common;
+use common::{SNOWFLAKE_ID_SIZE, SnowflakeIdTy, SnowflakeIdType};
 
 pub mod idgen {
     tonic::include_proto!("idgen");
@@ -39,26 +42,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut results = Vec::new();
 
     println!("\n=== Running Sequential ===");
-    results.push(run_parallel_stream(1, 1).await?);
-    results.push(run_parallel_stream(10, 1).await?);
-    results.push(run_parallel_stream(100, 1).await?);
-    results.push(run_parallel_stream(1000, 1).await?);
-    results.push(run_parallel_stream(10000, 1).await?);
-    results.push(run_parallel_stream(100000, 1).await?);
+    // results.push(run_parallel_stream(1, 1).await?);
+    // results.push(run_parallel_stream(10, 1).await?);
+    // results.push(run_parallel_stream(100, 1).await?);
+    // results.push(run_parallel_stream(1000, 1).await?);
+    // results.push(run_parallel_stream(10000, 1).await?);
+    // results.push(run_parallel_stream(100000, 1).await?);
     results.push(run_parallel_stream(1000000, 1).await?);
-    results.push(run_parallel_stream(10000000, 1).await?);
-    results.push(run_parallel_stream(100000000, 1).await?);
-    // results.push(run_parallel_stream(1000000000, 1).await?);
-    println!("\n=== Running Parallel ===");
+    // results.push(run_parallel_stream(10000000, 1).await?);
+    // results.push(run_parallel_stream(100000000, 1).await?);
+    // // results.push(run_parallel_stream(1000000000, 1).await?);
+    // println!("\n=== Running Parallel ===");
 
-    results.push(run_parallel_stream(1, 50).await?);
-    results.push(run_parallel_stream(10, 50).await?);
-    results.push(run_parallel_stream(100, 50).await?);
-    results.push(run_parallel_stream(1000, 50).await?);
-    results.push(run_parallel_stream(10000, 50).await?);
-    results.push(run_parallel_stream(100000, 50).await?);
-    results.push(run_parallel_stream(1000000, 50).await?);
-    results.push(run_parallel_stream(10000000, 50).await?);
+    // results.push(run_parallel_stream(1, 50).await?);
+    // results.push(run_parallel_stream(10, 50).await?);
+    // results.push(run_parallel_stream(100, 50).await?);
+    // results.push(run_parallel_stream(1000, 50).await?);
+    // results.push(run_parallel_stream(10000, 50).await?);
+    // results.push(run_parallel_stream(100000, 50).await?);
+    // results.push(run_parallel_stream(1000000, 50).await?);
+    // results.push(run_parallel_stream(10000000, 50).await?);
     // results.push(run_parallel_stream(100000000, 50).await?);
     // results.push(run_parallel_stream(1000000000, 50).await?);
 
@@ -100,23 +103,20 @@ async fn run_parallel_stream(
                 .await?
                 .into_inner();
 
-            type Ty = <SnowflakeTwitterId as Snowflake>::Ty;
-            let ty_size = size_of::<Ty>();
-
             let mut received = 0;
             while let Some(resp) = TokioStreamExt::next(&mut stream).await {
                 let raw = resp?.packed_ids;
                 let bytes = raw.as_ref();
 
                 assert_eq!(
-                    bytes.len() % ty_size,
+                    bytes.len() % SNOWFLAKE_ID_SIZE,
                     0,
-                    "Corrupt chunk: not a multiple of {ty_size}"
+                    "Corrupt chunk: not a multiple of {SNOWFLAKE_ID_SIZE}"
                 );
 
-                for chunk in bytes.chunks_exact(ty_size) {
-                    let raw_id = Ty::from_le_bytes(chunk.try_into().unwrap());
-                    let _id = SnowflakeTwitterId::from_raw(raw_id);
+                for chunk in bytes.chunks_exact(SNOWFLAKE_ID_SIZE) {
+                    let raw_id = SnowflakeIdTy::from_le_bytes(chunk.try_into().unwrap());
+                    let _id = SnowflakeIdType::from_raw(raw_id);
                     received += 1;
                 }
             }
