@@ -31,53 +31,36 @@ use tonic::Status;
 /// requests, and exits cleanly when either:
 /// - Its input channel is closed,
 /// - It receives a shutdown request,
-/// - The global shutdown token is cancelled.
-///
-/// # Arguments
-/// - `worker_id`: Identifier used for logging and shard allocation.
-/// - `rx`: Channel receiver for `WorkRequest`s.
-/// - `generator`: Snowflake generator instance scoped to this worker.
-/// - `shutdown_token`: Cancellation token used to trigger service-wide
-///   shutdown.
+
 pub(crate) async fn worker_loop(
     worker_id: usize,
     mut rx: mpsc::Receiver<WorkRequest>,
     mut generator: SnowflakeGeneratorType,
-    shutdown_token: CancellationToken,
 ) {
     #[cfg(feature = "tracing")]
     tracing::debug!("Worker {} started", worker_id);
 
     loop {
-        tokio::select! {
-            work = rx.recv() => {
-                match work {
-                    Some(WorkRequest::Stream { count, tx, cancelled }) => {
-                        handle_stream_request(worker_id, count, tx, cancelled, &mut generator).await;
-                    }
-                    Some(WorkRequest::Shutdown { response }) => {
-                        #[cfg(feature = "tracing")]
-                        tracing::debug!("Worker {} received shutdown signal", worker_id);
-                        let _ = response.send(());
-                        break;
-                    }
-                    None => {
-                        #[cfg(feature = "tracing")]
-                        tracing::debug!("Worker {} channel closed", worker_id);
-                        break;
-                    }
+        while let Some(work) = rx.recv().await {
+            match work {
+                WorkRequest::Stream {
+                    count,
+                    tx,
+                    cancelled,
+                } => {
+                    handle_stream_request(worker_id, count, tx, cancelled, &mut generator).await;
+                }
+                WorkRequest::Shutdown { response } => {
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!("Worker {} received shutdown signal", worker_id);
+                    let _ = response.send(());
+                    break;
                 }
             }
-            _ = shutdown_token.cancelled() => {
-                #[cfg(feature = "tracing")]
-                tracing::debug!("Worker {} shutdown via cancellation token", worker_id);
-                break;
-            }
         }
+        #[cfg(feature = "tracing")]
+        tracing::debug!("Worker {} stopped", worker_id);
     }
-
-    #[cfg(feature = "tracing")]
-    tracing::debug!("Worker {} stopped", worker_id);
 }
 
 /// Handles a single stream generation request.

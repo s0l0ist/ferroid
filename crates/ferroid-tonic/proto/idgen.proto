@@ -53,7 +53,7 @@ message IdStreamRequest {
 message IdUnitResponseChunk {
   // Packed binary IDs, encoded as fixed-width little-endian values.
   //
-  // The server does not specify the ID size — clients must decode it
+  // The server does not specify the ID size - clients must decode it
   // consistently with the agreed-upon ID type (typically 8 or 16 bytes).
   bytes packed_ids = 1;
 }

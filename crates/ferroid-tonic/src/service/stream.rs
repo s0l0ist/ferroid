@@ -48,6 +48,7 @@ pub(crate) async fn feed_chunks(
     let mut remaining = total_ids;
 
     while remaining > 0 {
+        // If the client canceled (disconnect), stop producing work
         if cancel.is_cancelled() {
             #[cfg(feature = "tracing")]
             tracing::debug!("feed_chunks cancelled");
@@ -70,6 +71,7 @@ pub(crate) async fn feed_chunks(
             Ok(()) => {
                 while let Some(msg) = chunk_rx.recv().await {
                     if let Err(_e) = resp_tx.send(msg).await {
+                        // typically "channel closed" (client disconnect)
                         #[cfg(feature = "tracing")]
                         tracing::debug!("Response channel failed to forward chunk: {}", _e);
                         return;
@@ -77,9 +79,11 @@ pub(crate) async fn feed_chunks(
                 }
             }
             Err(e) => {
+                // typically "ServerShutdown" (server disconnect)
                 #[cfg(feature = "tracing")]
-                tracing::error!("Failed to send work to worker: {:?}", e);
+                tracing::warn!("Failed to send work to worker: {:?}", e);
                 if let Err(_e) = resp_tx.send(Err(e.into())).await {
+                    // typically "channel closed" (client disconnect)
                     #[cfg(feature = "tracing")]
                     tracing::debug!("Response channel failed to forward error: {}", _e);
                 }

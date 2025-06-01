@@ -13,7 +13,7 @@ pub mod idgen {
 }
 
 #[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut results = Vec::new();
 
     println!("\n=== Running Sequential ===");
@@ -82,7 +82,7 @@ impl BenchmarkResult {
 async fn run_parallel_stream(
     target_count: u64,
     concurrency: usize,
-) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
+) -> Result<BenchmarkResult, Box<dyn std::error::Error + Send + Sync>> {
     // let per_stream = target_count / concurrency as u64;
     let start = Instant::now();
 
@@ -128,9 +128,8 @@ async fn run_parallel_stream(
     // Collect all results
     let mut total_received = 0;
     while let Some(res) = FuturesStreamExt::next(&mut tasks).await {
-        let res = res?;
-        let d = res.unwrap();
-        total_received += d;
+        let i = res??;
+        total_received += i;
     }
 
     let duration = start.elapsed();

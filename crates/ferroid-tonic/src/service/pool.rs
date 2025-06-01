@@ -101,6 +101,8 @@ impl WorkerPool {
     pub(crate) async fn shutdown(&self) -> Result<(), IdServiceError> {
         #[cfg(feature = "tracing")]
         tracing::info!("Initiating worker pool shutdown");
+
+        // Stop producing more work from existing streams
         self.shutdown_token.cancel();
 
         let mut shutdown_handles = Vec::new();
@@ -117,14 +119,14 @@ impl WorkerPool {
         }
 
         for (_i, handle) in shutdown_handles.into_iter().enumerate() {
-            match tokio::time::timeout(tokio::time::Duration::from_secs(5), handle).await {
+            match tokio::time::timeout(tokio::time::Duration::from_secs(3), handle).await {
                 Ok(Ok(())) => {
                     #[cfg(feature = "tracing")]
                     tracing::debug!("Worker {} shut down gracefully", _i)
                 }
-                Ok(Err(_)) => {
+                Ok(Err(_e)) => {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {} shutdown response channel closed", _i)
+                    tracing::debug!("Worker {} shutdown response: {}", _i, _e)
                 }
                 Err(_) => {
                     #[cfg(feature = "tracing")]

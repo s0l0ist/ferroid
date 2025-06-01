@@ -11,9 +11,9 @@
 //! - Return results to the client as a cancellable gRPC stream.
 //!
 //! ## Related Modules
-//! - [`crate::service::worker`] — Worker implementation logic.
-//! - [`crate::service::pool`] — Worker pool and routing logic.
-//! - [`crate::service::stream`] — Chunk buffering and stream forwarding.
+//! - [`crate::service::worker`] - Worker implementation logic.
+//! - [`crate::service::pool`] - Worker pool and routing logic.
+//! - [`crate::service::stream`] - Chunk buffering and stream forwarding.
 
 use super::{pool::WorkerPool, request::WorkRequest, stream::feed_chunks, worker::worker_loop};
 use crate::{
@@ -68,8 +68,7 @@ impl IdService {
                 clock.clone(),
             );
 
-            let worker_shutdown_token = shutdown_token.clone();
-            tokio::spawn(worker_loop(worker_id, rx, generator, worker_shutdown_token));
+            tokio::spawn(worker_loop(worker_id, rx, generator));
         }
 
         let worker_pool = Arc::new(WorkerPool::new(Arc::new(workers), shutdown_token));
