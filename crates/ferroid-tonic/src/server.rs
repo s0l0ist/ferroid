@@ -90,101 +90,91 @@ impl IdService {
         let clock = MonotonicClock::default();
 
         for worker_id in 0..num_workers {
-            let (tx, mut rx) = mpsc::channel::<WorkRequest>(DEFAULT_WORK_REQUEST_BUFFER_SIZE);
+            let (tx, rx) = mpsc::channel::<WorkRequest>(DEFAULT_WORK_REQUEST_BUFFER_SIZE);
             workers.push(tx);
             let generator = BasicSnowflakeGenerator::<SnowflakeIdType, _>::new(
                 (SHARD_OFFSET + worker_id) as <SnowflakeIdType as Snowflake>::Ty,
                 clock.clone(),
             );
-
-            tokio::spawn(async move {
-                debug!("Worker {} started", worker_id);
-
-                while let Some(work) = rx.recv().await {
-                    match work {
-                        WorkRequest::Stream {
-                            count,
-                            tx,
-                            cancelled,
-                        } => {
-                            let mut chunk_buf = [0_u8; DEFAULT_CHUNK_BYTES];
-                            let mut buf_pos = 0;
-                            let mut generated = 0;
-
-                            while generated < count {
-                                match generator.try_next_id() {
-                                    Ok(IdGenStatus::Ready { id }) => {
-                                        generated += 1;
-                                        let id_bytes = id.to_raw().to_le_bytes();
-                                        chunk_buf[buf_pos..buf_pos + SNOWFLAKE_ID_SIZE]
-                                            .copy_from_slice(&id_bytes);
-                                        buf_pos += SNOWFLAKE_ID_SIZE;
-
-                                        if buf_pos == DEFAULT_CHUNK_BYTES {
-                                            if cancelled.is_cancelled() || tx.is_closed() {
-                                                warn!(
-                                                    "Worker {} cancelled or tx closed",
-                                                    worker_id
-                                                );
-                                                break;
-                                            }
-
-                                            let bytes = bytes::Bytes::copy_from_slice(&chunk_buf);
-                                            if let Err(e) = tx
-                                                .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
-                                                .await
-                                            {
-                                                error!(
-                                                    "Worker {} failed to send chunk: {}",
-                                                    worker_id, e
-                                                );
-                                                break;
-                                            }
-                                            buf_pos = 0;
-                                        }
-                                    }
-                                    Ok(IdGenStatus::Pending { .. }) => {
-                                        tokio::task::yield_now().await;
-                                    }
-                                    Err(e) => {
-                                        if cancelled.is_cancelled() || tx.is_closed() {
-                                            warn!("Worker {} cancelled or tx closed", worker_id);
-                                            break;
-                                        }
-
-                                        if let Err(e) = tx
-                                            .send(Err(IdServiceError::IdGeneration(e).into()))
-                                            .await
-                                        {
-                                            error!(
-                                                "Worker {} failed to send error: {}",
-                                                worker_id, e
-                                            );
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            if buf_pos > 0 && !cancelled.is_cancelled() && !tx.is_closed() {
-                                let bytes = bytes::Bytes::copy_from_slice(&chunk_buf[..buf_pos]);
-                                if let Err(e) =
-                                    tx.send(Ok(IdUnitResponseChunk { packed_ids: bytes })).await
-                                {
-                                    error!(
-                                        "Worker {} failed to send final chunk: {}",
-                                        worker_id, e
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+            tokio::spawn(worker_loop(worker_id, rx, generator));
         }
 
         Self {
             workers: Arc::new(workers),
+        }
+    }
+}
+
+#[instrument(name = "worker_loop", skip_all, fields(worker_id))]
+async fn worker_loop(
+    worker_id: usize,
+    mut rx: mpsc::Receiver<WorkRequest>,
+    generator: BasicSnowflakeGenerator<SnowflakeIdType, MonotonicClock>,
+) {
+    debug!("Worker {} started", worker_id);
+
+    while let Some(work) = rx.recv().await {
+        match work {
+            WorkRequest::Stream {
+                count,
+                tx,
+                cancelled,
+            } => {
+                let mut chunk_buf = [0_u8; DEFAULT_CHUNK_BYTES];
+                let mut buf_pos = 0;
+                let mut generated = 0;
+
+                while generated < count {
+                    match generator.try_next_id() {
+                        Ok(IdGenStatus::Ready { id }) => {
+                            generated += 1;
+                            let id_bytes = id.to_raw().to_le_bytes();
+                            chunk_buf[buf_pos..buf_pos + SNOWFLAKE_ID_SIZE]
+                                .copy_from_slice(&id_bytes);
+                            buf_pos += SNOWFLAKE_ID_SIZE;
+
+                            if buf_pos == DEFAULT_CHUNK_BYTES {
+                                if cancelled.is_cancelled() || tx.is_closed() {
+                                    warn!("Worker {} cancelled or tx closed", worker_id);
+                                    break;
+                                }
+
+                                let bytes = bytes::Bytes::copy_from_slice(&chunk_buf);
+                                if let Err(e) =
+                                    tx.send(Ok(IdUnitResponseChunk { packed_ids: bytes })).await
+                                {
+                                    error!("Worker {} failed to send chunk: {}", worker_id, e);
+                                    break;
+                                }
+                                buf_pos = 0;
+                            }
+                        }
+                        Ok(IdGenStatus::Pending { .. }) => {
+                            tokio::task::yield_now().await;
+                        }
+                        Err(e) => {
+                            if cancelled.is_cancelled() || tx.is_closed() {
+                                warn!("Worker {} cancelled or tx closed", worker_id);
+                                break;
+                            }
+
+                            if let Err(e) =
+                                tx.send(Err(IdServiceError::IdGeneration(e).into())).await
+                            {
+                                error!("Worker {} failed to send error: {}", worker_id, e);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if buf_pos > 0 && !cancelled.is_cancelled() && !tx.is_closed() {
+                    let bytes = bytes::Bytes::copy_from_slice(&chunk_buf[..buf_pos]);
+                    if let Err(e) = tx.send(Ok(IdUnitResponseChunk { packed_ids: bytes })).await {
+                        error!("Worker {} failed to send final chunk: {}", worker_id, e);
+                    }
+                }
+            }
         }
     }
 }
@@ -293,6 +283,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::FULL)
         .with_target(false)
         .with_thread_ids(true)
         .with_file(true)

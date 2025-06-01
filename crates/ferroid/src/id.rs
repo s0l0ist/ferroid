@@ -8,8 +8,8 @@ use core::{
 /// Trait for converting numeric-like values into a `u64`.
 ///
 /// This is typically used to normalize custom duration types into milliseconds
-/// for compatibility with APIs like [`core::time::Duration::from_millis`], which
-/// are commonly required in async sleep contexts such as
+/// for compatibility with APIs like [`core::time::Duration::from_millis`],
+/// which are commonly required in async sleep contexts such as
 /// [`tokio::time::sleep`].
 pub trait ToU64 {
     fn to_u64(self) -> Result<u64>;
@@ -249,6 +249,21 @@ macro_rules! define_snowflake_id {
             /// Extracts the sequence number from the packed ID.
             pub const fn sequence(&self) -> $int {
                 (self.id >> Self::SEQUENCE_SHIFT) & Self::SEQUENCE_MASK
+            }
+            /// Returns the maximum representable timestamp value based on
+            /// Self::TIMESTAMP_BITS.
+            pub const fn max_timestamp() -> $int {
+                (1 << Self::TIMESTAMP_BITS) - 1
+            }
+            /// Returns the maximum representable machine ID value based on
+            /// Self::MACHINE_ID_BITS.
+            pub const fn max_machine_id() -> $int {
+                (1 << Self::MACHINE_ID_BITS) - 1
+            }
+            /// Returns the maximum representable sequence value based on
+            /// Self::SEQUENCE_BITS.
+            pub const fn max_sequence() -> $int {
+                (1 << Self::SEQUENCE_BITS) - 1
             }
         }
 
