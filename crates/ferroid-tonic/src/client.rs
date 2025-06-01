@@ -12,31 +12,6 @@ pub mod idgen {
     tonic::include_proto!("idgen");
 }
 
-#[derive(Debug)]
-struct BenchmarkResult {
-    label: String,
-    target_count: usize,
-    total_received: usize,
-    duration: Duration,
-}
-
-impl BenchmarkResult {
-    fn throughput(&self) -> f64 {
-        self.total_received as f64 / self.duration.as_secs_f64()
-    }
-
-    fn report(&self) {
-        println!(
-            "{:<25} | {:>10} target | {:>10} total | {:>8.2} ms | {:>10.2} ID/sec",
-            self.label,
-            self.target_count,
-            self.total_received,
-            self.duration.as_secs_f64() * 1000.0,
-            self.throughput()
-        );
-    }
-}
-
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut results = Vec::new();
@@ -77,6 +52,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+struct BenchmarkResult {
+    label: String,
+    target_count: usize,
+    total_received: usize,
+    duration: Duration,
+}
+
+impl BenchmarkResult {
+    fn throughput(&self) -> f64 {
+        self.total_received as f64 / self.duration.as_secs_f64()
+    }
+
+    fn report(&self) {
+        println!(
+            "{:<25} | {:>10} target | {:>10} total | {:>8.2} ms | {:>10.2} ID/sec",
+            self.label,
+            self.target_count,
+            self.total_received,
+            self.duration.as_secs_f64() * 1000.0,
+            self.throughput()
+        );
+    }
 }
 
 async fn run_parallel_stream(
