@@ -1,6 +1,5 @@
 use super::request::WorkRequest;
 use crate::{
-    common::error::IdServiceError,
     idgen::IdUnitResponseChunk,
     server::{config::ServerConfig, pool::manager::WorkerPool},
 };
