@@ -31,7 +31,7 @@
 
 use clap::Parser;
 use ferroid_tonic::{
-    idgen::id_gen_server::IdGenServer,
+    common::idgen::{FILE_DESCRIPTOR_SET, id_gen_server::IdGenServer},
     server::{
         config::{CliArgs, ServerConfig},
         service::handler::IdService,
@@ -41,6 +41,10 @@ use ferroid_tonic::{
 use std::net::SocketAddr;
 use tokio::signal;
 use tonic::{codec::CompressionEncoding, transport::Server};
+use tonic_reflection::server::Builder;
+use tonic_web::GrpcWebLayer;
+use tower::ServiceBuilder;
+use tower_http::cors::{Any, CorsLayer};
 
 /// Launches the gRPC streaming ID generation service.
 #[tokio::main]
@@ -54,9 +58,25 @@ async fn main() -> anyhow::Result<()> {
     log_startup_info(&addr, &config);
 
     let service = IdService::new(config);
+    let reflection_service = Builder::configure()
+        .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+        .build_v1()
+        .unwrap();
 
     let server = Server::builder()
+        .accept_http1(true)
         .http2_adaptive_window(Some(true))
+        .layer(
+            ServiceBuilder::new()
+                .layer(
+                    CorsLayer::new()
+                        .allow_origin(Any)
+                        .allow_methods(Any)
+                        .allow_headers(Any),
+                )
+                .layer(GrpcWebLayer::new()), // transparently upgrades gRPC-Web requests
+        )
+        .add_service(reflection_service)
         .add_service(create_compressed_service(service.clone()))
         .serve_with_shutdown(addr, create_shutdown_signal(service));
 

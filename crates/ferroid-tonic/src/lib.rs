@@ -44,6 +44,3 @@
 
 pub mod common;
 pub mod server;
-pub mod idgen {
-    tonic::include_proto!("idgen");
-}

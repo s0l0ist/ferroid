@@ -1,4 +1,4 @@
-use crate::idgen::IdUnitResponseChunk;
+use crate::common::idgen::IdUnitResponseChunk;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;

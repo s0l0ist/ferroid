@@ -1,6 +1,6 @@
 use super::request::WorkRequest;
 use crate::{
-    idgen::IdUnitResponseChunk,
+    common::idgen::IdUnitResponseChunk,
     server::{config::ServerConfig, pool::manager::WorkerPool},
 };
 use std::sync::Arc;

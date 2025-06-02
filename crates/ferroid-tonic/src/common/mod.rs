@@ -14,3 +14,7 @@
 
 pub mod error;
 pub mod types;
+pub mod idgen {
+    tonic::include_proto!("idgen");
+    pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("idgen_descriptor");
+}

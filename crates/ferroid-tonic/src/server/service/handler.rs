@@ -19,8 +19,11 @@
 //!   processing.
 
 use crate::{
-    common::{error::IdServiceError, types::SnowflakeIdType},
-    idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
+    common::{
+        error::IdServiceError,
+        idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
+        types::SnowflakeIdType,
+    },
     server::{
         config::ServerConfig,
         pool::{manager::WorkerPool, worker::worker_loop},

@@ -1,14 +1,10 @@
 use ferroid::Snowflake;
+use ferroid_tonic::common::idgen::{IdStreamRequest, id_gen_client::IdGenClient};
 use ferroid_tonic::common::types::{SNOWFLAKE_ID_SIZE, SnowflakeIdTy, SnowflakeIdType};
 use futures::stream::{FuturesUnordered, StreamExt as FuturesStreamExt};
-use idgen::{IdStreamRequest, id_gen_client::IdGenClient};
 use std::time::{Duration, Instant};
 use tokio_stream::StreamExt as TokioStreamExt;
 use tonic::{codec::CompressionEncoding, transport::Channel};
-
-pub mod idgen {
-    tonic::include_proto!("idgen");
-}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

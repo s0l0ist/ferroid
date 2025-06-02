@@ -1,6 +1,5 @@
 use crate::{
-    common::{error::IdServiceError, types::SNOWFLAKE_ID_SIZE},
-    idgen::IdUnitResponseChunk,
+    common::{error::IdServiceError, idgen::IdUnitResponseChunk, types::SNOWFLAKE_ID_SIZE},
     server::{config::ServerConfig, service::config::SnowflakeGeneratorType},
 };
 use ferroid::{IdGenStatus, Snowflake};

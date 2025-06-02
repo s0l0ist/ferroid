@@ -43,11 +43,19 @@
 /// ```
 ///
 /// This module will include both gRPC service traits and message types.
+///
+use std::env;
+use std::path::PathBuf;
 fn main() {
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let descriptor_path = out_dir.join("idgen_descriptor.bin");
+
     let mut config = tonic_build::Config::new();
 
     // Ensure packed binary field is treated as `Bytes`, not `Vec<u8>`
-    config.bytes([".idgen.IdUnitResponseChunk.packed_ids"]);
+    config
+        .bytes([".idgen.IdUnitResponseChunk.packed_ids"])
+        .file_descriptor_set_path(&descriptor_path);
 
     tonic_build::configure()
         .compile_protos_with_config(config, &["proto/idgen.proto"], &["proto"])
