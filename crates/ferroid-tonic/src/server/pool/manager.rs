@@ -1,24 +1,4 @@
-//! Worker pool management for concurrent, cancellable Snowflake ID generation.
-//!
-//! This module defines the [`WorkerPool`] struct, which orchestrates a fixed
-//! set of asynchronous worker tasks. Each worker is backed by its own bounded
-//! MPSC channel and is responsible for handling `WorkRequest`s such as
-//! generating Snowflake IDs or handling shutdown commands.
-//!
-//! ## Responsibilities
-//!
-//! - Load-balanced routing of incoming work via round-robin distribution.
-//! - Backpressure-aware task delegation using `try_send()` with bounded
-//!   fallback.
-//! - Cooperative cancellation through a shared [`CancellationToken`].
-//! - Graceful, coordinated shutdown via `WorkRequest::Shutdown` messages.
-//!
-//! This component is used internally by the gRPC
-//! [`IdService`](crate::server::service::handler::IdService) to distribute
-//! stream-based and batched ID generation requests across a pool of
-//! long-running tasks.
-
-use crate::{common::error::IdServiceError, server::service::streaming::request::WorkRequest};
+use crate::{common::error::IdServiceError, server::streaming::request::WorkRequest};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -52,23 +32,20 @@ impl WorkerPool {
     }
 
     /// Computes the next worker index using relaxed atomic round-robin logic.
-    pub(crate) fn next_worker_index(&self) -> usize {
+    pub fn next_worker_index(&self) -> usize {
         self.next_worker.fetch_add(1, Ordering::Relaxed) % self.workers.len()
     }
 
     /// Attempts to send a [`WorkRequest`] to the next worker in the pool.
     ///
     /// Fast-path uses `try_send()` to avoid awaiting when possible. If the
-    /// worker’s queue is full, falls back to `send()` with a 100ms timeout.
+    /// worker's queue is full, falls back to `send()` with a 100ms timeout.
     ///
     /// Returns an error if:
-    /// - The shutdown token has been triggered.
-    /// - The worker’s channel is closed.
+    /// - A server shutdown is triggered (shutdown_token)
+    /// - The worker's channel is closed.
     /// - Sending times out due to backpressure.
-    pub(crate) async fn send_to_next_worker(
-        &self,
-        request: WorkRequest,
-    ) -> Result<(), IdServiceError> {
+    pub async fn send_to_next_worker(&self, request: WorkRequest) -> Result<(), IdServiceError> {
         if self.shutdown_token.is_cancelled() {
             return Err(IdServiceError::ServiceShutdown);
         }
@@ -110,7 +87,7 @@ impl WorkerPool {
     /// - Waits up to 3 seconds per worker for confirmation.
     ///
     /// This is typically invoked during service shutdown.
-    pub(crate) async fn shutdown(&self) -> Result<(), IdServiceError> {
+    pub async fn shutdown(&self) -> Result<(), IdServiceError> {
         #[cfg(feature = "tracing")]
         tracing::info!("Initiating worker pool shutdown");
 

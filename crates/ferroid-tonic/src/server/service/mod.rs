@@ -20,5 +20,3 @@
 
 pub mod config;
 pub mod handler;
-mod pool;
-mod streaming;

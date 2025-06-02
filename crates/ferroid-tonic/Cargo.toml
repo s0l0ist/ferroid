@@ -21,7 +21,7 @@ path = "src/client/main.rs"
 
 [dependencies]
 ferroid = { path = "../ferroid", features = ["async-tokio"] }
-tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd"] }
+tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd", "deflate", "gzip"] }
 tokio = { workspace = true, features = ["parking_lot", "rt-multi-thread", "signal"] }
 prost = { workspace = true, features = ["derive", "std"] }
 prost-types = { workspace = true, features = ["std"] }

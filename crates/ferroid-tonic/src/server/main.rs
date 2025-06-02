@@ -38,6 +38,8 @@ use ferroid_tonic::{
         telemetry::init_tracing,
     },
 };
+use std::net::SocketAddr;
+use tokio::signal;
 use tonic::{codec::CompressionEncoding, transport::Server};
 
 /// Launches the gRPC streaming ID generation service.
@@ -49,44 +51,77 @@ async fn main() -> anyhow::Result<()> {
     init_tracing();
 
     let addr = "127.0.0.1:50051".parse()?;
-    println!(
-        "Starting ID service on {} with {} workers (chunk = {}, buffer = {}, max = {})",
-        addr,
-        config.num_workers,
-        config.ids_per_chunk,
-        config.work_request_buffer_size,
-        config.max_allowed_ids,
-    );
+    log_startup_info(&addr, &config);
 
     let service = IdService::new(config);
-    let service_for_shutdown = service.clone();
 
     let server = Server::builder()
         .http2_adaptive_window(Some(true))
-        .add_service(
-            IdGenServer::new(service)
-                .send_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Zstd),
-        )
-        .serve_with_shutdown(addr, async {
-            tokio::signal::ctrl_c()
-                .await
-                .expect("Failed to install CTRL+C signal handler");
+        .add_service(create_compressed_service(service.clone()))
+        .serve_with_shutdown(addr, create_shutdown_signal(service));
 
-            println!("Shutdown signal received, terminating gracefully...");
+    match server.await {
+        Ok(_) => {
+            println!("Service shut down successfully");
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Server error: {:?}", e);
+            Err(e.into())
+        }
+    }
+}
 
-            if let Err(_e) = service_for_shutdown.shutdown().await {
-                #[cfg(feature = "tracing")]
-                tracing::error!("Error during service shutdown: {:?}", _e);
-            }
-        });
+fn log_startup_info(addr: &SocketAddr, config: &ServerConfig) {
+    if cfg!(debug_assertions) {
+        println!(
+            "Starting ID service on {} with full config: {:#?}",
+            addr, config
+        );
+    } else {
+        println!(
+            "Starting ID service on {} with {} workers",
+            addr, config.num_workers
+        );
+    }
+}
 
-    if let Err(e) = server.await {
-        #[cfg(feature = "tracing")]
-        tracing::error!("Server error: {:?}", e);
-        return Err(e.into());
+fn create_compressed_service(service: IdService) -> IdGenServer<IdService> {
+    IdGenServer::new(service)
+        .send_compressed(CompressionEncoding::Zstd)
+        .send_compressed(CompressionEncoding::Gzip)
+        .send_compressed(CompressionEncoding::Deflate)
+        .accept_compressed(CompressionEncoding::Zstd)
+        .accept_compressed(CompressionEncoding::Gzip)
+        .accept_compressed(CompressionEncoding::Deflate)
+}
+
+async fn create_shutdown_signal(service: IdService) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => println!("Received Ctrl+C signal"),
+        () = terminate => println!("Received SIGTERM signal"),
     }
 
-    println!("Service shut down successfully");
-    Ok(())
+    println!("Shutdown signal received, terminating gracefully...");
+
+    if let Err(e) = service.shutdown().await {
+        eprintln!("Error during service shutdown: {:?}", e);
+    }
 }

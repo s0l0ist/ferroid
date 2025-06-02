@@ -23,11 +23,9 @@ use crate::{
     idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
     server::{
         config::ServerConfig,
-        service::{
-            config::{ClockType, SnowflakeGeneratorType},
-            pool::{manager::WorkerPool, worker::worker_loop},
-            streaming::coordinator::feed_chunks,
-        },
+        pool::{manager::WorkerPool, worker::worker_loop},
+        service::config::{ClockType, SnowflakeGeneratorType},
+        streaming::coordinator::feed_chunks,
     },
 };
 use core::pin::Pin;

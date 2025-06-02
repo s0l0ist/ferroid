@@ -1,34 +1,7 @@
-//! Worker task lifecycle and stream request execution for Snowflake ID
-//! generation.
-//!
-//! This module defines the logic executed by each background worker responsible
-//! for processing [`WorkRequest`] messages. A worker is an independent async
-//! task that listens on a bounded channel for incoming commands, which may
-//! include:
-//!
-//! - Streamed ID generation requests (`WorkRequest::Stream`)
-//! - Graceful shutdown signals (`WorkRequest::Shutdown`)
-//!
-//! Each worker owns a dedicated [`SnowflakeGeneratorType`] instance, ensuring
-//! uniqueness in ID generation across the pool. Chunked ID generation is
-//! delegated to [`handle_stream_request`], which handles buffering,
-//! backpressure, and cancellation detection.
-//!
-//! ## Responsibilities
-//!
-//! - Maintain a long-running loop that receives and processes work.
-//! - Cooperate with cancellation via [`CancellationToken`].
-//! - Ensure clean shutdown by responding to shutdown signals.
-//!
-//! This module is used internally by the worker pool and should not be invoked
-//! directly outside of pool orchestration.
-
 use crate::server::{
     config::ServerConfig,
-    service::{
-        config::SnowflakeGeneratorType,
-        streaming::{processor::handle_stream_request, request::WorkRequest},
-    },
+    service::config::SnowflakeGeneratorType,
+    streaming::{processor::handle_stream_request, request::WorkRequest},
 };
 use tokio::sync::mpsc;
 
@@ -50,7 +23,7 @@ use tokio::sync::mpsc;
 ///
 /// This function is intended to be spawned as a Tokio task and runs until a
 /// shutdown signal is received.
-pub(crate) async fn worker_loop(
+pub async fn worker_loop(
     worker_id: usize,
     mut rx: mpsc::Receiver<WorkRequest>,
     mut generator: SnowflakeGeneratorType,

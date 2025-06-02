@@ -15,5 +15,7 @@
 //! serve the `IdGen` gRPC service defined in [`crate::idgen`].
 
 pub mod config;
+pub mod pool;
 pub mod service;
+pub mod streaming;
 pub mod telemetry;

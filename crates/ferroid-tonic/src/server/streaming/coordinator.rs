@@ -1,26 +1,8 @@
-//! Streaming coordinator for chunked Snowflake ID generation.
-//!
-//! This module orchestrates the generation of large batches of Snowflake IDs by
-//! splitting incoming requests into smaller, fixed-size chunks and distributing
-//! them across the worker pool. It is responsible for forwarding those chunks
-//! back to the gRPC response stream in a backpressure-aware and
-//! cancellation-sensitive manner.
-//!
-//! ## Responsibilities
-//!
-//! - Split high-level ID generation requests into [`DEFAULT_IDS_PER_CHUNK`]
-//!   units.
-//! - Route each chunk to the next available worker via [`WorkerPool`].
-//! - Relay completed ID chunks or errors to the gRPC client.
-//! - Abort early on client-side cancellation or backpressure-induced failure.
-//!
-//! This function is invoked per-stream by the gRPC service implementation in
-//! [`IdService`](crate::server::service::handler::IdService).
-
 use super::request::WorkRequest;
 use crate::{
+    common::error::IdServiceError,
     idgen::IdUnitResponseChunk,
-    server::{config::ServerConfig, service::pool::manager::WorkerPool},
+    server::{config::ServerConfig, pool::manager::WorkerPool},
 };
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -51,7 +33,7 @@ use tonic::Status;
 ///   to the client and terminate the stream.
 /// - Remaining IDs are decremented per chunk, and progress continues until
 ///   zero.
-pub(crate) async fn feed_chunks(
+pub async fn feed_chunks(
     total_ids: usize,
     worker_pool: Arc<WorkerPool>,
     resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,

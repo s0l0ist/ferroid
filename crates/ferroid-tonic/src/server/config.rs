@@ -14,7 +14,11 @@ use crate::common::types::{SNOWFLAKE_ID_SIZE, SnowflakeIdType};
 /// deployment in clusters of varying sizes, memory constraints, or throughput
 /// needs.
 #[derive(Parser, Debug, Clone)]
-#[command(name = "id-server", version, about = "Snowflake ID generation service")]
+#[command(
+    name = "tonic-server",
+    version,
+    about = "A gRPC service for streaming Snowflake-like IDs"
+)]
 pub struct CliArgs {
     /// Maximum number of Snowflake IDs allowed per client request.
     ///
@@ -29,7 +33,7 @@ pub struct CliArgs {
     /// Offset used to shard machine ID space across multiple deployments or
     /// tenants.
     ///
-    /// This value is added to the worker index to compute each generator’s
+    /// This value is added to the worker index to compute each generator's
     /// unique machine ID. Use this to avoid ID collisions in multi-region or
     /// multi-tenant environments sharing a global ID namespace.
     ///

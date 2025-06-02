@@ -1,24 +1,3 @@
-//! Streamed Snowflake ID generation with chunk buffering and cancellation
-//! support.
-//!
-//! This module defines the lower-level execution logic for generating Snowflake
-//! IDs in response to a `WorkRequest::Stream` command. It handles:
-//!
-//! - ID generation via a worker-local [`SnowflakeGeneratorType`].
-//! - Efficient buffering of Snowflake IDs into pre-sized byte chunks.
-//! - Early exit on cancellation or gRPC backpressure.
-//!
-//! Each worker task invokes [`handle_stream_request`] to fulfill part of a
-//! larger client stream request, emitting serialized chunks of Snowflake IDs
-//! back to the gRPC response pipeline.
-//!
-//! ## Responsibilities
-//!
-//! - Use [`try_next_id`] from `ferroid` to fetch unique Snowflake IDs.
-//! - Pack IDs into contiguous byte buffers sized by [`DEFAULT_CHUNK_BYTES`].
-//! - Transmit each chunk through the provided MPSC channel.
-//! - Respect cancellation tokens and channel closures to avoid wasted work.
-
 use crate::{
     common::{error::IdServiceError, types::SNOWFLAKE_ID_SIZE},
     idgen::IdUnitResponseChunk,
