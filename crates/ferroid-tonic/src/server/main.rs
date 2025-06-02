@@ -74,10 +74,18 @@ async fn main() -> anyhow::Result<()> {
                         .allow_methods(Any)
                         .allow_headers(Any),
                 )
-                .layer(GrpcWebLayer::new()), // transparently upgrades gRPC-Web requests
+                .layer(GrpcWebLayer::new()),
         )
         .add_service(reflection_service)
-        .add_service(create_compressed_service(service.clone()))
+        .add_service(
+            IdGenServer::new(service.clone())
+                .send_compressed(CompressionEncoding::Zstd)
+                .send_compressed(CompressionEncoding::Gzip)
+                .send_compressed(CompressionEncoding::Deflate)
+                .accept_compressed(CompressionEncoding::Zstd)
+                .accept_compressed(CompressionEncoding::Gzip)
+                .accept_compressed(CompressionEncoding::Deflate),
+        )
         .serve_with_shutdown(addr, create_shutdown_signal(service));
 
     match server.await {
@@ -104,16 +112,6 @@ fn log_startup_info(addr: &SocketAddr, config: &ServerConfig) {
             addr, config.num_workers
         );
     }
-}
-
-fn create_compressed_service(service: IdService) -> IdGenServer<IdService> {
-    IdGenServer::new(service)
-        .send_compressed(CompressionEncoding::Zstd)
-        .send_compressed(CompressionEncoding::Gzip)
-        .send_compressed(CompressionEncoding::Deflate)
-        .accept_compressed(CompressionEncoding::Zstd)
-        .accept_compressed(CompressionEncoding::Gzip)
-        .accept_compressed(CompressionEncoding::Deflate)
 }
 
 async fn create_shutdown_signal(service: IdService) {
@@ -144,4 +142,5 @@ async fn create_shutdown_signal(service: IdService) {
     if let Err(e) = service.shutdown().await {
         eprintln!("Error during service shutdown: {:?}", e);
     }
+    println!("Shutdown complete!");
 }
