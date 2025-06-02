@@ -142,5 +142,4 @@ async fn create_shutdown_signal(service: IdService) {
     if let Err(e) = service.shutdown().await {
         eprintln!("Error during service shutdown: {:?}", e);
     }
-    println!("Shutdown complete!");
 }
