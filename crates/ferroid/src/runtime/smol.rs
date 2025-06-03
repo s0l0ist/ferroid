@@ -84,6 +84,24 @@ impl Future for SmolSleepFuture {
     }
 }
 
+/// An implementation of [`SleepProvider`] using Smol's yield.
+///
+/// This strategy avoids timer-based delays by yielding to the scheduler
+/// immediately, which can improve responsiveness in low-concurrency scenarios.
+///
+/// However, it comes at the cost of more frequent rescheduling, which can
+/// result in tighter polling loops and increased CPU usage under load. In
+/// highly concurrent cases, a timer-based sleep (e.g., [`SmolSleep`]) is often
+/// more efficient due to reduced scheduler churn.
+pub struct SmolYield;
+impl SleepProvider for SmolYield {
+    type Sleep = smol::future::YieldNow;
+
+    fn sleep_for(_dur: core::time::Duration) -> Self::Sleep {
+        smol::future::yield_now()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,29 +118,107 @@ mod tests {
     const NUM_GENERATORS: u64 = 32;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 32;
 
+    // Test the explicit SleepProvider approach
     #[test]
-    fn generates_many_unique_ids_lock_smol() {
-        smol::block_on(
-            test_many_unique_ids::<_, SnowflakeTwitterId, MonotonicClock>(
+    fn generates_many_unique_ids_explicit_lock_smol() {
+        smol::block_on(async {
+            test_many_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolSleep>(
                 LockSnowflakeGenerator::new,
                 MonotonicClock::default,
-            ),
-        )
+            )
+            .await
+            .unwrap();
+
+            test_many_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolYield>(
+                LockSnowflakeGenerator::new,
+                MonotonicClock::default,
+            )
+            .await
+            .unwrap();
+        });
+    }
+
+    #[test]
+    fn generates_many_unique_ids_explicit_atomic_smol() {
+        smol::block_on(async {
+            test_many_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolSleep>(
+                AtomicSnowflakeGenerator::new,
+                MonotonicClock::default,
+            )
+            .await
+            .unwrap();
+
+            test_many_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolYield>(
+                AtomicSnowflakeGenerator::new,
+                MonotonicClock::default,
+            )
+            .await
+            .unwrap();
+        });
+    }
+
+    // Test the convenience extension trait approach
+    #[test]
+    fn generates_many_unique_ids_convenience_lock_smol() {
+        smol::block_on(test_many_unique_ids_convenience::<
+            _,
+            SnowflakeTwitterId,
+            MonotonicClock,
+        >(
+            LockSnowflakeGenerator::new, MonotonicClock::default
+        ))
         .unwrap();
     }
 
     #[test]
-    fn generates_many_unique_ids_atomic_smol() {
-        smol::block_on(
-            test_many_unique_ids::<_, SnowflakeTwitterId, MonotonicClock>(
-                AtomicSnowflakeGenerator::new,
-                MonotonicClock::default,
-            ),
-        )
+    fn generates_many_unique_ids_convenience_atomic_smol() {
+        smol::block_on(test_many_unique_ids_convenience::<
+            _,
+            SnowflakeTwitterId,
+            MonotonicClock,
+        >(
+            AtomicSnowflakeGenerator::new, MonotonicClock::default
+        ))
         .unwrap();
     }
 
-    async fn test_many_unique_ids<G, ID, T>(
+    // Helper function for explicit SleepProvider testing
+    async fn test_many_unique_ids_explicit<G, ID, T, S>(
+        generator_fn: impl Fn(u64, T) -> G,
+        clock_factory: impl Fn() -> T,
+    ) -> Result<()>
+    where
+        G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
+        ID: Snowflake + fmt::Debug + Send + 'static,
+        T: TimeSource<ID::Ty> + Clone + Send,
+        S: SleepProvider,
+    {
+        let clock = clock_factory();
+        let generators: Vec<_> = (0..NUM_GENERATORS)
+            .map(|machine_id| generator_fn(machine_id, clock.clone()))
+            .collect();
+
+        // Test explicit SleepProvider syntax
+        let tasks: Vec<Task<Result<Vec<ID>>>> = generators
+            .into_iter()
+            .map(|g| {
+                smol::spawn(async move {
+                    let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
+                    for _ in 0..IDS_PER_GENERATOR {
+                        let id =
+                            crate::SnowflakeGeneratorAsyncExt::try_next_id_async::<S>(&g).await?;
+                        ids.push(id);
+                    }
+                    Ok(ids)
+                })
+            })
+            .collect();
+
+        validate_unique_ids(tasks).await
+    }
+
+    // Helper function for convenience extension trait testing
+    async fn test_many_unique_ids_convenience<G, ID, T>(
         generator_fn: impl Fn(u64, T) -> G,
         clock_factory: impl Fn() -> T,
     ) -> Result<()>
@@ -136,12 +232,15 @@ mod tests {
             .map(|machine_id| generator_fn(machine_id, clock.clone()))
             .collect();
 
+        // Test convenience extension trait syntax (uses SmolSleep by default)
         let tasks: Vec<Task<Result<Vec<ID>>>> = generators
             .into_iter()
             .map(|g| {
                 smol::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
+                        // This uses the convenience method - no explicit
+                        // SleepProvider type!
                         let id = g.try_next_id_async().await?;
                         ids.push(id);
                     }
@@ -150,6 +249,13 @@ mod tests {
             })
             .collect();
 
+        validate_unique_ids(tasks).await
+    }
+
+    // Helper to validate uniqueness - shared between test approaches
+    async fn validate_unique_ids(
+        tasks: Vec<Task<Result<Vec<impl Snowflake + fmt::Debug>>>>,
+    ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
