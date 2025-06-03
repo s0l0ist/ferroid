@@ -54,7 +54,8 @@ where
 /// This allows the generator to be generic over runtimes like `Tokio` or
 /// `Smol`.
 pub trait SleepProvider {
-    type Sleep: Future<Output = ()>;
+    /// We require `Send` so that the future can be safely moved across threads
+    type Sleep: Future<Output = ()> + Send;
 
     fn sleep_for(dur: Duration) -> Self::Sleep;
 }
