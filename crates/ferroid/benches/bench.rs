@@ -10,7 +10,7 @@ use futures::future::try_join_all;
 use smol::Task;
 use std::{
     sync::{Arc, Barrier},
-    thread::{scope, yield_now},
+    thread::scope,
     time::Instant,
 };
 use tokio::runtime::Builder;
@@ -194,7 +194,9 @@ fn bench_generator_contended_yield<G, ID, T>(
                                                     black_box(id);
                                                     break;
                                                 }
-                                                IdGenStatus::Pending { .. } => yield_now(),
+                                                IdGenStatus::Pending { .. } => {
+                                                    std::thread::yield_now()
+                                                }
                                             }
                                         }
                                     }
