@@ -1,11 +1,9 @@
 use crate::{
     common::{error::IdServiceError, idgen::IdUnitResponseChunk, types::SNOWFLAKE_ID_SIZE},
-    server::{config::ServerConfig, service::config::SnowflakeGeneratorType},
+    server::service::config::SnowflakeGeneratorType,
 };
 use ferroid::{IdGenStatus, Snowflake};
-use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use tonic::Status;
 
 /// Handles a single streamed ID generation task for a worker.
@@ -37,14 +35,13 @@ use tonic::Status;
 /// - Propagates [`IdServiceError::IdGeneration`] to the client on failure.
 pub async fn handle_stream_request(
     _worker_id: usize,
+    chunk_buf: &mut [u8],
+    buff_pos: &mut usize,
+    chunk_bytes: usize,
     chunk_size: usize,
     chunk_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
-    cancelled: Arc<CancellationToken>,
     generator: &mut SnowflakeGeneratorType,
-    config: &ServerConfig,
 ) {
-    let mut chunk_buf = vec![0_u8; config.chunk_bytes];
-    let mut buf_pos = 0;
     let mut generated = 0;
 
     while generated < chunk_size {
@@ -53,11 +50,11 @@ pub async fn handle_stream_request(
                 generated += 1;
 
                 let id_bytes = id.to_raw().to_le_bytes();
-                chunk_buf[buf_pos..buf_pos + SNOWFLAKE_ID_SIZE].copy_from_slice(&id_bytes);
-                buf_pos += SNOWFLAKE_ID_SIZE;
+                chunk_buf[*buff_pos..*buff_pos + SNOWFLAKE_ID_SIZE].copy_from_slice(&id_bytes);
+                *buff_pos += SNOWFLAKE_ID_SIZE;
 
-                if buf_pos == config.chunk_bytes {
-                    if should_stop(&chunk_tx, &cancelled) {
+                if *buff_pos == chunk_bytes {
+                    if chunk_tx.is_closed() {
                         #[cfg(feature = "tracing")]
                         tracing::debug!("Worker {} stopping before chunk send", _worker_id);
                         return;
@@ -73,14 +70,14 @@ pub async fn handle_stream_request(
                         return;
                     }
 
-                    buf_pos = 0;
+                    *buff_pos = 0;
                 }
             }
             Ok(IdGenStatus::Pending { .. }) => {
                 tokio::task::yield_now().await;
             }
             Err(e) => {
-                if should_stop(&chunk_tx, &cancelled) {
+                if chunk_tx.is_closed() {
                     #[cfg(feature = "tracing")]
                     tracing::debug!("Worker {} stopping after ID generation error", _worker_id);
                     return;
@@ -100,8 +97,9 @@ pub async fn handle_stream_request(
     }
 
     // Send final partial chunk if buffer is non-empty
-    if buf_pos > 0 && !should_stop(&chunk_tx, &cancelled) {
-        let bytes = bytes::Bytes::copy_from_slice(&chunk_buf[..buf_pos]);
+    if *buff_pos > 0 && !chunk_tx.is_closed() {
+        let bytes = bytes::Bytes::copy_from_slice(&chunk_buf[..*buff_pos]);
+        *buff_pos = 0;
         if let Err(_e) = chunk_tx
             .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
             .await
@@ -110,15 +108,4 @@ pub async fn handle_stream_request(
             tracing::debug!("Worker {} failed to send final chunk: {}", _worker_id, _e);
         }
     }
-}
-
-/// Determines whether the stream should terminate early.
-///
-/// Returns `true` if the client has cancelled the request or if the response
-/// channel is already closed.
-fn should_stop(
-    chunk_tx: &mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
-    cancelled: &CancellationToken,
-) -> bool {
-    chunk_tx.is_closed() || cancelled.is_cancelled()
 }

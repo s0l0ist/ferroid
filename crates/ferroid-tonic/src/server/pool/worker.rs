@@ -1,5 +1,4 @@
 use crate::server::{
-    config::ServerConfig,
     service::config::SnowflakeGeneratorType,
     streaming::{processor::handle_stream_request, request::WorkRequest},
 };
@@ -27,25 +26,30 @@ pub async fn worker_loop(
     worker_id: usize,
     mut rx: mpsc::Receiver<WorkRequest>,
     mut generator: SnowflakeGeneratorType,
-    config: ServerConfig,
+    chunk_bytes: usize,
 ) {
     #[cfg(feature = "tracing")]
     tracing::debug!("Worker {} started", worker_id);
+
+    // Create a reusable buffer based on the server config.
+    let mut buff = vec![0_u8; chunk_bytes];
+    // A cursor that tracks where we've written
+    let mut buff_pos = 0;
 
     while let Some(work) = rx.recv().await {
         match work {
             WorkRequest::Stream {
                 chunk_size,
                 chunk_tx,
-                cancelled,
             } => {
                 handle_stream_request(
                     worker_id,
+                    &mut buff,
+                    &mut buff_pos,
+                    chunk_bytes,
                     chunk_size,
                     chunk_tx,
-                    cancelled,
                     &mut generator,
-                    &config,
                 )
                 .await;
             }

@@ -5,7 +5,6 @@ use crate::{
 };
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio_util::sync::CancellationToken;
 use tonic::Status;
 
 /// Coordinates chunked ID generation and forwards results to the gRPC response
@@ -36,18 +35,12 @@ pub async fn feed_chunks(
     total_ids: usize,
     worker_pool: Arc<WorkerPool>,
     resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
-    cancel: Arc<CancellationToken>,
+
     config: ServerConfig,
 ) {
     let mut remaining = total_ids;
 
     while remaining > 0 {
-        if cancel.is_cancelled() {
-            #[cfg(feature = "tracing")]
-            tracing::debug!("feed_chunks cancelled");
-            break;
-        }
-
         let chunk_size = remaining.min(config.ids_per_chunk);
         remaining -= chunk_size;
 
@@ -57,7 +50,6 @@ pub async fn feed_chunks(
             .send_to_next_worker(WorkRequest::Stream {
                 chunk_size,
                 chunk_tx,
-                cancelled: cancel.clone(),
             })
             .await
         {
@@ -81,4 +73,7 @@ pub async fn feed_chunks(
             }
         }
     }
+
+    #[cfg(feature = "tracing")]
+    tracing::debug!("feed_chunks done");
 }

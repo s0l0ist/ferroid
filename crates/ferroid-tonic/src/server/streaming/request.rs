@@ -1,7 +1,5 @@
 use crate::common::idgen::IdUnitResponseChunk;
-use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-use tokio_util::sync::CancellationToken;
 use tonic::Status;
 
 /// A message sent from the worker pool to an individual worker task.
@@ -19,11 +17,9 @@ pub enum WorkRequest {
     /// - `chunk_size`: The number of IDs to generate.
     /// - `chunk_tx`: Output channel for sending chunks back to the client
     ///   stream.
-    /// - `cancelled`: Token that allows early exit if the client disconnects.
     Stream {
         chunk_size: usize,
         chunk_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
-        cancelled: Arc<CancellationToken>,
     },
 
     /// Request the worker to shut down gracefully.

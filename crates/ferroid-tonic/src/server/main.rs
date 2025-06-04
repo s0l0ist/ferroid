@@ -43,20 +43,20 @@ async fn main() -> anyhow::Result<()> {
     run_server(addr, config).await
 }
 
-fn log_startup_info(addr: &SocketAddr, config: &ServerConfig) {
+fn log_startup_info(_addr: &SocketAddr, _config: &ServerConfig) {
     if cfg!(debug_assertions) {
         #[cfg(feature = "tracing")]
         tracing::info!(
             "Starting ID service on {} with full config: {:#?}",
-            addr,
-            config
+            _addr,
+            _config
         );
     } else {
         #[cfg(feature = "tracing")]
         tracing::info!(
             "Starting ID service on {} with {} workers",
-            addr,
-            config.num_workers
+            _addr,
+            _config.num_workers
         );
     }
 }
@@ -133,8 +133,8 @@ async fn shutdown_signal(service: IdService) {
     #[cfg(feature = "tracing")]
     tracing::info!("Shutdown signal received, terminating gracefully...");
 
-    if let Err(e) = service.shutdown().await {
+    if let Err(_e) = service.shutdown().await {
         #[cfg(feature = "tracing")]
-        tracing::error!("Error during service shutdown: {:?}", e);
+        tracing::error!("Error during service shutdown: {:?}", _e);
     }
 }

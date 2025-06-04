@@ -33,7 +33,6 @@ use crate::{
 };
 use core::pin::Pin;
 use ferroid::Snowflake;
-use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, wrappers::ReceiverStream};
@@ -78,8 +77,7 @@ impl IdService {
                 clock.clone(),
             );
 
-            let config = config.clone();
-            tokio::spawn(worker_loop(worker_id, rx, generator, config));
+            tokio::spawn(worker_loop(worker_id, rx, generator, config.chunk_bytes));
         }
 
         let worker_pool = WorkerPool::new(workers, shutdown_token);
@@ -136,23 +134,15 @@ impl IdGen for IdService {
             .into());
         }
 
-        let cancellation_token = Arc::new(CancellationToken::new());
         let (resp_tx, resp_rx) =
             mpsc::channel::<Result<IdUnitResponseChunk, Status>>(self.config.stream_buffer_size);
 
         let worker_pool = Arc::clone(&self.worker_pool);
-        let cancel = cancellation_token.clone();
         let config = self.config.clone();
         tokio::spawn(async move {
-            feed_chunks(total_ids, worker_pool, resp_tx, cancel, config).await;
+            feed_chunks(total_ids, worker_pool, resp_tx, config).await;
         });
 
-        let cancel_future = Box::pin(async move {
-            cancellation_token.cancelled().await;
-        });
-
-        let stream = ReceiverStream::new(resp_rx).take_until(cancel_future);
-
-        Ok(Response::new(Box::pin(stream)))
+        Ok(Response::new(Box::pin(ReceiverStream::new(resp_rx))))
     }
 }
