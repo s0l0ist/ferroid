@@ -1,33 +1,18 @@
-//! # `ferroid-tonic` Server
+//! # `ferroid-tonic` gRPC Server
 //!
-//! This binary launches a high-throughput, gRPC-based Snowflake ID generation
-//! service using [`ferroid`] for ID generation and [`tonic`] for the transport
-//! layer.
+//! High-throughput Snowflake ID service using [`ferroid`] + [`tonic`].
 //!
-//! The server exposes a **streaming-only** endpoint that allows clients to
-//! request a large number of Snowflake-like IDs, returned in compressed,
-//! backpressure-aware chunks.
+//! ## Highlights
+//! - **Streaming only**: Optimized for large batch ID generation.
+//! - **Async worker pool**: Fixed concurrency, backpressure-aware.
+//! - **Efficient transport**: HTTP/2, Zstd, and Gzip support.
+//! - **Graceful shutdown**: Clean Ctrl+C or SIGTERM handling.
 //!
-//! ## Key Features
-//!
-//! - **Streaming ID Generation Only**: Optimized for large-batch use cases.
-//! - **Async Worker Pool**: Fixed number of concurrent workers with unique
-//!   generator state.
-//! - **Backpressure Handling**: All channels are bounded to prevent memory
-//!   overcommitment.
-//! - **Cooperative Cancellation**: Streams terminate early when the client
-//!   disconnects.
-//! - **Graceful Shutdown**: Workers are shut down cleanly on `SIGINT` (Ctrl+C).
-//! - **Efficient Transport**:
-//!   - gRPC over HTTP/2 with adaptive windowing.
-//!   - Zstd compression support for streaming responses.
-//!
-//! ## Running the Server
+//! ## Usage
 //!
 //! ```bash
 //! cargo run --bin server --release
 //! ```
-//!
 
 use clap::Parser;
 use ferroid_tonic::{
@@ -46,7 +31,6 @@ use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 
-/// Launches the gRPC streaming ID generation service.
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = CliArgs::try_parse()?;
@@ -54,16 +38,37 @@ async fn main() -> anyhow::Result<()> {
 
     init_tracing();
 
-    let addr = "127.0.0.1:50051".parse()?;
+    let addr: SocketAddr = "127.0.0.1:50051".parse()?;
     log_startup_info(&addr, &config);
+    run_server(addr, config).await
+}
 
-    let service = IdService::new(config);
-    let reflection_service = Builder::configure()
+fn log_startup_info(addr: &SocketAddr, config: &ServerConfig) {
+    if cfg!(debug_assertions) {
+        #[cfg(feature = "tracing")]
+        tracing::info!(
+            "Starting ID service on {} with full config: {:#?}",
+            addr,
+            config
+        );
+    } else {
+        #[cfg(feature = "tracing")]
+        tracing::info!(
+            "Starting ID service on {} with {} workers",
+            addr,
+            config.num_workers
+        );
+    }
+}
+
+async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()> {
+    let service = IdService::new(config.clone());
+
+    let reflection = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
-        .build_v1()
-        .unwrap();
+        .build_v1()?;
 
-    let server = Server::builder()
+    Server::builder()
         .accept_http1(true)
         .http2_adaptive_window(Some(true))
         .layer(
@@ -76,51 +81,27 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .layer(GrpcWebLayer::new()),
         )
-        .add_service(reflection_service)
-        .add_service(
-            IdGenServer::new(service.clone())
-                .send_compressed(CompressionEncoding::Zstd)
-                .send_compressed(CompressionEncoding::Gzip)
-                .send_compressed(CompressionEncoding::Deflate)
-                .accept_compressed(CompressionEncoding::Zstd)
-                .accept_compressed(CompressionEncoding::Gzip)
-                .accept_compressed(CompressionEncoding::Deflate),
-        )
-        .serve_with_shutdown(addr, create_shutdown_signal(service));
+        .add_service(reflection)
+        .add_service(build_id_service(service.clone()))
+        .serve_with_shutdown(addr, shutdown_signal(service))
+        .await?;
 
-    match server.await {
-        Ok(_) => {
-            println!("Service shut down successfully");
-            Ok(())
-        }
-        Err(e) => {
-            eprintln!("Server error: {:?}", e);
-            Err(e.into())
-        }
-    }
+    #[cfg(feature = "tracing")]
+    tracing::info!("Service shut down successfully");
+    Ok(())
 }
 
-fn log_startup_info(addr: &SocketAddr, config: &ServerConfig) {
-    if cfg!(debug_assertions) {
-        println!(
-            "Starting ID service on {} with full config: {:#?}",
-            addr, config
-        );
-    } else {
-        println!(
-            "Starting ID service on {} with {} workers",
-            addr, config.num_workers
-        );
-    }
+fn build_id_service(service: IdService) -> IdGenServer<IdService> {
+    IdGenServer::new(service)
+        .send_compressed(CompressionEncoding::Zstd)
+        .send_compressed(CompressionEncoding::Gzip)
+        .send_compressed(CompressionEncoding::Deflate)
+        .accept_compressed(CompressionEncoding::Zstd)
+        .accept_compressed(CompressionEncoding::Gzip)
+        .accept_compressed(CompressionEncoding::Deflate)
 }
 
-async fn create_shutdown_signal(service: IdService) {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
+async fn shutdown_signal(service: IdService) {
     #[cfg(unix)]
     let terminate = async {
         signal::unix::signal(signal::unix::SignalKind::terminate())
@@ -132,14 +113,28 @@ async fn create_shutdown_signal(service: IdService) {
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
     tokio::select! {
-        () = ctrl_c => println!("Received Ctrl+C signal"),
-        () = terminate => println!("Received SIGTERM signal"),
+        () = ctrl_c => {
+            #[cfg(feature = "tracing")]
+            tracing::info!("Received Ctrl+C signal");
+        },
+        () = terminate => {
+            #[cfg(feature = "tracing")]
+            tracing::info!("Received SIGTERM signal");
+        },
     }
 
-    println!("Shutdown signal received, terminating gracefully...");
+    #[cfg(feature = "tracing")]
+    tracing::info!("Shutdown signal received, terminating gracefully...");
 
     if let Err(e) = service.shutdown().await {
-        eprintln!("Error during service shutdown: {:?}", e);
+        #[cfg(feature = "tracing")]
+        tracing::error!("Error during service shutdown: {:?}", e);
     }
 }

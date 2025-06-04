@@ -16,12 +16,13 @@ use tonic::Status;
 pub enum WorkRequest {
     /// Generate a stream of `count` Snowflake IDs and send them in chunks.
     ///
-    /// - `count`: Total number of IDs to generate.
-    /// - `tx`: Output channel for sending chunks back to the client stream.
+    /// - `chunk_size`: The number of IDs to generate.
+    /// - `chunk_tx`: Output channel for sending chunks back to the client
+    ///   stream.
     /// - `cancelled`: Token that allows early exit if the client disconnects.
     Stream {
-        count: usize,
-        tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
+        chunk_size: usize,
+        chunk_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
         cancelled: Arc<CancellationToken>,
     },
 

@@ -51,7 +51,7 @@ impl From<IdServiceError> for Status {
     fn from(err: IdServiceError) -> Self {
         match err {
             IdServiceError::ChannelError { context } => {
-                Status::unavailable(format!("Channel error: {}", context))
+                Status::internal(format!("Channel error: {}", context))
             }
             IdServiceError::IdGeneration(e) => {
                 Status::internal(format!("ID generation error: {:?}", e))

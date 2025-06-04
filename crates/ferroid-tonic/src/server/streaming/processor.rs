@@ -21,9 +21,10 @@ use tonic::Status;
 ///
 /// # Arguments
 ///
-/// - `worker_id`: Used for tracing and debugging.
-/// - `count`: Number of Snowflake IDs to generate in total.
-/// - `tx`: Output channel for sending serialized chunks to the response stream.
+/// - `_worker_id`: Used for tracing and debugging.
+/// - `chunk_size`: Number of Snowflake IDs to generate.
+/// - `chunk_tx`: Output channel for sending serialized chunks to the response
+///   stream.
 /// - `cancelled`: Shared cancellation token (triggered by stream termination).
 /// - `generator`: Local Snowflake ID generator unique to the worker.
 ///
@@ -36,8 +37,8 @@ use tonic::Status;
 /// - Propagates [`IdServiceError::IdGeneration`] to the client on failure.
 pub async fn handle_stream_request(
     _worker_id: usize,
-    count: usize,
-    tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
+    chunk_size: usize,
+    chunk_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
     cancelled: Arc<CancellationToken>,
     generator: &mut SnowflakeGeneratorType,
     config: &ServerConfig,
@@ -46,7 +47,7 @@ pub async fn handle_stream_request(
     let mut buf_pos = 0;
     let mut generated = 0;
 
-    while generated < count {
+    while generated < chunk_size {
         match generator.try_next_id() {
             Ok(IdGenStatus::Ready { id }) => {
                 generated += 1;
@@ -56,14 +57,17 @@ pub async fn handle_stream_request(
                 buf_pos += SNOWFLAKE_ID_SIZE;
 
                 if buf_pos == config.chunk_bytes {
-                    if should_stop(&cancelled, &tx) {
+                    if should_stop(&chunk_tx, &cancelled) {
                         #[cfg(feature = "tracing")]
                         tracing::debug!("Worker {} stopping before chunk send", _worker_id);
                         return;
                     }
 
                     let bytes = bytes::Bytes::copy_from_slice(&chunk_buf);
-                    if let Err(_e) = tx.send(Ok(IdUnitResponseChunk { packed_ids: bytes })).await {
+                    if let Err(_e) = chunk_tx
+                        .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
+                        .await
+                    {
                         #[cfg(feature = "tracing")]
                         tracing::debug!("Worker {} failed to send chunk: {}", _worker_id, _e);
                         return;
@@ -76,13 +80,16 @@ pub async fn handle_stream_request(
                 tokio::task::yield_now().await;
             }
             Err(e) => {
-                if should_stop(&cancelled, &tx) {
+                if should_stop(&chunk_tx, &cancelled) {
                     #[cfg(feature = "tracing")]
                     tracing::debug!("Worker {} stopping after ID generation error", _worker_id);
                     return;
                 }
 
-                if let Err(_e) = tx.send(Err(IdServiceError::IdGeneration(e).into())).await {
+                if let Err(_e) = chunk_tx
+                    .send(Err(IdServiceError::IdGeneration(e).into()))
+                    .await
+                {
                     #[cfg(feature = "tracing")]
                     tracing::debug!("Worker {} failed to send error: {}", _worker_id, _e);
                 }
@@ -93,9 +100,12 @@ pub async fn handle_stream_request(
     }
 
     // Send final partial chunk if buffer is non-empty
-    if buf_pos > 0 && !should_stop(&cancelled, &tx) {
+    if buf_pos > 0 && !should_stop(&chunk_tx, &cancelled) {
         let bytes = bytes::Bytes::copy_from_slice(&chunk_buf[..buf_pos]);
-        if let Err(_e) = tx.send(Ok(IdUnitResponseChunk { packed_ids: bytes })).await {
+        if let Err(_e) = chunk_tx
+            .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
+            .await
+        {
             #[cfg(feature = "tracing")]
             tracing::debug!("Worker {} failed to send final chunk: {}", _worker_id, _e);
         }
@@ -107,8 +117,8 @@ pub async fn handle_stream_request(
 /// Returns `true` if the client has cancelled the request or if the response
 /// channel is already closed.
 fn should_stop(
+    chunk_tx: &mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
     cancelled: &CancellationToken,
-    tx: &mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
 ) -> bool {
-    tx.is_closed() || cancelled.is_cancelled()
+    chunk_tx.is_closed() || cancelled.is_cancelled()
 }

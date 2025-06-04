@@ -1,8 +1,5 @@
 use crate::{common::error::IdServiceError, server::streaming::request::WorkRequest};
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
@@ -12,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 /// bounded MPSC channel. The pool distributes requests using round-robin
 /// scheduling and supports graceful, cooperative shutdown.
 pub struct WorkerPool {
-    workers: Arc<Vec<mpsc::Sender<WorkRequest>>>,
+    workers: Vec<mpsc::Sender<WorkRequest>>,
     next_worker: AtomicUsize,
     shutdown_token: CancellationToken,
 }
@@ -20,10 +17,7 @@ pub struct WorkerPool {
 impl WorkerPool {
     /// Creates a new [`WorkerPool`] from a pre-initialized list of worker
     /// channels and a shared shutdown token.
-    pub fn new(
-        workers: Arc<Vec<mpsc::Sender<WorkRequest>>>,
-        shutdown_token: CancellationToken,
-    ) -> Self {
+    pub fn new(workers: Vec<mpsc::Sender<WorkRequest>>, shutdown_token: CancellationToken) -> Self {
         Self {
             workers,
             next_worker: AtomicUsize::new(0),
@@ -98,28 +92,34 @@ impl WorkerPool {
             let (tx, rx) = oneshot::channel();
             if let Err(_e) = worker.send(WorkRequest::Shutdown { response: tx }).await {
                 #[cfg(feature = "tracing")]
-                tracing::debug!("Failed to send shutdown signal to worker {}: {}", _i, _e);
+                tracing::error!("Failed to send shutdown signal to worker {}: {}", _i, _e);
             } else {
                 shutdown_handles.push(rx);
             }
         }
 
-        for (_i, handle) in shutdown_handles.into_iter().enumerate() {
-            match tokio::time::timeout(tokio::time::Duration::from_secs(3), handle).await {
-                Ok(Ok(())) => {
-                    #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {} shut down gracefully", _i);
+        let timeout_futures: Vec<_> = shutdown_handles
+            .into_iter()
+            .enumerate()
+            .map(|(_i, handle)| async move {
+                match tokio::time::timeout(tokio::time::Duration::from_secs(3), handle).await {
+                    Ok(Ok(())) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::debug!("Worker {} acked shutdown gracefully", _i);
+                    }
+                    Ok(Err(_e)) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::error!("Worker {} shutdown response: {}", _i, _e);
+                    }
+                    Err(_) => {
+                        #[cfg(feature = "tracing")]
+                        tracing::warn!("Worker {} shutdown timeout", _i);
+                    }
                 }
-                Ok(Err(_e)) => {
-                    #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {} shutdown response: {}", _i, _e);
-                }
-                Err(_) => {
-                    #[cfg(feature = "tracing")]
-                    tracing::warn!("Worker {} shutdown timeout", _i);
-                }
-            }
-        }
+            })
+            .collect();
+
+        futures::future::join_all(timeout_futures).await;
 
         #[cfg(feature = "tracing")]
         tracing::info!("Worker pool shutdown complete");

@@ -57,7 +57,7 @@ impl IdService {
     /// Each worker is assigned a unique Snowflake machine ID and runs its own
     /// generator and bounded channel. All workers share a global shutdown
     /// token.
-    #[cfg_attr(feature = "tracing", tracing::instrument(name = "id_service_new", fields(num_workers = config.num_workers)))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(fields(num_workers = config.num_workers)))]
     pub fn new(config: ServerConfig) -> Self {
         #[cfg(feature = "tracing")]
         tracing::info!(
@@ -82,7 +82,7 @@ impl IdService {
             tokio::spawn(worker_loop(worker_id, rx, generator, config));
         }
 
-        let worker_pool = WorkerPool::new(Arc::new(workers), shutdown_token);
+        let worker_pool = WorkerPool::new(workers, shutdown_token);
 
         Self {
             config,
@@ -109,7 +109,7 @@ impl IdGen for IdService {
     /// The total requested count is validated and split into fixed-size chunks.
     /// Each chunk is delegated to the worker pool. Cancellation is supported
     /// via a scoped [`CancellationToken`].
-    #[cfg_attr(feature = "tracing", tracing::instrument(name = "get_stream_ids", skip_all, fields(count = req.get_ref().count)))]
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all, fields(count = req.get_ref().count)))]
     async fn get_stream_ids(
         &self,
         req: Request<IdStreamRequest>,

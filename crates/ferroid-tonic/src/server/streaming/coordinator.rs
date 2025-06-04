@@ -55,8 +55,8 @@ pub async fn feed_chunks(
 
         match worker_pool
             .send_to_next_worker(WorkRequest::Stream {
-                count: chunk_size,
-                tx: chunk_tx,
+                chunk_size,
+                chunk_tx,
                 cancelled: cancel.clone(),
             })
             .await
