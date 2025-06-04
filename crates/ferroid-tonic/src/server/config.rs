@@ -53,21 +53,13 @@ pub struct CliArgs {
 
     /// Number of Snowflake IDs included in each response chunk.
     ///
-    /// Affects the size of each `IdUnitResponseChunk`. Larger chunks improve
-    /// network efficiency but increase per-chunk memory usage.
+    /// Affects the size of each `IdUnitResponseChunk`. Ideally, should be the
+    /// size of the snowflake sequence id; however, larger chunks improve
+    /// performance with concurrent streams.
     ///
     /// Environment variable: `IDS_PER_CHUNK`
-    #[arg(long, env = "IDS_PER_CHUNK", default_value_t = 2048)]
+    #[arg(long, env = "IDS_PER_CHUNK", default_value_t = 4096)]
     pub ids_per_chunk: usize,
-
-    /// Capacity of the per-worker bounded work request queue.
-    ///
-    /// This controls how many `WorkRequest`s can be buffered per worker before
-    /// backpressure is applied. Tune based on expected request burstiness.
-    ///
-    /// Environment variable: `WORK_REQUEST_BUFFER_SIZE`
-    #[arg(long, env = "WORK_REQUEST_BUFFER_SIZE", default_value_t = 2048)]
-    pub work_request_buffer_size: usize,
 
     /// Capacity of the response buffer between worker and gRPC stream.
     ///
@@ -86,7 +78,6 @@ pub struct ServerConfig {
     pub shard_offset: usize,
     pub num_workers: usize,
     pub ids_per_chunk: usize,
-    pub work_request_buffer_size: usize,
     pub stream_buffer_size: usize,
     pub chunk_bytes: usize,
 }
@@ -115,7 +106,6 @@ impl TryFrom<CliArgs> for ServerConfig {
             shard_offset: args.shard_offset,
             num_workers: args.num_workers,
             ids_per_chunk: args.ids_per_chunk,
-            work_request_buffer_size: args.work_request_buffer_size,
             stream_buffer_size: args.stream_buffer_size,
             chunk_bytes,
         })

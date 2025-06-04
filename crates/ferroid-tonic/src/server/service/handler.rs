@@ -69,7 +69,27 @@ impl IdService {
         let shutdown_token = CancellationToken::new();
 
         for worker_id in 0..config.num_workers {
-            let (tx, rx) = mpsc::channel(config.work_request_buffer_size);
+            // We only send a single WorkRequest to a worker at a time, even
+            // when processing large client requests. This is because
+            // `feed_chunks()` dispatches chunks sequentially across workers
+            // rather than flooding them concurrently.
+            //
+            // In this sequential mode, each worker receives one request,
+            // processes it fully, sends back chunked responses via a separate
+            // channel, and only then receives the next request.
+            //
+            // If we were instead dispatching multiple chunks concurrently to
+            // the same worker - either by spawning tasks or using
+            // `futures::join_all` - we would need a higher
+            // `work_request_buffer_size` to avoid backpressure stalls. But in
+            // practice, doing so degrades performance due to task overhead,
+            // increased contention, and less effective batching.
+            //
+            // Empirically, a buffer size of 1 is optimal in this model: it
+            // ensures at-most-one in-flight WorkRequest per worker, avoids
+            // unnecessary memory usage, and maintains high throughput with
+            // predictable latency.
+            let (tx, rx) = mpsc::channel(1);
             workers.push(tx);
 
             let generator = SnowflakeGeneratorType::new(

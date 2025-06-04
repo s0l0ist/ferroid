@@ -74,6 +74,10 @@ pub async fn handle_stream_request(
                 }
             }
             Ok(IdGenStatus::Pending { .. }) => {
+                // Tokio's timer granularity is 1ms, but `yield_now` requeues
+                // the task allowing others to proceed. By the time we're polled
+                // again, enough time has typically passed for progress to
+                // resume.
                 tokio::task::yield_now().await;
             }
             Err(e) => {

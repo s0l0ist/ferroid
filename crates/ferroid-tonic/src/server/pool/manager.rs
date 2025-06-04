@@ -32,13 +32,9 @@ impl WorkerPool {
 
     /// Attempts to send a [`WorkRequest`] to the next worker in the pool.
     ///
-    /// Fast-path uses `try_send()` to avoid awaiting when possible. If the
-    /// worker's queue is full, falls back to `send()` with a 100ms timeout.
-    ///
     /// Returns an error if:
     /// - A server shutdown is triggered (shutdown_token)
     /// - The worker's channel is closed.
-    /// - Sending times out due to backpressure.
     pub async fn send_to_next_worker(&self, request: WorkRequest) -> Result<(), IdServiceError> {
         if self.shutdown_token.is_cancelled() {
             return Err(IdServiceError::ServiceShutdown);
@@ -47,25 +43,9 @@ impl WorkerPool {
         let worker_idx = self.next_worker_index();
         let worker = &self.workers[worker_idx];
 
-        match worker.try_send(request) {
+        match worker.send(request).await {
             Ok(()) => Ok(()),
-            Err(mpsc::error::TrySendError::Full(request)) => {
-                match tokio::time::timeout(
-                    tokio::time::Duration::from_millis(100),
-                    worker.send(request),
-                )
-                .await
-                {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(_)) => Err(IdServiceError::ChannelError {
-                        context: format!("Worker {} channel closed", worker_idx),
-                    }),
-                    Err(_) => Err(IdServiceError::ServiceOverloaded {
-                        details: format!("Worker {} timeout after 100ms", worker_idx),
-                    }),
-                }
-            }
-            Err(mpsc::error::TrySendError::Closed(_)) => Err(IdServiceError::ChannelError {
+            Err(_e) => Err(IdServiceError::ChannelError {
                 context: format!("Worker {} channel closed", worker_idx),
             }),
         }
