@@ -48,15 +48,16 @@ pub struct CliArgs {
     /// machine ID field in the Snowflake format.
     ///
     /// Environment variable: `NUM_WORKERS`
-    #[arg(long, env = "NUM_WORKERS", default_value_t = 512)]
+    #[arg(long, env = "NUM_WORKERS", default_value_t = 128)]
     pub num_workers: usize,
 
     /// Number of Snowflake IDs included in each response chunk.
     ///
-    /// Determines the size of each `IdUnitResponseChunk`. Ideally, this should
-    /// match the sequence bit capacity of the target Snowflake ID type. Using
-    /// larger chunks, however, can improve throughput when handling concurrent
-    /// streams.
+    /// Defines the size of each `IdUnitResponseChunk`. Ideally, this aligns
+    /// with the maximum sequence value of the Snowflake ID type. The default
+    /// assumes a 12-bit sequence. While the gRPC protocol does impose message
+    /// size limits, these are only a concern when using IDs with high sequence
+    /// bit allocations.
     ///
     /// Environment variable: `IDS_PER_CHUNK`
     #[arg(long, env = "IDS_PER_CHUNK", default_value_t = 4096)]
