@@ -1,0 +1,12 @@
+use crate::common::types::SnowflakeIdType;
+use ferroid::{BasicSnowflakeGenerator, MonotonicClock};
+
+/// Clock implementation used by all Snowflake generators.
+///
+/// This controls how timestamps are embedded into generated IDs.
+pub type ClockType = MonotonicClock;
+
+/// Default Snowflake generator used per worker task.
+///
+/// Each instance is parameterized with a unique machine ID and shared clock.
+pub type SnowflakeGeneratorType = BasicSnowflakeGenerator<SnowflakeIdType, ClockType>;

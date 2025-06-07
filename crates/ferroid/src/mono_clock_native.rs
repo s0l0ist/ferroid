@@ -164,7 +164,7 @@ impl TimeSource<u64> for MonotonicClock {
     /// Returns the number of milliseconds since the configured epoch, based on
     /// the elapsed monotonic time since construction.
     fn current_millis(&self) -> u64 {
-        self.epoch_offset + self.inner.current.load(Ordering::Acquire)
+        self.epoch_offset + self.inner.current.load(Ordering::Relaxed)
     }
 }
 
