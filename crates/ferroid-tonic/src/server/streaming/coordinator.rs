@@ -35,7 +35,6 @@ pub async fn feed_chunks(
     total_ids: usize,
     worker_pool: Arc<WorkerPool>,
     resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
-
     config: ServerConfig,
 ) {
     let mut remaining = total_ids;
