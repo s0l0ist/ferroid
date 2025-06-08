@@ -111,15 +111,8 @@ impl MonotonicClock {
             _handle: OnceLock::new(),
         });
 
-        // On most systems, this will report a value near 5 ms. However, due to
-        // small differences in timer alignment and sleep accuracy (especially
-        // on macOS and Windows), the counter may be slightly behind. It's
-        // common to observe values like 4–6 ms after sleeping for 5 ms. The
-        // value will never go backward and is guaranteed to increase
-        // monotonically.
         let weak_inner = Arc::downgrade(&inner);
         let handle = thread::spawn(move || {
-            let start = start;
             let mut tick = 0;
 
             loop {

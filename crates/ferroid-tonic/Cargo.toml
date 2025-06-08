@@ -21,7 +21,7 @@ path = "src/client/main.rs"
 
 [dependencies]
 ferroid = { path = "../ferroid", features = ["async-tokio"] }
-tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd", "deflate", "gzip"] }
+tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd", "deflate", "gzip", "tls-webpki-roots"] }
 tonic-reflection = { workspace = true, features = ["server"] }
 tonic-web = { workspace = true }
 tokio = { workspace = true, features = ["parking_lot", "rt-multi-thread", "signal"] }
@@ -35,9 +35,14 @@ tokio-util = { workspace = true }
 bytes = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, optional = true }
-tracing-subscriber = { workspace = true, optional = true, features = ["ansi", "fmt", "smallvec", "std", "chrono", "env-filter"] }
 clap = { workspace = true, features = ["derive", "env", "color", "error-context", "help", "std", "suggestions", "usage"] }
 anyhow = { workspace = true, features = ["std"] }
+opentelemetry_sdk = { workspace = true, features = ["rt-tokio", "metrics", "trace", "logs"] }
+opentelemetry = { workspace = true,  features = ["logs", "trace", "metrics"] }
+opentelemetry-otlp = { workspace = true, features = ["gzip-tonic", "zstd-tonic", "grpc-tonic", "logs", "trace", "tls", "metrics"] }
+opentelemetry-semantic-conventions = { workspace = true, features = ["semconv_experimental"] }
+tracing-opentelemetry = { workspace = true, features = ["metrics"] }
+tracing-subscriber = { workspace = true, features = ["smallvec", "fmt", "ansi", "tracing-log", "std", "env-filter", "json", "chrono"] }
 
 [build-dependencies]
 tonic-build = { workspace = true, features = ["prost"] }
@@ -45,5 +50,3 @@ tonic-build = { workspace = true, features = ["prost"] }
 [features]
 default = []
 tracing = ["dep:tracing"]
-debug = ["tracing", "dep:tracing-subscriber"]
-
