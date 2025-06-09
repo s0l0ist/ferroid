@@ -1,6 +1,6 @@
 use super::request::WorkRequest;
 use crate::{
-    common::idgen::IdUnitResponseChunk,
+    common::{error::IdServiceError, idgen::IdUnitResponseChunk},
     server::{config::ServerConfig, pool::manager::WorkerPool},
 };
 use std::sync::Arc;
@@ -36,7 +36,7 @@ pub async fn feed_chunks(
     worker_pool: Arc<WorkerPool>,
     resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
     config: ServerConfig,
-) {
+) -> crate::common::error::Result<()> {
     let mut remaining = total_ids;
 
     while remaining > 0 {
@@ -54,25 +54,30 @@ pub async fn feed_chunks(
         {
             Ok(()) => {
                 while let Some(msg) = chunk_rx.recv().await {
-                    if let Err(_e) = resp_tx.send(msg).await {
-                        #[cfg(feature = "tracing")]
-                        tracing::debug!("Response channel failed to forward chunk: {}", _e);
-                        return;
+                    // Send the chunk back to the client. If it fails here, we
+                    // should immediately return the error so that we can track
+                    // it upstream.
+                    if let Err(e) = resp_tx.send(msg).await {
+                        return Err(IdServiceError::ChannelError {
+                            context: format!("Failed to forward chunk: {}", e),
+                        });
                     }
                 }
             }
             Err(e) => {
-                #[cfg(feature = "tracing")]
-                tracing::warn!("Failed to send work to worker: {:?}", e);
-                if let Err(_e) = resp_tx.send(Err(e.into())).await {
+                // On an internal error, we make a best effort to surface to the
+                // client. But there's a possibility that the client has also
+                // disconnected. Therefore, we return the original error and
+                // instead log when we are unable to send the error message to
+                // the client.
+                if let Err(_e) = resp_tx.send(Err(e.clone().into())).await {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Response channel failed to forward error: {}", _e);
+                    tracing::warn!("Failed to forward err: {}", _e)
                 }
-                return;
+                return Err(e);
             }
         }
     }
 
-    #[cfg(feature = "tracing")]
-    tracing::debug!("feed_chunks done");
+    Ok(())
 }

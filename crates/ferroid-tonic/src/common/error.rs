@@ -19,8 +19,10 @@
 use thiserror::Error;
 use tonic::Status;
 
+pub type Result<T> = core::result::Result<T, IdServiceError>;
+
 /// Unified error type for the ID generation service.
-#[derive(Error, Debug)]
+#[derive(Clone, Error, Debug)]
 pub enum IdServiceError {
     /// Internal channel send/receive failure (e.g., closed or full channel).
     #[error("Channel communication error: {context}")]
@@ -29,10 +31,6 @@ pub enum IdServiceError {
     /// Underlying Snowflake ID generation failed.
     #[error("ID generation failed: {0:?}")]
     IdGeneration(#[from] ferroid::Error),
-
-    /// The service cannot handle more requests due to load.
-    #[error("Service is overloaded: {details}")]
-    ServiceOverloaded { details: String },
 
     /// The client aborted the request.
     #[error("Request cancelled by client")]
@@ -56,7 +54,6 @@ impl From<IdServiceError> for Status {
             IdServiceError::IdGeneration(e) => {
                 Status::internal(format!("ID generation error: {:?}", e))
             }
-            IdServiceError::ServiceOverloaded { details } => Status::resource_exhausted(details),
             IdServiceError::RequestCancelled => Status::cancelled("Request was cancelled"),
             IdServiceError::InvalidRequest { reason } => Status::invalid_argument(reason),
             IdServiceError::ServiceShutdown => Status::unavailable("Service is shutting down"),

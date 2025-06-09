@@ -43,6 +43,7 @@ opentelemetry-otlp = { workspace = true, features = ["gzip-tonic", "zstd-tonic",
 opentelemetry-semantic-conventions = { workspace = true, features = ["semconv_experimental"] }
 tracing-opentelemetry = { workspace = true, features = ["metrics"] }
 tracing-subscriber = { workspace = true, features = ["smallvec", "fmt", "ansi", "tracing-log", "std", "env-filter", "json", "chrono"] }
+dotenvy = { workspace = true }
 
 [build-dependencies]
 tonic-build = { workspace = true, features = ["prost"] }

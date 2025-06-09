@@ -50,8 +50,8 @@ opentelemetry-otlp = { version = "0.30", default-features = false }
 opentelemetry-semantic-conventions = { version = "0.30", default-features = false }
 opentelemetry_sdk = { version = "0.30", default-features = false }
 tracing-opentelemetry = { version = "0.31", default-features = false }
-tracing-subscriber = { version = "0.3", default-features = false}
-
+tracing-subscriber = { version = "0.3", default-features = false }
+dotenvy = { version = "0.15", default-features = false }
 
 [profile.bin-release]
 inherits = "release"

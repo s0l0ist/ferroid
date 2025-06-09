@@ -11,26 +11,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let mut results = Vec::new();
 
     println!("\n=== Running Sequential ===");
-    results.push(run_parallel_stream(1, 1).await?);
-    results.push(run_parallel_stream(10, 1).await?);
-    results.push(run_parallel_stream(100, 1).await?);
-    results.push(run_parallel_stream(1000, 1).await?);
-    results.push(run_parallel_stream(10000, 1).await?);
-    results.push(run_parallel_stream(100000, 1).await?);
-    results.push(run_parallel_stream(1000000, 1).await?);
-    results.push(run_parallel_stream(10000000, 1).await?);
-    results.push(run_parallel_stream(100000000, 1).await?);
-    // results.push(run_parallel_stream(1000000000, 1).await?);
-    println!("\n=== Running Parallel ===");
+    // results.push(run_parallel_stream(1, 1).await?);
+    // results.push(run_parallel_stream(10, 1).await?);
+    // results.push(run_parallel_stream(100, 1).await?);
+    // results.push(run_parallel_stream(1000, 1).await?);
+    // results.push(run_parallel_stream(10000, 1).await?);
+    // results.push(run_parallel_stream(100000, 1).await?);
+    // results.push(run_parallel_stream(1000000, 1).await?);
+    // results.push(run_parallel_stream(10000000, 1).await?);
+    // results.push(run_parallel_stream(100000000, 1).await?);
+    results.push(run_parallel_stream(1000000000, 1).await?);
+    // println!("\n=== Running Parallel ===");
 
-    results.push(run_parallel_stream(1, 50).await?);
-    results.push(run_parallel_stream(10, 50).await?);
-    results.push(run_parallel_stream(100, 50).await?);
-    results.push(run_parallel_stream(1000, 50).await?);
-    results.push(run_parallel_stream(10000, 50).await?);
-    results.push(run_parallel_stream(100000, 50).await?);
-    results.push(run_parallel_stream(1000000, 50).await?);
-    results.push(run_parallel_stream(10000000, 50).await?);
+    // results.push(run_parallel_stream(1, 50).await?);
+    // results.push(run_parallel_stream(10, 50).await?);
+    // results.push(run_parallel_stream(100, 50).await?);
+    // results.push(run_parallel_stream(1000, 50).await?);
+    // results.push(run_parallel_stream(10000, 50).await?);
+    // results.push(run_parallel_stream(100000, 50).await?);
+    // results.push(run_parallel_stream(1000000, 50).await?);
+    // results.push(run_parallel_stream(10000000, 50).await?);
     // results.push(run_parallel_stream(100000000, 50).await?);
     // results.push(run_parallel_stream(1000000000, 50).await?);
 

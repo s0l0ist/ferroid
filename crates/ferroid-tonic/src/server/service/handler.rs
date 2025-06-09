@@ -17,22 +17,26 @@
 //! - [`crate::server::service::pool`] - worker pool and routing.
 //! - [`crate::server::service::streaming`] - stream coordination and chunk
 //!   processing.
-
 use crate::{
     common::{
         error::IdServiceError,
         idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
-        types::SnowflakeIdType,
+        types::{SNOWFLAKE_ID_SIZE, SnowflakeIdType},
     },
     server::{
         config::ServerConfig,
         pool::{manager::WorkerPool, worker::worker_loop},
         service::config::{ClockType, SnowflakeGeneratorType},
         streaming::coordinator::feed_chunks,
+        telemetry::{
+            IDS_GENERATED, IDS_PER_REQUEST, REQUESTS, STREAM_DURATION_MS, STREAM_ERRORS,
+            STREAMS_INFLIGHT,
+        },
     },
 };
 use core::pin::Pin;
 use ferroid::Snowflake;
+use futures::TryStreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, wrappers::ReceiverStream};
@@ -56,7 +60,6 @@ impl IdService {
     /// Each worker is assigned a unique Snowflake machine ID and runs its own
     /// generator and bounded channel. All workers share a global shutdown
     /// token.
-    #[cfg_attr(feature = "tracing", tracing::instrument(fields(num_workers = config.num_workers)))]
     pub fn new(config: ServerConfig) -> Self {
         #[cfg(feature = "tracing")]
         tracing::info!(
@@ -132,12 +135,11 @@ impl IdGen for IdService {
         &self,
         req: Request<IdStreamRequest>,
     ) -> Result<Response<Self::GetStreamIdsStream>, Status> {
+        let start = std::time::Instant::now();
         let total_ids = req.get_ref().count as usize;
 
-        #[cfg(feature = "tracing")]
-        tracing::info!(total_ids = total_ids, "Received stream request");
-
         if total_ids == 0 {
+            STREAM_ERRORS.get().map(|m| m.add(1, &[]));
             return Err(IdServiceError::InvalidRequest {
                 reason: "Count must be greater than 0".to_string(),
             }
@@ -145,6 +147,7 @@ impl IdGen for IdService {
         }
 
         if total_ids > self.config.max_allowed_ids {
+            STREAM_ERRORS.get().map(|m| m.add(1, &[]));
             return Err(IdServiceError::InvalidRequest {
                 reason: format!(
                     "Count {} exceeds maximum allowed ({})",
@@ -154,15 +157,56 @@ impl IdGen for IdService {
             .into());
         }
 
+        REQUESTS.get().map(|m| m.add(1, &[]));
+        IDS_PER_REQUEST
+            .get()
+            .map(|h| h.record(total_ids as f64, &[]));
+        STREAMS_INFLIGHT.get().map(|m| m.add(1, &[]));
+
         let (resp_tx, resp_rx) =
             mpsc::channel::<Result<IdUnitResponseChunk, Status>>(self.config.stream_buffer_size);
 
         let worker_pool = Arc::clone(&self.worker_pool);
         let config = self.config.clone();
-        tokio::spawn(async move {
-            feed_chunks(total_ids, worker_pool, resp_tx, config).await;
-        });
 
-        Ok(Response::new(Box::pin(ReceiverStream::new(resp_rx))))
+        let fut = async move {
+            match feed_chunks(total_ids, worker_pool, resp_tx, config).await {
+                Ok(_) => {
+                    STREAMS_INFLIGHT.get().map(|g| g.add(-1, &[]));
+                    STREAM_DURATION_MS
+                        .get()
+                        .map(|h| h.record(start.elapsed().as_millis() as f64, &[]));
+                }
+                Err(_e) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("Error in feed_chunks: {}", _e);
+                }
+            }
+        };
+        #[cfg(feature = "tracing")]
+        let fut = {
+            use tracing::Instrument;
+            let span = tracing::info_span!("streaming");
+            let fut = fut.instrument(span);
+            fut
+        };
+
+        tokio::spawn(fut);
+
+        let stream = ReceiverStream::new(resp_rx)
+            .inspect_ok(|chunk| {
+                IDS_GENERATED.get().map(|m| {
+                    // packed_ids contains binary representation of the IDs,
+                    // therefore, we must divide by the size of the
+                    // snowflake ID to get the actual number of IDs
+                    // generated.
+                    m.add((chunk.packed_ids.len() / SNOWFLAKE_ID_SIZE) as u64, &[])
+                });
+            })
+            .inspect_err(move |_e| {
+                STREAM_ERRORS.get().map(|m| m.add(1, &[]));
+            });
+
+        Ok(Response::new(Box::pin(stream)))
     }
 }

@@ -35,6 +35,9 @@ use tower_http::cors::{Any, CorsLayer};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Load from .env
+    dotenvy::dotenv()?;
+
     let args = CliArgs::try_parse()?;
     let config = ServerConfig::try_from(args)?;
 
@@ -62,7 +65,7 @@ fn log_startup_info(_addr: &SocketAddr, _config: &ServerConfig) {
 }
 
 async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()> {
-    let (tracer_provider, meter_provider) = init_telemetry();
+    let (tracer_provider, meter_provider) = init_telemetry()?;
     let service = IdService::new(config.clone());
 
     let reflection = Builder::configure()
