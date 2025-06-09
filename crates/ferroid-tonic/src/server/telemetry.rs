@@ -13,7 +13,7 @@ use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitEx
 // Conditional imports for telemetry exporters
 #[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
 use anyhow::Context;
-#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
+#[cfg(feature = "telemetry")]
 use opentelemetry_otlp::{Compression, Protocol, WithExportConfig, WithTonicConfig};
 #[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
 use std::time::Duration;
