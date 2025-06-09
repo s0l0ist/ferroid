@@ -1,8 +1,6 @@
 use super::request::WorkRequest;
-use crate::{
-    common::{error::IdServiceError, idgen::IdUnitResponseChunk},
-    server::{config::ServerConfig, pool::manager::WorkerPool},
-};
+use crate::{config::ServerConfig, pool::manager::WorkerPool};
+use ferroid_tonic::common::{Error, idgen::IdUnitResponseChunk};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tonic::Status;
@@ -36,7 +34,7 @@ pub async fn feed_chunks(
     worker_pool: Arc<WorkerPool>,
     resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
     config: ServerConfig,
-) -> crate::common::error::Result<()> {
+) -> ferroid_tonic::common::Result<()> {
     let mut remaining = total_ids;
 
     while remaining > 0 {
@@ -58,7 +56,7 @@ pub async fn feed_chunks(
                     // should immediately return the error so that we can track
                     // it upstream.
                     if let Err(e) = resp_tx.send(msg).await {
-                        return Err(IdServiceError::ChannelError {
+                        return Err(Error::ChannelError {
                             context: format!("Failed to forward chunk: {}", e),
                         });
                     }

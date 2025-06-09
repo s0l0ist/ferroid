@@ -1,4 +1,4 @@
-use crate::common::idgen::IdUnitResponseChunk;
+use ferroid_tonic::common::idgen::IdUnitResponseChunk;
 use tokio::sync::{mpsc, oneshot};
 use tonic::Status;
 

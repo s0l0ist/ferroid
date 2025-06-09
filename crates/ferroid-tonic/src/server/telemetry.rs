@@ -73,9 +73,7 @@ pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
 
     // Build the subscriber with conditional layers
     let registry = tracing_subscriber::registry()
-        .with(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,opentelemetry=warn".into()),
-        )
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with(
             tracing_subscriber::fmt::layer()
                 .with_thread_ids(true)

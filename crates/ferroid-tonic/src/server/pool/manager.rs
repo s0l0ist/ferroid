@@ -1,4 +1,5 @@
-use crate::{common::error::IdServiceError, server::streaming::request::WorkRequest};
+use crate::streaming::request::WorkRequest;
+use ferroid_tonic::common::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -35,9 +36,9 @@ impl WorkerPool {
     /// Returns an error if:
     /// - A server shutdown is triggered (shutdown_token)
     /// - The worker's channel is closed.
-    pub async fn send_to_next_worker(&self, request: WorkRequest) -> Result<(), IdServiceError> {
+    pub async fn send_to_next_worker(&self, request: WorkRequest) -> Result<(), Error> {
         if self.shutdown_token.is_cancelled() {
-            return Err(IdServiceError::ServiceShutdown);
+            return Err(Error::ServiceShutdown);
         }
 
         let worker_idx = self.next_worker_index();
@@ -45,7 +46,7 @@ impl WorkerPool {
 
         match worker.send(request).await {
             Ok(()) => Ok(()),
-            Err(_e) => Err(IdServiceError::ChannelError {
+            Err(_e) => Err(Error::ChannelError {
                 context: format!("Worker {} channel closed", worker_idx),
             }),
         }
@@ -61,7 +62,7 @@ impl WorkerPool {
     /// - Waits up to 3 seconds per worker for confirmation.
     ///
     /// This is typically invoked during service shutdown.
-    pub async fn shutdown(&self) -> Result<(), IdServiceError> {
+    pub async fn shutdown(&self) -> Result<(), Error> {
         #[cfg(feature = "tracing")]
         tracing::info!("Initiating worker pool shutdown");
 

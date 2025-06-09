@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     results.push(run_parallel_stream(10000000, 1).await?);
     results.push(run_parallel_stream(100000000, 1).await?);
     // results.push(run_parallel_stream(1000000000, 1).await?);
-    // println!("\n=== Running Parallel ===");
+    println!("\n=== Running Parallel ===");
 
     results.push(run_parallel_stream(1, 50).await?);
     results.push(run_parallel_stream(10, 50).await?);
@@ -83,9 +83,7 @@ async fn run_parallel_stream(
 
     for _ in 0..concurrency {
         tasks.push(tokio::spawn(async move {
-            let channel = Channel::from_static("http://127.0.0.1:50051")
-                .connect()
-                .await?;
+            let channel = Channel::from_static("http://[::1]:50051").connect().await?;
             let mut client = IdGenClient::new(channel)
                 // .accept_compressed(CompressionEncoding::Zstd)
                 .send_compressed(CompressionEncoding::Zstd);

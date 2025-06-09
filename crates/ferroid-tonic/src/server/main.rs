@@ -1,29 +1,64 @@
-//! # `ferroid-tonic` gRPC Server
+//! # `ferroid-tonic`: Streaming Snowflake ID Generation Service
 //!
-//! High-throughput Snowflake ID service using [`ferroid`] + [`tonic`].
+//! `ferroid-tonic` is a high-performance, gRPC-based Snowflake ID generation
+//! service built on top of [`ferroid`] for timestamp-based ID generation and
+//! [`tonic`] for HTTP/2 transport.
+//!
+//! This crate powers a standalone server that accepts streaming requests for
+//! batches of Snowflake-like IDs. It is designed for workloads that demand:
+//!
+//! - Time-ordered, collision-free IDs
+//! - Large batch throughput
+//! - Efficient use of memory and network bandwidth
 //!
 //! ## Highlights
-//! - **Streaming only**: Optimized for large batch ID generation.
-//! - **Async worker pool**: Fixed concurrency, backpressure-aware.
-//! - **Efficient transport**: HTTP/2, Zstd, and Gzip support.
-//! - **Graceful shutdown**: Clean Ctrl+C or SIGTERM handling.
+//!
+//! - **Streaming-only gRPC Endpoint**: Clients stream requests for up to
+//!   billions of IDs per call, delivered in compressed, chunked responses.
+//! - **Tokio Worker Pool**: Each worker runs a dedicated ID generator with
+//!   bounded task queues.
+//! - **Backpressure Aware**: All queues are size-limited to avoid memory
+//!   blowup.
+//! - **Client Cancellation**: Streamed requests are cancellable mid-flight.
+//! - **Graceful Shutdown**: Coordinated shutdown ensures no work is lost.
+//! - **Zstd Compression**: gRPC chunks are compressed for efficient transfer.
 //!
 //! ## Usage
 //!
+//! Build and run the gRPC server with:
+//!
 //! ```bash
-//! cargo run --bin server --release
+//! cargo run --bin tonic-server --release
+//! ```
+//!
+//! Then connect via gRPC on `127.0.0.1:50051` using the `GetStreamIds`
+//! endpoint.
+//!
+//! ## Reflection
+//! ```bash
+//! grpcurl -plaintext localhost:50051 list
+//! > grpc.reflection.v1.ServerReflection
+//! > idgen.IdGen
+//! ```
+//!
+//! ## Healthcheck
+//! ```bash
+//! ./grpc-health-probe -addr=localhost:50051 -service=idgen.IdGen
+//! > status: SERVING
 //! ```
 
+mod config;
+mod pool;
+mod service;
+mod streaming;
+mod telemetry;
+
 use clap::Parser;
-use ferroid_tonic::{
-    common::idgen::{FILE_DESCRIPTOR_SET, id_gen_server::IdGenServer},
-    server::{
-        config::{CliArgs, ServerConfig},
-        service::handler::IdService,
-        telemetry::{TelemetryProviders, init_telemetry},
-    },
-};
+use config::{CliArgs, ServerConfig};
+use ferroid_tonic::common::idgen::{FILE_DESCRIPTOR_SET, id_gen_server::IdGenServer};
+use service::handler::IdService;
 use std::net::SocketAddr;
+use telemetry::{TelemetryProviders, init_telemetry};
 use tokio::signal;
 use tonic::{codec::CompressionEncoding, transport::Server};
 use tonic_health::server::HealthReporter;
@@ -40,27 +75,8 @@ async fn main() -> anyhow::Result<()> {
     let args = CliArgs::try_parse()?;
     let config = ServerConfig::try_from(args)?;
 
-    let addr: SocketAddr = "127.0.0.1:50051".parse()?;
-    log_startup_info(&addr, &config);
+    let addr: SocketAddr = "[::1]:50051".parse()?;
     run_server(addr, config).await
-}
-
-fn log_startup_info(_addr: &SocketAddr, _config: &ServerConfig) {
-    if cfg!(debug_assertions) {
-        #[cfg(feature = "tracing")]
-        tracing::info!(
-            "Starting ID service on {} with full config: {:#?}",
-            _addr,
-            _config
-        );
-    } else {
-        #[cfg(feature = "tracing")]
-        tracing::info!(
-            "Starting ID service on {} with {} workers",
-            _addr,
-            _config.num_workers
-        );
-    }
 }
 
 async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()> {
@@ -76,6 +92,8 @@ async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()
     let reflection = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
         .build_v1()?;
+
+    log_startup_info(&addr, &config);
 
     Server::builder()
         .accept_http1(true)
@@ -101,6 +119,23 @@ async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()
     Ok(())
 }
 
+fn log_startup_info(_addr: &SocketAddr, _config: &ServerConfig) {
+    if cfg!(debug_assertions) {
+        #[cfg(feature = "tracing")]
+        tracing::info!(
+            "Starting ID service on {} with full config: {:#?}",
+            _addr,
+            _config
+        );
+    } else {
+        #[cfg(feature = "tracing")]
+        tracing::info!(
+            "Starting ID service on {} with {} workers",
+            _addr,
+            _config.num_workers
+        );
+    }
+}
 fn build_id_service(service: IdService) -> IdGenServer<IdService> {
     IdGenServer::new(service)
         .send_compressed(CompressionEncoding::Zstd)

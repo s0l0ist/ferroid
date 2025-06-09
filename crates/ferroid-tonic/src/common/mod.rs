@@ -12,8 +12,13 @@
 //! These definitions are not tied to any specific layer and are imported
 //! throughout the `server` module for error propagation and ID encoding.
 
-pub mod error;
+mod error;
+mod result;
 pub mod types;
+
+pub use error::Error;
+pub use result::Result;
+
 pub mod idgen {
     tonic::include_proto!("idgen");
     pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("idgen_descriptor");

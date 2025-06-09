@@ -1,29 +1,24 @@
 //! Error types for the ID generation service.
 //!
-//! This module defines the central `IdServiceError` enum, which captures all
-//! recoverable and reportable error cases within the ID generation system. It
-//! implements `From<IdServiceError>` for `tonic::Status` to enable seamless
-//! gRPC error propagation to clients with appropriate status codes and
-//! messages.
+//! This module defines the central `Error` enum, which captures all recoverable
+//! and reportable error cases within the ID generation system. It implements
+//! `From<Error>` for `tonic::Status` to enable seamless gRPC error propagation
+//! to clients with appropriate status codes and messages.
 //!
 //! ## Error Cases
 //! - `ChannelError`: An internal communication failure between tasks or
 //!   workers.
 //! - `IdGeneration`: An error occurred during ID creation (via the `ferroid`
 //!   generator).
-//! - `ServiceOverloaded`: Backpressure or queue limits were exceeded.
 //! - `RequestCancelled`: The client canceled the request mid-flight.
 //! - `InvalidRequest`: The client request was malformed or exceeded bounds.
 //! - `ServiceShutdown`: A request arrived while the service was shutting down.
 
-use thiserror::Error;
 use tonic::Status;
 
-pub type Result<T> = core::result::Result<T, IdServiceError>;
-
 /// Unified error type for the ID generation service.
-#[derive(Clone, Error, Debug)]
-pub enum IdServiceError {
+#[derive(Clone, thiserror::Error, Debug)]
+pub enum Error {
     /// Internal channel send/receive failure (e.g., closed or full channel).
     #[error("Channel communication error: {context}")]
     ChannelError { context: String },
@@ -45,18 +40,16 @@ pub enum IdServiceError {
     ServiceShutdown,
 }
 
-impl From<IdServiceError> for Status {
-    fn from(err: IdServiceError) -> Self {
+impl From<Error> for Status {
+    fn from(err: Error) -> Self {
         match err {
-            IdServiceError::ChannelError { context } => {
+            Error::ChannelError { context } => {
                 Status::internal(format!("Channel error: {}", context))
             }
-            IdServiceError::IdGeneration(e) => {
-                Status::internal(format!("ID generation error: {:?}", e))
-            }
-            IdServiceError::RequestCancelled => Status::cancelled("Request was cancelled"),
-            IdServiceError::InvalidRequest { reason } => Status::invalid_argument(reason),
-            IdServiceError::ServiceShutdown => Status::unavailable("Service is shutting down"),
+            Error::IdGeneration(e) => Status::internal(format!("ID generation error: {:?}", e)),
+            Error::RequestCancelled => Status::cancelled("Request was cancelled"),
+            Error::InvalidRequest { reason } => Status::invalid_argument(reason),
+            Error::ServiceShutdown => Status::unavailable("Service is shutting down"),
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::server::{
+use crate::{
     service::config::SnowflakeGeneratorType,
     streaming::{processor::handle_stream_request, request::WorkRequest},
 };

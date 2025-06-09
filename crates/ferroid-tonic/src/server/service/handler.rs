@@ -18,25 +18,23 @@
 //! - [`crate::server::service::streaming`] - stream coordination and chunk
 //!   processing.
 use crate::{
-    common::{
-        error::IdServiceError,
-        idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
-        types::{SNOWFLAKE_ID_SIZE, SnowflakeIdType},
-    },
-    server::{
-        config::ServerConfig,
-        pool::{manager::WorkerPool, worker::worker_loop},
-        service::config::{ClockType, SnowflakeGeneratorType},
-        streaming::coordinator::feed_chunks,
-        telemetry::{
-            decrement_streams_inflight, increment_ids_generated, increment_requests,
-            increment_stream_errors, increment_streams_inflight, record_ids_per_request,
-            record_stream_duration,
-        },
+    config::ServerConfig,
+    pool::{manager::WorkerPool, worker::worker_loop},
+    service::config::{ClockType, SnowflakeGeneratorType},
+    streaming::coordinator::feed_chunks,
+    telemetry::{
+        decrement_streams_inflight, increment_ids_generated, increment_requests,
+        increment_stream_errors, increment_streams_inflight, record_ids_per_request,
+        record_stream_duration,
     },
 };
 use core::pin::Pin;
 use ferroid::Snowflake;
+use ferroid_tonic::common::{
+    Error,
+    idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
+    types::{SNOWFLAKE_ID_SIZE, SnowflakeIdType},
+};
 use futures::TryStreamExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -62,12 +60,6 @@ impl IdService {
     /// generator and bounded channel. All workers share a global shutdown
     /// token.
     pub fn new(config: ServerConfig) -> Self {
-        #[cfg(feature = "tracing")]
-        tracing::info!(
-            "Initializing ID service with {} workers",
-            config.num_workers
-        );
-
         let mut workers = Vec::with_capacity(config.num_workers);
         let clock = ClockType::default();
         let shutdown_token = CancellationToken::new();
@@ -116,7 +108,7 @@ impl IdService {
     ///
     /// This cancels all in-flight streams and waits for each worker to
     /// acknowledge shutdown.
-    pub async fn shutdown(&self) -> Result<(), IdServiceError> {
+    pub async fn shutdown(&self) -> Result<(), Error> {
         self.worker_pool.shutdown().await
     }
 }
@@ -141,7 +133,7 @@ impl IdGen for IdService {
 
         if total_ids == 0 {
             increment_stream_errors();
-            return Err(IdServiceError::InvalidRequest {
+            return Err(Error::InvalidRequest {
                 reason: "Count must be greater than 0".to_string(),
             }
             .into());
@@ -149,7 +141,7 @@ impl IdGen for IdService {
 
         if total_ids > self.config.max_allowed_ids {
             increment_stream_errors();
-            return Err(IdServiceError::InvalidRequest {
+            return Err(Error::InvalidRequest {
                 reason: format!(
                     "Count {} exceeds maximum allowed ({})",
                     total_ids, self.config.max_allowed_ids

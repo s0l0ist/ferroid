@@ -1,8 +1,6 @@
-use crate::{
-    common::{error::IdServiceError, idgen::IdUnitResponseChunk, types::SNOWFLAKE_ID_SIZE},
-    server::service::config::SnowflakeGeneratorType,
-};
+use crate::service::config::SnowflakeGeneratorType;
 use ferroid::{IdGenStatus, Snowflake};
+use ferroid_tonic::common::{Error, idgen::IdUnitResponseChunk, types::SNOWFLAKE_ID_SIZE};
 use tokio::sync::mpsc;
 use tonic::Status;
 
@@ -32,7 +30,7 @@ use tonic::Status;
 ///   is closed.
 /// - Emits zero or more [`IdUnitResponseChunk`]s, depending on how many IDs
 ///   were successfully generated.
-/// - Propagates [`IdServiceError::IdGeneration`] to the client on failure.
+/// - Propagates [`Error::IdGeneration`] to the client on failure.
 pub async fn handle_stream_request(
     _worker_id: usize,
     chunk_buf: &mut [u8],
@@ -88,7 +86,7 @@ pub async fn handle_stream_request(
                 }
 
                 if let Err(_e) = chunk_tx
-                    .send(Err(IdServiceError::IdGeneration(e).into()))
+                    .send(Err(Error::IdGeneration(e).into()))
                     .await
                 {
                     #[cfg(feature = "tracing")]

@@ -1,5 +1,5 @@
-use crate::common::types::SnowflakeIdType;
 use ferroid::{BasicSnowflakeGenerator, MonotonicClock};
+use ferroid_tonic::common::types::SnowflakeIdType;
 
 /// Clock implementation used by all Snowflake generators.
 ///
