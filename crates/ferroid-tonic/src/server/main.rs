@@ -26,6 +26,7 @@ use ferroid_tonic::{
 use std::net::SocketAddr;
 use tokio::signal;
 use tonic::{codec::CompressionEncoding, transport::Server};
+use tonic_health::server::HealthReporter;
 use tonic_reflection::server::Builder;
 use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
@@ -64,6 +65,12 @@ fn log_startup_info(_addr: &SocketAddr, _config: &ServerConfig) {
 
 async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()> {
     let providers = init_telemetry()?;
+
+    let (health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<IdGenServer<IdService>>()
+        .await;
+
     let service = IdService::new(config.clone());
 
     let reflection = Builder::configure()
@@ -83,9 +90,10 @@ async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()
                 )
                 .layer(GrpcWebLayer::new()),
         )
+        .add_service(health_service.clone())
         .add_service(reflection)
         .add_service(build_id_service(service.clone()))
-        .serve_with_shutdown(addr, shutdown_signal(service, providers))
+        .serve_with_shutdown(addr, shutdown_signal(service, health_reporter, providers))
         .await?;
 
     #[cfg(feature = "tracing")]
@@ -103,7 +111,11 @@ fn build_id_service(service: IdService) -> IdGenServer<IdService> {
         .accept_compressed(CompressionEncoding::Deflate)
 }
 
-async fn shutdown_signal(service: IdService, providers: TelemetryProviders) {
+async fn shutdown_signal(
+    service: IdService,
+    health_reporter: HealthReporter,
+    providers: TelemetryProviders,
+) {
     #[cfg(unix)]
     let terminate = async {
         signal::unix::signal(signal::unix::SignalKind::terminate())
@@ -135,36 +147,35 @@ async fn shutdown_signal(service: IdService, providers: TelemetryProviders) {
     #[cfg(feature = "tracing")]
     tracing::info!("Shutdown signal received, terminating gracefully...");
 
+    health_reporter
+        .set_not_serving::<IdGenServer<IdService>>()
+        .await;
+
     if let Err(_e) = service.shutdown().await {
         #[cfg(feature = "tracing")]
         tracing::error!("Error during service shutdown: {:?}", _e);
     }
 
-    // Must use a blocking thread so that tokio doesn't hang.
-    tokio::task::spawn_blocking(|| {
-        #[cfg(feature = "tracing")]
-        {
-            if let Err(err) = providers.tracer_provider.force_flush() {
-                eprintln!("Error flushing traces: {:#?}", err);
-            }
-            if let Err(err) = providers.tracer_provider.shutdown() {
-                eprintln!("Error shutting down tracer: {:#?}", err);
-            }
+    #[cfg(feature = "tracing")]
+    {
+        if let Err(err) = providers.tracer_provider.force_flush() {
+            eprintln!("Error flushing traces: {:#?}", err);
         }
-
-        #[cfg(feature = "metrics")]
-        {
-            if let Err(err) = providers.meter_provider.force_flush() {
-                eprintln!("Error flushing metrics: {:#?}", err);
-            }
-            if let Err(err) = providers.meter_provider.shutdown() {
-                eprintln!("Error shutting down meter: {:#?}", err);
-            }
+        if let Err(err) = providers.tracer_provider.shutdown() {
+            eprintln!("Error shutting down tracer: {:#?}", err);
         }
+    }
 
-        // manually drop the provider(s) before invoking shutdown.
-        drop(providers);
-    })
-    .await
-    .expect("Failed to run shutdown in blocking thread");
+    #[cfg(feature = "metrics")]
+    {
+        if let Err(err) = providers.meter_provider.force_flush() {
+            eprintln!("Error flushing metrics: {:#?}", err);
+        }
+        if let Err(err) = providers.meter_provider.shutdown() {
+            eprintln!("Error shutting down meter: {:#?}", err);
+        }
+    }
+
+    // manually drop the provider(s) before invoking shutdown.
+    drop(providers);
 }

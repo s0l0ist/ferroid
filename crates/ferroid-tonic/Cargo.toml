@@ -37,6 +37,7 @@ tokio = { workspace = true, features = ["parking_lot", "rt-multi-thread", "signa
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd", "deflate", "gzip"] }
+tonic-health = { workspace = true }
 tonic-reflection = { workspace = true, features = ["server"] }
 tonic-web = { workspace = true }
 tower = { workspace = true }

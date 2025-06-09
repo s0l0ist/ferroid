@@ -29,7 +29,7 @@ pub async fn worker_loop(
     chunk_bytes: usize,
 ) {
     #[cfg(feature = "tracing")]
-    tracing::debug!("Worker {} started", worker_id);
+    tracing::trace!("Worker {} started", worker_id);
 
     // Create a reusable buffer based on the server config.
     let mut buff = vec![0_u8; chunk_bytes];
@@ -67,5 +67,5 @@ pub async fn worker_loop(
     }
 
     #[cfg(feature = "tracing")]
-    tracing::debug!("Worker {} stopped", worker_id);
+    tracing::trace!("Worker {} stopped", worker_id);
 }

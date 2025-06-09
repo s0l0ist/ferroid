@@ -34,12 +34,24 @@
 //! Then connect via gRPC on `127.0.0.1:50051` using the `GetStreamIds`
 //! endpoint.
 //!
+//! ## Reflection
+//! ```bash
+//! grpcurl -plaintext localhost:50051 list
+//! > grpc.reflection.v1.ServerReflection
+//! > idgen.IdGen
+//! ```
+//!
+//! ## Healthcheck
+//! ```bash
+//! ./grpc-health-probe -addr=localhost:50051 -service=idgen.IdGen
+//! > status: SERVING
+//! ```
+//!
 //! ## Module Overview
 //!
 //! - [`common`] - Shared types and error definitions.
 //! - [`server`] - gRPC service implementation, worker orchestration, and
 //!   streaming logic.
-//! - [`idgen`] - Generated Protobuf service and message definitions.
 //!
 
 pub mod common;
