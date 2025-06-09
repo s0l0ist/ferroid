@@ -1,6 +1,8 @@
 use ferroid::Snowflake;
-use ferroid_tonic::common::idgen::{IdStreamRequest, id_gen_client::IdGenClient};
-use ferroid_tonic::common::types::{SNOWFLAKE_ID_SIZE, SnowflakeIdTy, SnowflakeIdType};
+use ferroid_tonic::common::{
+    idgen::{IdStreamRequest, id_gen_client::IdGenClient},
+    types::{SNOWFLAKE_ID_SIZE, SnowflakeIdTy, SnowflakeIdType},
+};
 use futures::stream::{FuturesUnordered, StreamExt as FuturesStreamExt};
 use std::time::{Duration, Instant};
 use tokio_stream::StreamExt as TokioStreamExt;
