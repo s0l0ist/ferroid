@@ -37,11 +37,11 @@ thiserror = { workspace = true }
 tracing = { workspace = true, optional = true }
 clap = { workspace = true, features = ["derive", "env", "color", "error-context", "help", "std", "suggestions", "usage"] }
 anyhow = { workspace = true, features = ["std"] }
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio", "metrics", "trace", "logs"] }
-opentelemetry = { workspace = true,  features = ["logs", "trace", "metrics"] }
-opentelemetry-otlp = { workspace = true, features = ["gzip-tonic", "zstd-tonic", "grpc-tonic", "logs", "trace", "tls", "metrics"] }
-opentelemetry-semantic-conventions = { workspace = true, features = ["semconv_experimental"] }
-tracing-opentelemetry = { workspace = true, features = ["metrics"] }
+opentelemetry_sdk = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true, optional = true, features = ["gzip-tonic", "zstd-tonic", "grpc-tonic"] }
+opentelemetry-semantic-conventions = { workspace = true, optional = true, features = ["semconv_experimental"] }
+tracing-opentelemetry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["smallvec", "fmt", "ansi", "tracing-log", "std", "env-filter", "json", "chrono"] }
 dotenvy = { workspace = true }
 
@@ -50,6 +50,24 @@ tonic-build = { workspace = true, features = ["prost"] }
 
 [features]
 default = []
-tracing = ["dep:tracing"]
-metrics = []
-telemetry = []
+tracing = [
+    "dep:tracing",
+    "opentelemetry/trace",
+    "opentelemetry_sdk/trace",
+    "opentelemetry-otlp",
+    "opentelemetry-otlp/trace",
+    "opentelemetry-semantic-conventions",
+    "tracing-opentelemetry"
+]
+metrics = [
+    "opentelemetry/metrics",
+    "opentelemetry_sdk/metrics",
+    "opentelemetry-otlp",
+    "opentelemetry-otlp/metrics",
+    "opentelemetry-semantic-conventions",
+    "tracing-opentelemetry/metrics"
+]
+
+telemetry = [
+    "opentelemetry-otlp/tls",
+]

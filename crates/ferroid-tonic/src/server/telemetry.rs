@@ -1,17 +1,26 @@
+// Compile-time validation: telemetry requires at least one of tracing or metrics
+#[cfg(all(
+    feature = "telemetry",
+    not(any(feature = "tracing", feature = "metrics"))
+))]
+compile_error!(
+    "The 'telemetry' feature requires at least one of 'tracing' or 'metrics' features to be enabled"
+);
+
 // Core imports - always needed
-use opentelemetry_sdk::propagation::TraceContextPropagator;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 // Conditional imports for telemetry exporters
-#[cfg(feature = "telemetry")]
+#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
 use anyhow::Context;
 #[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
 use opentelemetry_otlp::{Compression, Protocol, WithExportConfig, WithTonicConfig};
-
-#[cfg(feature = "telemetry")]
+#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
 use std::time::Duration;
-#[cfg(feature = "telemetry")]
-use tonic::{metadata::MetadataMap, transport::ClientTlsConfig};
+#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
+use tonic::metadata::MetadataMap;
+#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
+use tonic::transport::ClientTlsConfig;
 
 // Metrics-specific imports
 #[cfg(feature = "metrics")]
@@ -35,6 +44,8 @@ use opentelemetry_semantic_conventions as semvcns;
 #[cfg(feature = "tracing")]
 use opentelemetry::trace::TracerProvider;
 #[cfg(feature = "tracing")]
+use opentelemetry_sdk::propagation::TraceContextPropagator;
+#[cfg(feature = "tracing")]
 use opentelemetry_sdk::trace as sdktrace;
 
 pub struct TelemetryProviders {
@@ -45,6 +56,7 @@ pub struct TelemetryProviders {
 }
 
 pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
+    #[cfg(feature = "tracing")]
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
     #[cfg(feature = "tracing")]
@@ -105,7 +117,7 @@ pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
     })
 }
 
-#[cfg(feature = "telemetry")]
+#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
 fn get_metadata() -> anyhow::Result<MetadataMap> {
     let mut map = MetadataMap::new();
     let api_key = std::env::var("HONEYCOMB_API_KEY").context("missing `HONEYCOMB_API_KEY`")?;
@@ -164,6 +176,9 @@ fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
 
 #[cfg(feature = "tracing")]
 fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
+    #[cfg(not(feature = "telemetry"))]
+    let builder = sdktrace::SdkTracerProvider::builder().with_resource(resource());
+    #[cfg(feature = "telemetry")]
     let mut builder = sdktrace::SdkTracerProvider::builder().with_resource(resource());
 
     #[cfg(feature = "telemetry")]
