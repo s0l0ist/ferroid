@@ -1,28 +1,66 @@
-use anyhow::Context;
-use opentelemetry::metrics::{Counter, Histogram, Meter, UpDownCounter};
-use opentelemetry::{InstrumentationScope, KeyValue, trace::TracerProvider};
-use opentelemetry_otlp::{Compression, Protocol, WithExportConfig, WithTonicConfig};
-use opentelemetry_sdk::metrics as sdkmetrics;
-use opentelemetry_sdk::metrics::Temporality;
-use opentelemetry_sdk::{Resource, propagation::TraceContextPropagator, trace as sdktrace};
-use opentelemetry_semantic_conventions as semvcns;
-use std::sync::OnceLock;
-use std::time::Duration;
-use tonic::{metadata::MetadataMap, transport::ClientTlsConfig};
+// Core imports - always needed
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-pub fn init_telemetry()
--> anyhow::Result<(sdktrace::SdkTracerProvider, sdkmetrics::SdkMeterProvider)> {
+// Conditional imports for telemetry exporters
+#[cfg(feature = "telemetry")]
+use anyhow::Context;
+#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
+use opentelemetry_otlp::{Compression, Protocol, WithExportConfig, WithTonicConfig};
+
+#[cfg(feature = "telemetry")]
+use std::time::Duration;
+#[cfg(feature = "telemetry")]
+use tonic::{metadata::MetadataMap, transport::ClientTlsConfig};
+
+// Metrics-specific imports
+#[cfg(feature = "metrics")]
+use opentelemetry::metrics::{Counter, Histogram, Meter, UpDownCounter};
+#[cfg(feature = "metrics")]
+use opentelemetry_sdk::metrics as sdkmetrics;
+#[cfg(all(feature = "metrics", feature = "telemetry"))]
+use opentelemetry_sdk::metrics::Temporality;
+#[cfg(feature = "metrics")]
+use std::sync::OnceLock;
+
+// Both
+#[cfg(any(feature = "metrics", feature = "tracing"))]
+use opentelemetry::{InstrumentationScope, KeyValue};
+#[cfg(any(feature = "metrics", feature = "tracing"))]
+use opentelemetry_sdk::Resource;
+#[cfg(any(feature = "metrics", feature = "tracing"))]
+use opentelemetry_semantic_conventions as semvcns;
+
+// Tracing-specific imports
+#[cfg(feature = "tracing")]
+use opentelemetry::trace::TracerProvider;
+#[cfg(feature = "tracing")]
+use opentelemetry_sdk::trace as sdktrace;
+
+pub struct TelemetryProviders {
+    #[cfg(feature = "tracing")]
+    pub tracer_provider: sdktrace::SdkTracerProvider,
+    #[cfg(feature = "metrics")]
+    pub meter_provider: sdkmetrics::SdkMeterProvider,
+}
+
+pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
     opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
+    #[cfg(feature = "tracing")]
     let tracer_provider = init_tracer()?;
+
+    #[cfg(feature = "metrics")]
     let meter_provider = init_metrics()?;
+
+    #[cfg(any(feature = "metrics", feature = "tracing"))]
     let scope = InstrumentationScope::builder("ferroid")
         .with_version(env!("CARGO_PKG_VERSION"))
         .with_schema_url(semvcns::SCHEMA_URL)
         .build();
 
-    tracing_subscriber::registry()
+    // Build the subscriber with conditional layers
+    let registry = tracing_subscriber::registry()
         .with(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,opentelemetry=warn".into()),
         )
@@ -34,30 +72,42 @@ pub fn init_telemetry()
                 .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc_3339())
                 .with_file(true)
                 .pretty(),
-        )
-        .with(
+        );
+
+    #[cfg(feature = "tracing")]
+    let registry = {
+        opentelemetry::global::set_tracer_provider(tracer_provider.clone());
+        registry.with(
             tracing_opentelemetry::layer()
                 .with_tracer(tracer_provider.tracer_with_scope(scope.clone()))
                 .with_error_records_to_exceptions(true),
         )
-        .with(tracing_opentelemetry::MetricsLayer::new(
+    };
+
+    #[cfg(feature = "metrics")]
+    let registry = {
+        opentelemetry::global::set_meter_provider(meter_provider.clone());
+        let meter = opentelemetry::global::meter_with_scope(scope);
+        init_metric_handles(meter);
+
+        registry.with(tracing_opentelemetry::MetricsLayer::new(
             meter_provider.clone(),
         ))
-        .init();
+    };
 
-    opentelemetry::global::set_tracer_provider(tracer_provider.clone());
-    opentelemetry::global::set_meter_provider(meter_provider.clone());
+    registry.init();
 
-    let meter = opentelemetry::global::meter_with_scope(scope);
-
-    init_metric_handles(meter);
-
-    Ok((tracer_provider, meter_provider))
+    Ok(TelemetryProviders {
+        #[cfg(feature = "tracing")]
+        tracer_provider,
+        #[cfg(feature = "metrics")]
+        meter_provider,
+    })
 }
 
+#[cfg(feature = "telemetry")]
 fn get_metadata() -> anyhow::Result<MetadataMap> {
     let mut map = MetadataMap::new();
-
     let api_key = std::env::var("HONEYCOMB_API_KEY").context("missing `HONEYCOMB_API_KEY`")?;
     let dataset = std::env::var("HONEYCOMB_DATASET").context("missing `HONEYCOMB_DATASET`")?;
 
@@ -73,6 +123,7 @@ fn get_metadata() -> anyhow::Result<MetadataMap> {
     Ok(map)
 }
 
+#[cfg(any(feature = "metrics", feature = "tracing"))]
 fn resource() -> Resource {
     Resource::builder()
         .with_service_name("ferroid")
@@ -86,111 +137,191 @@ fn resource() -> Resource {
         .build()
 }
 
+#[cfg(feature = "metrics")]
 fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
-    let metadata: MetadataMap = get_metadata()?;
+    let builder = sdkmetrics::SdkMeterProvider::builder().with_resource(resource());
 
-    let exporter = opentelemetry_otlp::MetricExporter::builder()
-        .with_tonic()
-        .with_tls_config(ClientTlsConfig::new().with_webpki_roots())
-        .with_metadata(metadata)
-        .with_timeout(Duration::from_secs(10))
-        .with_compression(Compression::Gzip)
-        .with_endpoint("https://api.eu1.honeycomb.io:443")
-        .with_protocol(Protocol::Grpc)
-        .with_temporality(Temporality::Delta)
-        .build()
-        .context("failed to build metrics exporter")?;
+    #[cfg(feature = "telemetry")]
+    let builder = {
+        let metadata = get_metadata()?;
+        let exporter = opentelemetry_otlp::MetricExporter::builder()
+            .with_tonic()
+            .with_tls_config(ClientTlsConfig::new().with_webpki_roots())
+            .with_metadata(metadata)
+            .with_timeout(Duration::from_secs(10))
+            .with_compression(Compression::Gzip)
+            .with_endpoint("https://api.eu1.honeycomb.io:443")
+            .with_protocol(Protocol::Grpc)
+            .with_temporality(Temporality::Delta)
+            .build()
+            .context("failed to build metrics exporter")?;
 
-    Ok(sdkmetrics::SdkMeterProvider::builder()
-        .with_periodic_exporter(exporter)
-        .with_resource(resource())
-        .build())
+        builder.with_periodic_exporter(exporter)
+    };
+
+    Ok(builder.build())
 }
 
+#[cfg(feature = "tracing")]
 fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
-    let metadata: MetadataMap = get_metadata()?;
+    let mut builder = sdktrace::SdkTracerProvider::builder().with_resource(resource());
 
-    let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic()
-        .with_tls_config(ClientTlsConfig::new().with_webpki_roots())
-        .with_metadata(metadata)
-        .with_timeout(Duration::from_secs(10))
-        .with_compression(Compression::Gzip)
-        .with_endpoint("https://api.eu1.honeycomb.io:443")
-        .with_protocol(Protocol::Grpc)
-        .build()
-        .context("failed to build tracer exporter")?;
+    #[cfg(feature = "telemetry")]
+    {
+        let metadata = get_metadata()?;
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_tls_config(ClientTlsConfig::new().with_webpki_roots())
+            .with_metadata(metadata)
+            .with_timeout(Duration::from_secs(10))
+            .with_compression(Compression::Gzip)
+            .with_endpoint("https://api.eu1.honeycomb.io:443")
+            .with_protocol(Protocol::Grpc)
+            .build()
+            .context("failed to build tracer exporter")?;
 
-    let batch = sdktrace::BatchSpanProcessor::builder(exporter)
-        .with_batch_config(
-            sdktrace::BatchConfigBuilder::default()
-                .with_scheduled_delay(Duration::from_secs(5))
-                .with_max_queue_size(2048)
-                .build(),
-        )
-        .build();
+        let batch = sdktrace::BatchSpanProcessor::builder(exporter)
+            .with_batch_config(
+                sdktrace::BatchConfigBuilder::default()
+                    .with_scheduled_delay(Duration::from_secs(5))
+                    .with_max_queue_size(2048)
+                    .build(),
+            )
+            .build();
 
-    Ok(sdktrace::SdkTracerProvider::builder()
-        .with_span_processor(batch)
-        .with_resource(resource())
-        .build())
+        builder = builder.with_span_processor(batch);
+    }
+
+    Ok(builder.build())
 }
 
-pub static REQUESTS: OnceLock<Counter<u64>> = OnceLock::new();
-pub static STREAMS_INFLIGHT: OnceLock<UpDownCounter<i64>> = OnceLock::new();
-pub static STREAM_ERRORS: OnceLock<Counter<u64>> = OnceLock::new();
-pub static STREAM_DURATION_MS: OnceLock<Histogram<f64>> = OnceLock::new();
-pub static IDS_GENERATED: OnceLock<Counter<u64>> = OnceLock::new();
-pub static IDS_PER_REQUEST: OnceLock<Histogram<f64>> = OnceLock::new();
+// Metric handles - only compiled when metrics feature is enabled
+#[cfg(feature = "metrics")]
+static REQUESTS: OnceLock<Counter<u64>> = OnceLock::new();
+#[cfg(feature = "metrics")]
+static STREAMS_INFLIGHT: OnceLock<UpDownCounter<i64>> = OnceLock::new();
+#[cfg(feature = "metrics")]
+static STREAM_ERRORS: OnceLock<Counter<u64>> = OnceLock::new();
+#[cfg(feature = "metrics")]
+static STREAM_DURATION_MS: OnceLock<Histogram<f64>> = OnceLock::new();
+#[cfg(feature = "metrics")]
+static IDS_GENERATED: OnceLock<Counter<u64>> = OnceLock::new();
+#[cfg(feature = "metrics")]
+static IDS_PER_REQUEST: OnceLock<Histogram<f64>> = OnceLock::new();
 
+#[cfg(feature = "metrics")]
 fn init_metric_handles(meter: Meter) {
-    REQUESTS
-        .set(
-            meter
-                .u64_counter("requests")
-                .with_description("Total gRPC stream requests")
-                .build(),
-        )
-        .ok();
-    STREAMS_INFLIGHT
-        .set(
-            meter
-                .i64_up_down_counter("streams_inflight")
-                .with_description("Concurrent gRPC streams")
-                .build(),
-        )
-        .ok();
-    STREAM_ERRORS
-        .set(
-            meter
-                .u64_counter("errors")
-                .with_description("Errored/cancelled streams")
-                .build(),
-        )
-        .ok();
-    STREAM_DURATION_MS
-        .set(
-            meter
-                .f64_histogram("stream_duration")
-                .with_unit("ms")
-                .with_description("End-to-end stream duration")
-                .build(),
-        )
-        .ok();
-    IDS_GENERATED
-        .set(
-            meter
-                .u64_counter("ids_generated")
-                .with_description("Total Snowflake IDs generated")
-                .build(),
-        )
-        .ok();
-    IDS_PER_REQUEST
-        .set(
-            meter
-                .f64_histogram("ids_per_request")
-                .with_description("IDs requested per stream")
-                .build(),
-        )
-        .ok();
+    let _ = REQUESTS.set(
+        meter
+            .u64_counter("requests")
+            .with_description("Total gRPC stream requests")
+            .build(),
+    );
+
+    let _ = STREAMS_INFLIGHT.set(
+        meter
+            .i64_up_down_counter("streams_inflight")
+            .with_description("Concurrent gRPC streams")
+            .build(),
+    );
+
+    let _ = STREAM_ERRORS.set(
+        meter
+            .u64_counter("errors")
+            .with_description("Errored/cancelled streams")
+            .build(),
+    );
+
+    let _ = STREAM_DURATION_MS.set(
+        meter
+            .f64_histogram("stream_duration")
+            .with_unit("ms")
+            .with_description("End-to-end stream duration")
+            .build(),
+    );
+
+    let _ = IDS_GENERATED.set(
+        meter
+            .u64_counter("ids_generated")
+            .with_description("Total Snowflake IDs generated")
+            .build(),
+    );
+
+    let _ = IDS_PER_REQUEST.set(
+        meter
+            .f64_histogram("ids_per_request")
+            .with_description("IDs requested per stream")
+            .build(),
+    );
 }
+
+// Convenience functions that compile to no-ops when metrics are disabled
+#[cfg(feature = "metrics")]
+pub fn increment_requests() {
+    if let Some(counter) = REQUESTS.get() {
+        counter.add(1, &[]);
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn increment_requests() {}
+
+#[cfg(feature = "metrics")]
+pub fn increment_streams_inflight() {
+    if let Some(counter) = STREAMS_INFLIGHT.get() {
+        counter.add(1, &[]);
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn increment_streams_inflight() {}
+
+#[cfg(feature = "metrics")]
+pub fn decrement_streams_inflight() {
+    if let Some(counter) = STREAMS_INFLIGHT.get() {
+        counter.add(-1, &[]);
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn decrement_streams_inflight() {}
+
+#[cfg(feature = "metrics")]
+pub fn increment_stream_errors() {
+    if let Some(counter) = STREAM_ERRORS.get() {
+        counter.add(1, &[]);
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn increment_stream_errors() {}
+
+#[cfg(feature = "metrics")]
+pub fn record_stream_duration(duration_ms: f64) {
+    if let Some(histogram) = STREAM_DURATION_MS.get() {
+        histogram.record(duration_ms, &[]);
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn record_stream_duration(_duration_ms: f64) {}
+
+#[cfg(feature = "metrics")]
+pub fn increment_ids_generated(count: u64) {
+    if let Some(counter) = IDS_GENERATED.get() {
+        counter.add(count, &[]);
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn increment_ids_generated(_count: u64) {}
+
+#[cfg(feature = "metrics")]
+pub fn record_ids_per_request(count: f64) {
+    if let Some(histogram) = IDS_PER_REQUEST.get() {
+        histogram.record(count, &[]);
+    }
+}
+
+#[cfg(not(feature = "metrics"))]
+pub fn record_ids_per_request(_count: f64) {}

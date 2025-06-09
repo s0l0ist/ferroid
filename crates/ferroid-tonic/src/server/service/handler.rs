@@ -29,8 +29,9 @@ use crate::{
         service::config::{ClockType, SnowflakeGeneratorType},
         streaming::coordinator::feed_chunks,
         telemetry::{
-            IDS_GENERATED, IDS_PER_REQUEST, REQUESTS, STREAM_DURATION_MS, STREAM_ERRORS,
-            STREAMS_INFLIGHT,
+            decrement_streams_inflight, increment_ids_generated, increment_requests,
+            increment_stream_errors, increment_streams_inflight, record_ids_per_request,
+            record_stream_duration,
         },
     },
 };
@@ -139,7 +140,7 @@ impl IdGen for IdService {
         let total_ids = req.get_ref().count as usize;
 
         if total_ids == 0 {
-            STREAM_ERRORS.get().map(|m| m.add(1, &[]));
+            increment_stream_errors();
             return Err(IdServiceError::InvalidRequest {
                 reason: "Count must be greater than 0".to_string(),
             }
@@ -147,7 +148,7 @@ impl IdGen for IdService {
         }
 
         if total_ids > self.config.max_allowed_ids {
-            STREAM_ERRORS.get().map(|m| m.add(1, &[]));
+            increment_stream_errors();
             return Err(IdServiceError::InvalidRequest {
                 reason: format!(
                     "Count {} exceeds maximum allowed ({})",
@@ -157,11 +158,9 @@ impl IdGen for IdService {
             .into());
         }
 
-        REQUESTS.get().map(|m| m.add(1, &[]));
-        IDS_PER_REQUEST
-            .get()
-            .map(|h| h.record(total_ids as f64, &[]));
-        STREAMS_INFLIGHT.get().map(|m| m.add(1, &[]));
+        increment_requests();
+        record_ids_per_request(total_ids as f64);
+        increment_streams_inflight();
 
         let (resp_tx, resp_rx) =
             mpsc::channel::<Result<IdUnitResponseChunk, Status>>(self.config.stream_buffer_size);
@@ -172,14 +171,12 @@ impl IdGen for IdService {
         let fut = async move {
             match feed_chunks(total_ids, worker_pool, resp_tx, config).await {
                 Ok(_) => {
-                    STREAMS_INFLIGHT.get().map(|g| g.add(-1, &[]));
-                    STREAM_DURATION_MS
-                        .get()
-                        .map(|h| h.record(start.elapsed().as_millis() as f64, &[]));
+                    decrement_streams_inflight();
+                    record_stream_duration(start.elapsed().as_millis() as f64);
                 }
                 Err(_e) => {
                     #[cfg(feature = "tracing")]
-                    tracing::warn!("Error in feed_chunks: {}", _e);
+                    tracing::warn!("Error: {}", _e);
                 }
             }
         };
@@ -195,16 +192,14 @@ impl IdGen for IdService {
 
         let stream = ReceiverStream::new(resp_rx)
             .inspect_ok(|chunk| {
-                IDS_GENERATED.get().map(|m| {
-                    // packed_ids contains binary representation of the IDs,
-                    // therefore, we must divide by the size of the
-                    // snowflake ID to get the actual number of IDs
-                    // generated.
-                    m.add((chunk.packed_ids.len() / SNOWFLAKE_ID_SIZE) as u64, &[])
-                });
+                // packed_ids contains binary representation of the IDs,
+                // therefore, we must divide by the size of the
+                // snowflake ID to get the actual number of IDs
+                // generated.
+                increment_ids_generated((chunk.packed_ids.len() / SNOWFLAKE_ID_SIZE) as u64);
             })
             .inspect_err(move |_e| {
-                STREAM_ERRORS.get().map(|m| m.add(1, &[]));
+                increment_stream_errors();
             });
 
         Ok(Response::new(Box::pin(stream)))

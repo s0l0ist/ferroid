@@ -20,11 +20,9 @@ use ferroid_tonic::{
     server::{
         config::{CliArgs, ServerConfig},
         service::handler::IdService,
-        telemetry::init_telemetry,
+        telemetry::{TelemetryProviders, init_telemetry},
     },
 };
-use opentelemetry_sdk::metrics as sdkmetrics;
-use opentelemetry_sdk::trace as sdktrace;
 use std::net::SocketAddr;
 use tokio::signal;
 use tonic::{codec::CompressionEncoding, transport::Server};
@@ -65,7 +63,7 @@ fn log_startup_info(_addr: &SocketAddr, _config: &ServerConfig) {
 }
 
 async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()> {
-    let (tracer_provider, meter_provider) = init_telemetry()?;
+    let providers = init_telemetry()?;
     let service = IdService::new(config.clone());
 
     let reflection = Builder::configure()
@@ -87,10 +85,7 @@ async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()
         )
         .add_service(reflection)
         .add_service(build_id_service(service.clone()))
-        .serve_with_shutdown(
-            addr,
-            shutdown_signal(service, tracer_provider, meter_provider),
-        )
+        .serve_with_shutdown(addr, shutdown_signal(service, providers))
         .await?;
 
     #[cfg(feature = "tracing")]
@@ -108,11 +103,7 @@ fn build_id_service(service: IdService) -> IdGenServer<IdService> {
         .accept_compressed(CompressionEncoding::Deflate)
 }
 
-async fn shutdown_signal(
-    service: IdService,
-    tracer_provider: sdktrace::SdkTracerProvider,
-    meter_provider: sdkmetrics::SdkMeterProvider,
-) {
+async fn shutdown_signal(service: IdService, providers: TelemetryProviders) {
     #[cfg(unix)]
     let terminate = async {
         signal::unix::signal(signal::unix::SignalKind::terminate())
@@ -151,21 +142,28 @@ async fn shutdown_signal(
 
     // Must use a blocking thread so that tokio doesn't hang.
     tokio::task::spawn_blocking(|| {
-        if let Err(err) = tracer_provider.force_flush() {
-            eprintln!("Error flushing traces: {:#?}", err);
+        #[cfg(feature = "tracing")]
+        {
+            if let Err(err) = providers.tracer_provider.force_flush() {
+                eprintln!("Error flushing traces: {:#?}", err);
+            }
+            if let Err(err) = providers.tracer_provider.shutdown() {
+                eprintln!("Error shutting down tracer: {:#?}", err);
+            }
         }
-        if let Err(err) = tracer_provider.shutdown() {
-            eprintln!("Error shutting down tracer: {:#?}", err);
+
+        #[cfg(feature = "metrics")]
+        {
+            if let Err(err) = providers.meter_provider.force_flush() {
+                eprintln!("Error flushing metrics: {:#?}", err);
+            }
+            if let Err(err) = providers.meter_provider.shutdown() {
+                eprintln!("Error shutting down meter: {:#?}", err);
+            }
         }
-        // manually drop the provider before invoking shutdown.
-        drop(tracer_provider);
-        if let Err(err) = meter_provider.force_flush() {
-            eprintln!("Error flushing metrics: {:#?}", err);
-        }
-        if let Err(err) = meter_provider.shutdown() {
-            eprintln!("Error shutting down meter: {:#?}", err);
-        }
-        drop(meter_provider)
+
+        // manually drop the provider(s) before invoking shutdown.
+        drop(providers);
     })
     .await
     .expect("Failed to run shutdown in blocking thread");
