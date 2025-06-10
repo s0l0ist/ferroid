@@ -58,7 +58,7 @@ const SERVER_ADDR: &str = "http://localhost:50051";
 fn grpc_bench(c: &mut Criterion) {
     // Start the server. This may require a full compilation so set the timeout
     // high. Adjust features and CLI args to the server as necessary.
-    let _ = Command::new("cargo")
+    let mut server = Command::new("cargo")
         .args([
             "run",
             "--bin",
@@ -130,6 +130,10 @@ fn grpc_bench(c: &mut Criterion) {
         );
 
         group.finish();
+    }
+
+    if server.kill().is_err() {
+        eprintln!("failed to kill server");
     }
 }
 
