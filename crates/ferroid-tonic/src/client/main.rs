@@ -12,54 +12,100 @@ use tonic::{codec::CompressionEncoding, transport::Channel};
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-const PARALLEL: usize = 50;
+#[derive(Clone, Copy, Debug)]
+enum Compression {
+    None,
+    Deflate,
+    Gzip,
+    Zstd,
+}
+
+impl Compression {
+    fn as_label(&self) -> &'static str {
+        match self {
+            Compression::None => "none",
+            Compression::Deflate => "deflate",
+            Compression::Gzip => "gzip",
+            Compression::Zstd => "zstd",
+        }
+    }
+    fn as_tonic(&self) -> Option<CompressionEncoding> {
+        match self {
+            Compression::None => None,
+            Compression::Deflate => Some(CompressionEncoding::Deflate),
+            Compression::Gzip => Some(CompressionEncoding::Gzip),
+            Compression::Zstd => Some(CompressionEncoding::Zstd),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct BenchParams {
+    requests: usize,          // N (number of requests/tasks)
+    ids_per_request: u64,     // how many IDs per request
+    concurrency: usize,       // in-flight requests at a time
+    compression: Compression, // which compression mode
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let sequential_cases = [
-        1,
-        10,
-        100,
-        1_000,
-        10_000,
-        100_000,
-        1_000_000,
-        10_000_000,
-        100_000_000,
+    let scenarios = [
+        BenchParams {
+            requests: 10,
+            ids_per_request: 100,
+            concurrency: 1,
+            compression: Compression::None,
+        },
+        BenchParams {
+            requests: 10,
+            ids_per_request: 100,
+            concurrency: 10,
+            compression: Compression::Zstd,
+        },
+        BenchParams {
+            requests: 100,
+            ids_per_request: 1000,
+            concurrency: 50,
+            compression: Compression::Zstd,
+        },
+        BenchParams {
+            requests: 100,
+            ids_per_request: 1000,
+            concurrency: 50,
+            compression: Compression::Deflate,
+        },
     ];
-    let parallel_cases = sequential_cases;
 
     let mut results = Vec::new();
 
-    println!("\n=== Running Sequential ===");
-    for &count in &sequential_cases {
-        results.push(run_stream_bench(count, 1).await?);
+    for params in &scenarios {
+        results.push(run_bench(params).await?);
     }
 
-    println!("\n=== Running Parallel ({PARALLEL} tasks) ===");
-    for &count in &parallel_cases {
-        results.push(run_stream_bench(count, PARALLEL).await?);
-    }
-
-    // === Final Summary Table ===
+    // === Summary Table ===
     println!("\n=== Benchmark Summary ===");
     println!(
-        "{:<22} | {:>10} | {:>10} | {:>10} | {:>12}",
-        "Method", "Count", "Total", "Time (ms)", "Throughput/s"
+        "{:<24} | {:>8} | {:>8} | {:>8} | {:>8} | {:>10} | {:>12}",
+        "Mode", "Reqs", "IDs/Req", "Conc", "Total", "Time(ms)", "Throughput/s"
     );
-    println!("{}", "-".repeat(72));
+    println!("{}", "-".repeat(80));
     for r in &results {
         r.report();
+    }
+
+    // Optional: print latency percentiles for each run (90th/99th/min/max)
+    for r in &results {
+        r.print_latency_stats();
     }
     Ok(())
 }
 
 #[derive(Debug)]
 struct BenchmarkResult {
-    label: String,
-    target_count: usize,
+    params: BenchParams,
     total_received: usize,
     duration: Duration,
+    per_req_durations: Vec<Duration>,
 }
 
 impl BenchmarkResult {
@@ -68,32 +114,99 @@ impl BenchmarkResult {
     }
     fn report(&self) {
         println!(
-            "{:<22} | {:>10} | {:>10} | {:>10.2} | {:>12.2}",
-            self.label,
-            self.target_count,
+            "{:<24} | {:>8} | {:>8} | {:>8} | {:>8} | {:>10.2} | {:>12.2}",
+            self.label(),
+            self.params.requests,
+            self.params.ids_per_request,
+            self.params.concurrency,
             self.total_received,
             self.duration.as_secs_f64() * 1000.0,
             self.throughput()
         );
     }
+    fn label(&self) -> String {
+        format!(
+            "{} x{} c{} [{}]",
+            if self.params.concurrency == 1 {
+                "sequential"
+            } else {
+                "parallel"
+            },
+            self.params.ids_per_request,
+            self.params.concurrency,
+            self.params.compression.as_label()
+        )
+    }
+    fn print_latency_stats(&self) {
+        if self.per_req_durations.is_empty() {
+            return;
+        }
+        let mut durations_ms: Vec<f64> = self
+            .per_req_durations
+            .iter()
+            .map(|d| d.as_secs_f64() * 1000.0)
+            .collect();
+        durations_ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let min = durations_ms.first().copied().unwrap_or(0.0);
+        let max = durations_ms.last().copied().unwrap_or(0.0);
+        let p50 = percentile(&durations_ms, 50.0);
+        let p90 = percentile(&durations_ms, 90.0);
+        let p99 = percentile(&durations_ms, 99.0);
+        println!(
+            "[{}] latencies: min {:.2} ms | p50 {:.2} | p90 {:.2} | p99 {:.2} | max {:.2} ms",
+            self.label(),
+            min,
+            p50,
+            p90,
+            p99,
+            max
+        );
+    }
 }
 
-async fn run_stream_bench(target_count: u64, concurrency: usize) -> Result<BenchmarkResult> {
+fn percentile(sorted: &[f64], p: f64) -> f64 {
+    if sorted.is_empty() {
+        return 0.0;
+    }
+    let rank = (p / 100.0) * (sorted.len() - 1) as f64;
+    let low = rank.floor() as usize;
+    let high = rank.ceil() as usize;
+    if low == high {
+        sorted[low]
+    } else {
+        sorted[low] * (high as f64 - rank) + sorted[high] * (rank - low as f64)
+    }
+}
+
+async fn run_bench(params: &BenchParams) -> Result<BenchmarkResult> {
+    let BenchParams {
+        requests,
+        ids_per_request,
+        concurrency,
+        compression,
+    } = *params;
     let start = Instant::now();
+
     let mut tasks = FuturesUnordered::new();
+    let mut per_req_durations = Vec::with_capacity(requests);
 
-    for _ in 0..concurrency {
+    let channel = Channel::from_static("http://localhost:50051")
+        .connect()
+        .await?;
+
+    // Distribute requests across workers
+    for _ in 0..requests {
+        let channel = channel.clone();
+        let compression = compression;
         tasks.push(tokio::spawn(async move {
-            let channel = Channel::from_static("http://localhost:50051")
-                .connect()
-                .await?;
-            let mut client = IdGenClient::new(channel)
-                // .accept_compressed(CompressionEncoding::Zstd)
-                .send_compressed(CompressionEncoding::Zstd);
-
+            let t0 = Instant::now();
+            let mut client = IdGenClient::new(channel);
+            if let Some(encoding) = compression.as_tonic() {
+                client = client.send_compressed(encoding);
+            }
             let mut stream = client
                 .get_stream_ids(IdStreamRequest {
-                    count: target_count,
+                    count: ids_per_request,
                 })
                 .await?
                 .into_inner();
@@ -109,36 +222,35 @@ async fn run_stream_bench(target_count: u64, concurrency: usize) -> Result<Bench
                         bytes.len()
                     );
                 }
-
                 for chunk in bytes.chunks_exact(SNOWFLAKE_ID_SIZE) {
                     let raw_id = SnowflakeIdTy::from_le_bytes(chunk.try_into().unwrap());
                     let _id = SnowflakeIdType::from_raw(raw_id);
                     received += 1;
                 }
             }
-            Ok::<usize, anyhow::Error>(received)
+            let duration = t0.elapsed();
+            Ok::<(usize, Duration), anyhow::Error>((received, duration))
         }));
+        // Simple throttle to avoid spinning up more than `concurrency` at once
+        if tasks.len() >= concurrency {
+            let (_received, dur) = FutureStreamExt::next(&mut tasks).await.unwrap()??;
+            per_req_durations.push(dur);
+        }
     }
-
-    let mut total_received = 0;
+    // Drain remaining
     while let Some(res) = FutureStreamExt::next(&mut tasks).await {
-        total_received += res??;
+        let (_received, dur) = res??;
+        per_req_durations.push(dur);
     }
-
-    let duration = start.elapsed();
+    let total_received = per_req_durations
+        .iter()
+        .map(|_| ids_per_request as usize)
+        .sum();
 
     Ok(BenchmarkResult {
-        label: format!(
-            "{} stream x{}",
-            if concurrency == 1 {
-                "Sequential"
-            } else {
-                "Parallel"
-            },
-            concurrency
-        ),
-        target_count: target_count as usize,
+        params: params.clone(),
         total_received,
-        duration,
+        duration: start.elapsed(),
+        per_req_durations,
     })
 }

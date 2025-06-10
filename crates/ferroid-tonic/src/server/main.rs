@@ -80,9 +80,7 @@ async fn main() -> anyhow::Result<()> {
 
     let args = CliArgs::try_parse()?;
     let config = ServerConfig::try_from(args)?;
-    let server_addr = std::env::var("SERVER_ADDR").context("missing `SERVER_ADDR`")?;
-
-    let addr: SocketAddr = server_addr.parse()?;
+    let addr: SocketAddr = "0.0.0.0:50051".parse()?;
     run_server(addr, config).await
 }
 
