@@ -6,7 +6,7 @@
 //! service, client, and serialization logic.
 //!
 //! ## Type Aliases
-//! - [`SnowflakeIdType`]: The concrete Snowflake ID implementation
+//! - [`SnowflakeId`]: The concrete Snowflake ID implementation
 //!       (Twitter-style).
 //! - [`SnowflakeIdTy`]: The underlying primitive integer type used by the
 //!       Snowflake implementation.
@@ -16,18 +16,17 @@
 //!       Snowflake ID.
 
 use ferroid::{Snowflake, SnowflakeTwitterId};
-use std::mem::size_of;
 
 /// [CHANGEME] The concrete Snowflake ID type used throughout the system.
 ///
 /// Currently set to `SnowflakeTwitterId`, but feel free to override with any
 /// custom implementation.
-pub type SnowflakeIdType = SnowflakeTwitterId;
+pub type SnowflakeId = SnowflakeTwitterId;
 
 /// The primitive integer representation of the Snowflake ID (usually `u64`).
-pub type SnowflakeIdTy = <SnowflakeIdType as Snowflake>::Ty;
+pub type SnowflakeIdTy = <SnowflakeId as Snowflake>::Ty;
 
 /// Size in bytes of a single serialized Snowflake ID.
 ///
 /// This value is used to allocate buffers for chunked transmission and storage.
-pub const SNOWFLAKE_ID_SIZE: usize = size_of::<SnowflakeIdTy>();
+pub const SNOWFLAKE_ID_SIZE: usize = std::mem::size_of::<SnowflakeIdTy>();

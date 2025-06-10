@@ -20,11 +20,11 @@ use tonic::Status;
 #[derive(Clone, thiserror::Error, Debug)]
 pub enum Error {
     /// Internal channel send/receive failure (e.g., closed or full channel).
-    #[error("Channel communication error: {context}")]
+    #[error("Channel error: {context}")]
     ChannelError { context: String },
 
     /// Underlying Snowflake ID generation failed.
-    #[error("ID generation failed: {0:?}")]
+    #[error("ID error: {0:?}")]
     IdGeneration(#[from] ferroid::Error),
 
     /// The client aborted the request.

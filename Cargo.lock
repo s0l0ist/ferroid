@@ -621,6 +621,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "clap",
+ "criterion",
  "dotenvy",
  "ferroid",
  "futures",

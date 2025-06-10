@@ -20,7 +20,7 @@
 use crate::{
     config::ServerConfig,
     pool::{manager::WorkerPool, worker::worker_loop},
-    service::config::{ClockType, SnowflakeGeneratorType},
+    service::config::{Clock, Generator},
     streaming::coordinator::feed_chunks,
     telemetry::{
         decrement_streams_inflight, increment_ids_generated, increment_requests,
@@ -33,7 +33,7 @@ use ferroid::Snowflake;
 use ferroid_tonic::common::{
     Error,
     idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
-    types::{SNOWFLAKE_ID_SIZE, SnowflakeIdType},
+    types::{SNOWFLAKE_ID_SIZE, SnowflakeId},
 };
 use futures::TryStreamExt;
 use std::sync::Arc;
@@ -61,7 +61,7 @@ impl IdService {
     /// token.
     pub fn new(config: ServerConfig) -> Self {
         let mut workers = Vec::with_capacity(config.num_workers);
-        let clock = ClockType::default();
+        let clock = Clock::default();
         let shutdown_token = CancellationToken::new();
 
         for worker_id in 0..config.num_workers {
@@ -88,8 +88,8 @@ impl IdService {
             let (tx, rx) = mpsc::channel(1);
             workers.push(tx);
 
-            let generator = SnowflakeGeneratorType::new(
-                (config.shard_offset + worker_id) as <SnowflakeIdType as Snowflake>::Ty,
+            let generator = Generator::new(
+                (config.shard_offset + worker_id) as <SnowflakeId as Snowflake>::Ty,
                 clock.clone(),
             );
 

@@ -15,10 +15,6 @@ publish = false
 name = "tonic-server"
 path = "src/server/main.rs"
 
-[[bin]] 
-name = "tonic-client"
-path = "src/client/main.rs"
-
 [dependencies]
 anyhow = { workspace = true, features = ["std"] }
 bytes = { workspace = true }
@@ -49,6 +45,13 @@ tracing-subscriber = { workspace = true, features = ["smallvec", "fmt", "ansi", 
 
 [build-dependencies]
 tonic-build = { workspace = true, features = ["prost"] }
+
+[dev-dependencies]
+criterion = { workspace = true, features = ["async_tokio"] }
+
+[[bench]]
+name = "bench"
+harness = false
 
 [features]
 default = []

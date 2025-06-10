@@ -1,4 +1,4 @@
-use crate::service::config::SnowflakeGeneratorType;
+use crate::service::config::Generator;
 use ferroid::{IdGenStatus, Snowflake};
 use ferroid_tonic::common::{Error, idgen::IdUnitResponseChunk, types::SNOWFLAKE_ID_SIZE};
 use tokio::sync::mpsc;
@@ -6,7 +6,7 @@ use tonic::Status;
 
 /// Handles a single streamed ID generation task for a worker.
 ///
-/// IDs are generated sequentially using the provided [`SnowflakeGeneratorType`]
+/// IDs are generated sequentially using the provided [`Generator`]
 /// and buffered into a fixed-size byte array. When the buffer is full, it is
 /// sent downstream as a gRPC response chunk. Remaining IDs (if any) are sent as
 /// a final partial chunk.
@@ -38,7 +38,7 @@ pub async fn handle_stream_request(
     chunk_bytes: usize,
     chunk_size: usize,
     chunk_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
-    generator: &mut SnowflakeGeneratorType,
+    generator: &mut Generator,
 ) {
     let mut generated = 0;
 
@@ -85,10 +85,7 @@ pub async fn handle_stream_request(
                     return;
                 }
 
-                if let Err(_e) = chunk_tx
-                    .send(Err(Error::IdGeneration(e).into()))
-                    .await
-                {
+                if let Err(_e) = chunk_tx.send(Err(Error::IdGeneration(e).into())).await {
                     #[cfg(feature = "tracing")]
                     tracing::debug!("Worker {} failed to send error: {}", _worker_id, _e);
                 }

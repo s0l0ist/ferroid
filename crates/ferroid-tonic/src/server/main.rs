@@ -53,7 +53,6 @@ mod service;
 mod streaming;
 mod telemetry;
 
-use anyhow::Context;
 use clap::Parser;
 use config::{CliArgs, ServerConfig};
 use ferroid_tonic::common::idgen::{FILE_DESCRIPTOR_SET, id_gen_server::IdGenServer};

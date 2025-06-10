@@ -1,5 +1,5 @@
 use crate::{
-    service::config::SnowflakeGeneratorType,
+    service::config::Generator,
     streaming::{processor::handle_stream_request, request::WorkRequest},
 };
 use tokio::sync::mpsc;
@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 /// For each `Stream` request, it invokes the chunked ID generation pipeline.
 /// For `Shutdown`, it exits cleanly after acknowledging shutdown.
 ///
-/// Each worker owns its own [`SnowflakeGeneratorType`] to maintain ID
+/// Each worker owns its own [`Generator`] to maintain ID
 /// uniqueness.
 ///
 /// # Arguments
@@ -25,7 +25,7 @@ use tokio::sync::mpsc;
 pub async fn worker_loop(
     worker_id: usize,
     mut rx: mpsc::Receiver<WorkRequest>,
-    mut generator: SnowflakeGeneratorType,
+    mut generator: Generator,
     chunk_bytes: usize,
 ) {
     #[cfg(feature = "tracing")]

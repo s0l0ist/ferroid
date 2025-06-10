@@ -1,6 +1,6 @@
 use anyhow::bail;
 use clap::Parser;
-use ferroid_tonic::common::types::{SNOWFLAKE_ID_SIZE, SnowflakeIdType};
+use ferroid_tonic::common::types::{SNOWFLAKE_ID_SIZE, SnowflakeId};
 
 /// Runtime configuration for the `id-server` binary.
 ///
@@ -87,7 +87,7 @@ impl TryFrom<CliArgs> for ServerConfig {
     type Error = anyhow::Error;
 
     fn try_from(args: CliArgs) -> Result<Self, Self::Error> {
-        let max_machine_id = SnowflakeIdType::max_machine_id() as usize + 1;
+        let max_machine_id = SnowflakeId::max_machine_id() as usize + 1;
 
         if args.num_workers > max_machine_id {
             bail!(
