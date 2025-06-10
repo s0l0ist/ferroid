@@ -53,6 +53,7 @@ mod service;
 mod streaming;
 mod telemetry;
 
+use anyhow::Context;
 use clap::Parser;
 use config::{CliArgs, ServerConfig};
 use ferroid_tonic::common::idgen::{FILE_DESCRIPTOR_SET, id_gen_server::IdGenServer};
@@ -67,15 +68,21 @@ use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
 use tower_http::cors::{Any, CorsLayer};
 
+// Using mimalloc for better performance under contention, especially in musl
+// environments.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Load from .env
-    dotenvy::dotenv()?;
+    let _ = dotenvy::dotenv();
 
     let args = CliArgs::try_parse()?;
     let config = ServerConfig::try_from(args)?;
+    let server_addr = std::env::var("SERVER_ADDR").context("missing `SERVER_ADDR`")?;
 
-    let addr: SocketAddr = "[::1]:50051".parse()?;
+    let addr: SocketAddr = server_addr.parse()?;
     run_server(addr, config).await
 }
 

@@ -26,6 +26,7 @@ clap = { workspace = true, features = ["derive", "env", "color", "error-context"
 dotenvy = { workspace = true }
 ferroid = { path = "../ferroid" }
 futures = { workspace = true }
+mimalloc = { workspace = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true, features = ["semconv_experimental"] }

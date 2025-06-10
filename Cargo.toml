@@ -27,6 +27,7 @@ criterion = { version = "0.6", default-features = false }
 dotenvy = { version = "0.15", default-features = false }
 futures = { version = "0.3", default-features = false }
 hyper = { version = "1.6.0", default-features = false }
+mimalloc = { version = "0.1", default-features = false }
 num_cpus = { version = "1.17", default-features = false }
 opentelemetry = { version = "0.30", default-features = false }
 opentelemetry-appender-log = { version = "0.30", default-features = false }

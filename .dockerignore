@@ -1,0 +1,5 @@
+**/target
+**/.env
+**/.DS_Store
+**/.git
+**/.github
