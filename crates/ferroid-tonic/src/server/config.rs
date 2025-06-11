@@ -71,6 +71,18 @@ pub struct CliArgs {
     /// Environment variable: `STREAM_BUFFER_SIZE`
     #[arg(long, env = "STREAM_BUFFER_SIZE", default_value_t = 8)]
     pub stream_buffer_size: usize,
+
+    /// Address to listen on (TCP or Unix socket path; use --uds for Unix socket).
+    ///
+    /// Example: "0.0.0.0:50051" or "/tmp/tonic-uds.sock"
+    ///
+    /// Environment variable: `SERVER_ADDR`
+    #[arg(long, env = "SERVER_ADDR", default_value_t = String::from("0.0.0.0:50051"))]
+    pub server_addr: String,
+
+    /// Listen on a Unix socket instead of TCP. If set, `SERVER_ADDR` must be a file path.
+    #[arg(short, long, default_value_t = false)]
+    pub uds: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -81,6 +93,8 @@ pub struct ServerConfig {
     pub ids_per_chunk: usize,
     pub stream_buffer_size: usize,
     pub chunk_bytes: usize,
+    pub server_addr: String,
+    pub uds: bool,
 }
 
 impl TryFrom<CliArgs> for ServerConfig {
@@ -108,7 +122,9 @@ impl TryFrom<CliArgs> for ServerConfig {
             num_workers: args.num_workers,
             ids_per_chunk: args.ids_per_chunk,
             stream_buffer_size: args.stream_buffer_size,
+            server_addr: args.server_addr,
             chunk_bytes,
+            uds: args.uds,
         })
     }
 }

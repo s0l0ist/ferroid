@@ -56,10 +56,14 @@ mod telemetry;
 use clap::Parser;
 use config::{CliArgs, ServerConfig};
 use ferroid_tonic::common::idgen::{FILE_DESCRIPTOR_SET, id_gen_server::IdGenServer};
+use futures::Stream;
 use service::handler::IdService;
-use std::net::SocketAddr;
 use telemetry::{TelemetryProviders, init_telemetry};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::net::{TcpListener, UnixListener};
 use tokio::signal;
+use tokio_stream::wrappers::{TcpListenerStream, UnixListenerStream};
+use tonic::transport::server::Connected;
 use tonic::{codec::CompressionEncoding, transport::Server};
 use tonic_health::server::HealthReporter;
 use tonic_reflection::server::Builder;
@@ -76,16 +80,39 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 async fn main() -> anyhow::Result<()> {
     // Load from .env
     let _ = dotenvy::dotenv();
-
     let args = CliArgs::try_parse()?;
     let config = ServerConfig::try_from(args)?;
-    let addr: SocketAddr = "0.0.0.0:50051".parse()?;
-    run_server(addr, config).await
-}
 
-async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()> {
     let providers = init_telemetry()?;
 
+    if config.uds {
+        let uds_path = config.server_addr.clone();
+        let uds = UnixListener::bind(&uds_path)?;
+        let incoming = UnixListenerStream::new(uds);
+        log_startup_info(&uds_path, &config);
+        let res = run_server_with_incoming(providers, incoming, config).await;
+        // Always try to clean up the socket file, even if server failed or panicked.
+        let _ = std::fs::remove_file(&uds_path);
+        res
+    } else {
+        let tcp_path = config.server_addr.clone();
+        let tcp = TcpListener::bind(&tcp_path).await?;
+        let incoming = TcpListenerStream::new(tcp);
+        log_startup_info(&tcp_path, &config);
+        run_server_with_incoming(providers, incoming, config).await
+    }
+}
+
+async fn run_server_with_incoming<I, IO, IE>(
+    providers: TelemetryProviders,
+    incoming: I,
+    config: ServerConfig,
+) -> anyhow::Result<()>
+where
+    I: Stream<Item = Result<IO, IE>>,
+    IO: AsyncRead + AsyncWrite + Connected + Unpin + Send + 'static,
+    IE: Into<tower::BoxError>,
+{
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
     health_reporter
         .set_serving::<IdGenServer<IdService>>()
@@ -96,8 +123,6 @@ async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()
     let reflection = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
         .build_v1()?;
-
-    log_startup_info(&addr, &config);
 
     Server::builder()
         .accept_http1(true)
@@ -115,7 +140,10 @@ async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()
         .add_service(health_service.clone())
         .add_service(reflection)
         .add_service(build_id_service(service.clone()))
-        .serve_with_shutdown(addr, shutdown_signal(service, health_reporter, providers))
+        .serve_with_incoming_shutdown(
+            incoming,
+            shutdown_signal(service, health_reporter, providers),
+        )
         .await?;
 
     #[cfg(feature = "tracing")]
@@ -123,7 +151,7 @@ async fn run_server(addr: SocketAddr, config: ServerConfig) -> anyhow::Result<()
     Ok(())
 }
 
-fn log_startup_info(_addr: &SocketAddr, _config: &ServerConfig) {
+fn log_startup_info(_addr: &str, _config: &ServerConfig) {
     if cfg!(debug_assertions) {
         #[cfg(feature = "tracing")]
         tracing::info!(

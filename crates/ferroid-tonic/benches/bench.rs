@@ -14,7 +14,10 @@ use std::{
 };
 use tokio::runtime::Builder;
 use tokio_stream::StreamExt;
-use tonic::{codec::CompressionEncoding, transport::Channel};
+use tonic::{
+    codec::CompressionEncoding,
+    transport::{Channel, Uri},
+};
 
 #[derive(Clone, Copy, Debug)]
 enum Compression {
@@ -53,9 +56,8 @@ struct GrpcBenchParams {
     compression: Compression,
 }
 
-const SERVER_ADDR: &str = "http://localhost:50051";
-
 fn grpc_bench(c: &mut Criterion) {
+    let uri = Uri::try_from("http://0.0.0.0:50051").expect("Invalid URI");
     // Start the server. This may require a full compilation so set the timeout
     // high. Adjust features and CLI args to the server as necessary.
     let mut server = Command::new("cargo")
@@ -74,7 +76,7 @@ fn grpc_bench(c: &mut Criterion) {
         .stderr(Stdio::inherit())
         .spawn()
         .expect("Failed to start tonic-server");
-    wait_for_port("127.0.0.1:50051", 300);
+    wait_for_port(uri.authority().expect("missing authority").as_str(), 300);
 
     let ids_per_request_cases = [10_000, 100_000, 1_000_000];
     let concurrency_cases = [1, 2, 4, 8, 16, 32];
@@ -112,19 +114,22 @@ fn grpc_bench(c: &mut Criterion) {
                 params.ids_per_request, params.concurrency, params.compression,
             ),
             |b| {
-                b.to_async(&rt).iter_custom(|iters| async move {
-                    let channel = Channel::from_static(SERVER_ADDR)
-                        .connect()
-                        .await
-                        .expect("Failed to connect to server");
+                b.to_async(&rt).iter_custom(|iters| {
+                    let uri = uri.clone();
+                    async move {
+                        let channel = Channel::builder(uri)
+                            .connect()
+                            .await
+                            .expect("Failed to connect to server");
 
-                    let start = Instant::now();
+                        let start = Instant::now();
 
-                    for _ in 0..iters {
-                        run_grpc_id_bench(&channel, params).await;
+                        for _ in 0..iters {
+                            run_grpc_id_bench(&channel, params).await;
+                        }
+
+                        start.elapsed()
                     }
-
-                    start.elapsed()
                 });
             },
         );
@@ -183,7 +188,7 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
     }
 }
 
-fn wait_for_port(addr: &str, timeout_secs: u64) {
+pub fn wait_for_port(addr: &str, timeout_secs: u64) {
     let start = Instant::now();
     while start.elapsed().as_secs() < timeout_secs {
         if TcpStream::connect(addr).is_ok() {
@@ -193,5 +198,6 @@ fn wait_for_port(addr: &str, timeout_secs: u64) {
     }
     panic!("Server did not start listening on {}", addr);
 }
+
 criterion_group!(grpc_benches, grpc_bench);
 criterion_main!(grpc_benches);
