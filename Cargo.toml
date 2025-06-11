@@ -3,7 +3,6 @@ resolver = "3"
 members = [
     "crates/ferroid",
     "crates/ferroid-tonic",
-    "crates/ferroid-axum",
 ]
 
 [workspace.package]

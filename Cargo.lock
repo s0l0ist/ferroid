@@ -259,8 +259,6 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "hyper",
- "hyper-util",
  "itoa",
  "matchit",
  "memchr",
@@ -270,7 +268,6 @@ dependencies = [
  "rustversion",
  "serde",
  "sync_wrapper",
- "tokio",
  "tower",
  "tower-layer",
  "tower-service",
@@ -598,20 +595,6 @@ dependencies = [
  "smol",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "ferroid-axum"
-version = "0.3.6"
-dependencies = [
- "axum",
- "ferroid",
- "futures",
- "hyper",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
 ]
 
 [[package]]
