@@ -60,9 +60,9 @@ use futures::Stream;
 use service::handler::IdService;
 use telemetry::{TelemetryProviders, init_telemetry};
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::{TcpListener, UnixListener};
+use tokio::net::TcpListener;
 use tokio::signal;
-use tokio_stream::wrappers::{TcpListenerStream, UnixListenerStream};
+use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::server::Connected;
 use tonic::{codec::CompressionEncoding, transport::Server};
 use tonic_health::server::HealthReporter;
@@ -86,14 +86,23 @@ async fn main() -> anyhow::Result<()> {
     let providers = init_telemetry()?;
 
     if config.uds {
-        let uds_path = config.server_addr.clone();
-        let uds = UnixListener::bind(&uds_path)?;
-        let incoming = UnixListenerStream::new(uds);
-        log_startup_info(&uds_path, &config);
-        let res = run_server_with_incoming(providers, incoming, config).await;
-        // Always try to clean up the socket file, even if server failed or panicked.
-        let _ = std::fs::remove_file(&uds_path);
-        res
+        #[cfg(unix)]
+        {
+            use tokio::net::UnixListener;
+            use tokio_stream::wrappers::UnixListenerStream;
+            let uds_path = config.server_addr.clone();
+            let uds = UnixListener::bind(&uds_path)?;
+            let incoming = UnixListenerStream::new(uds);
+            log_startup_info(&uds_path, &config);
+            let res = run_server_with_incoming(providers, incoming, config).await;
+            // Always try to clean up the socket file, even if server failed or panicked.
+            let _ = std::fs::remove_file(&uds_path);
+            res
+        }
+        #[cfg(not(unix))]
+        {
+            unimplemented!("Unix sockets are not supported on this platform!");
+        }
     } else {
         let tcp_path = config.server_addr.clone();
         let tcp = TcpListener::bind(&tcp_path).await?;
