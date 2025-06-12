@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
         }
         #[cfg(not(unix))]
         {
-            unimplemented!("Unix sockets are not supported on this platform!");
+            anyhow::bail!("Unix domain sockets are not supported on this platform");
         }
     } else {
         let tcp_path = config.server_addr.clone();
