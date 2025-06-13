@@ -26,6 +26,7 @@ mimalloc = { workspace = true }
 opentelemetry = { workspace = true, optional = true }
 opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true, features = ["semconv_experimental"] }
+opentelemetry-stdout = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
 prost = { workspace = true, features = ["derive", "std"] }
 prost-types = { workspace = true, features = ["std"] }
@@ -72,11 +73,15 @@ metrics = [
     "opentelemetry-semantic-conventions",
     "tracing-opentelemetry/metrics"
 ]
-
-telemetry = [
-    "tonic/tls-native-roots",
+stdout = [
+    "opentelemetry-stdout",
+    "opentelemetry-stdout/trace",
+    "opentelemetry-stdout/metrics"
+]
+honeycomb = [
     "opentelemetry-otlp/tls",
     "opentelemetry-otlp/gzip-tonic",
     "opentelemetry-otlp/zstd-tonic",
-    "opentelemetry-otlp/grpc-tonic"
+    "opentelemetry-otlp/grpc-tonic",
+    "tonic/tls-native-roots"
 ]

@@ -32,6 +32,7 @@ opentelemetry = { version = "0.30", default-features = false }
 opentelemetry-appender-log = { version = "0.30", default-features = false }
 opentelemetry-otlp = { version = "0.30", default-features = false }
 opentelemetry-semantic-conventions = { version = "0.30", default-features = false }
+opentelemetry-stdout = { version = "0.30", default-features = false }
 opentelemetry_sdk = { version = "0.30", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
 prost = { version = "0.13", default-features = false }

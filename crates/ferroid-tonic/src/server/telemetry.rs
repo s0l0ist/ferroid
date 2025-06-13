@@ -1,25 +1,87 @@
-// Compile-time validation: telemetry requires at least one of tracing or metrics
+//! # Telemetry Features
+//!
+//! This crate supports optional telemetry using the `tracing` and `metrics`
+//! crates, exported via OpenTelemetry to either Honeycomb or stdout.
+//!
+//! ## Feature matrix
+//!
+//! - `tracing`: Enables OpenTelemetry distributed tracing (via spans).
+//! - `metrics`: Enables OpenTelemetry metrics (via counters, histograms, etc.).
+//! - `honeycomb`: Enables the Honeycomb OTLP exporter.
+//! - `stdout`: Enables the stdout OTLP exporter.
+//!
+//! ## Feature constraints
+//!
+//! - Exporters require using at least one of: `tracing` or `metrics`.
+//! - Both `honeycomb` and `stdout` exporters can be enabled at the same time.
+//!
+//! ## Span behavior
+//!
+//! - Spans created via `tracing::info_span!` are exported to any enabled
+//!   telemetry backend
+//! - Events (`tracing::info!`, etc.) inside a span become span events in
+//!   telemetry backends
+//! - Events outside of a span are only shown in log output (via
+//!   `fmt::layer()`), not exported
+//!
+//! ## Metrics behavior
+//!
+//! - Metrics (e.g. request count, stream duration) are exported if `metrics` is
+//!   enabled
+//! - Each exporter (Honeycomb, stdout) gets its own reader
+//!
+//! ## Example usage
+//!
+//! Enable tracing and export to Honeycomb:
+//!
+//! ```bash
+//! cargo run --bin tonic-server --features tracing,honeycomb
+//! ```
+//!
+//! Enable metrics and export to Honeycomb:
+//!
+//! ```bash
+//! cargo run--bin tonic-server --features metrics,honeycomb
+//! ```
+//!
+//! Enable tracing and metrics, exported to both Honeycomb and stdout:
+//!
+//! ```bash
+//! cargo run --bin tonic-server --features tracing,metrics,honeycomb,stdout
+//! ```
+//!
+//! Enable only local stdout export (no remote backend):
+//!
+//! ```bash
+//! cargo run --bin tonic-server --features tracing,stdout
+//! ```
+
+// Disallow using `honeycomb` without `tracing` or `metrics`
 #[cfg(all(
-    feature = "telemetry",
+    feature = "honeycomb",
     not(any(feature = "tracing", feature = "metrics"))
 ))]
 compile_error!(
-    "The 'telemetry' feature requires at least one of 'tracing' or 'metrics' features to be enabled"
+    "The 'honeycomb' feature requires at least one of 'tracing' or 'metrics' to be enabled."
+);
+
+// Disallow using `stdout` without `tracing` or `metrics`
+#[cfg(all(feature = "stdout", not(any(feature = "tracing", feature = "metrics"))))]
+compile_error!(
+    "The 'stdout' feature requires at least one of 'tracing' or 'metrics' to be enabled."
 );
 
 // Core imports - always needed
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-// Conditional imports for telemetry exporters
-#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
-use anyhow::Context;
-#[cfg(feature = "telemetry")]
+// Honeycomb-specific imports
+#[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]
 use opentelemetry_otlp::{Compression, Protocol, WithExportConfig, WithTonicConfig};
-#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
-use std::time::Duration;
-#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
+#[cfg(all(feature = "honeycomb", feature = "metrics"))]
+use opentelemetry_sdk::metrics::Temporality;
+#[cfg(feature = "honeycomb")]
 use tonic::metadata::MetadataMap;
-#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
+#[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]
 use tonic::transport::ClientTlsConfig;
 
 // Metrics-specific imports
@@ -27,8 +89,6 @@ use tonic::transport::ClientTlsConfig;
 use opentelemetry::metrics::{Counter, Histogram, Meter, UpDownCounter};
 #[cfg(feature = "metrics")]
 use opentelemetry_sdk::metrics as sdkmetrics;
-#[cfg(all(feature = "metrics", feature = "telemetry"))]
-use opentelemetry_sdk::metrics::Temporality;
 #[cfg(feature = "metrics")]
 use std::sync::OnceLock;
 
@@ -71,7 +131,9 @@ pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
         .with_schema_url(semvcns::SCHEMA_URL)
         .build();
 
-    // Build the subscriber with conditional layers
+    // Always subscribe to standard tracing logs printed to the console via
+    // `tracing_subscriber::fmt`. This is unrelated to the `opentelemetry_stdout`
+    // exporter - it logs spans/events as human-readable output.
     let registry = tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with(
@@ -115,12 +177,13 @@ pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
     })
 }
 
-#[cfg(all(feature = "telemetry", any(feature = "metrics", feature = "tracing")))]
+#[cfg(feature = "honeycomb")]
 fn get_metadata() -> anyhow::Result<MetadataMap> {
+    use anyhow::Context;
+
     let mut map = MetadataMap::new();
     let api_key = std::env::var("HONEYCOMB_API_KEY").context("missing `HONEYCOMB_API_KEY`")?;
     let dataset = std::env::var("HONEYCOMB_DATASET").context("missing `HONEYCOMB_DATASET`")?;
-
     map.insert(
         "x-honeycomb-team",
         api_key.parse().context("invalid API key")?,
@@ -129,7 +192,6 @@ fn get_metadata() -> anyhow::Result<MetadataMap> {
         "x-honeycomb-dataset",
         dataset.parse().context("invalid dataset")?,
     );
-
     Ok(map)
 }
 
@@ -151,16 +213,38 @@ fn resource() -> Resource {
 fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
     let builder = sdkmetrics::SdkMeterProvider::builder().with_resource(resource());
 
-    #[cfg(feature = "telemetry")]
+    #[cfg(feature = "stdout")]
     let builder = {
+        use opentelemetry_stdout::MetricExporter;
+        let exporter = MetricExporter::default();
+        let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
+            .with_interval(std::time::Duration::from_secs(5))
+            .build();
+
+        builder.with_reader(reader)
+    };
+
+    #[cfg(feature = "honeycomb")]
+    let builder = {
+        use anyhow::Context;
+
         let metadata = get_metadata()?;
+        let endpoint =
+            std::env::var("HONEYCOMB_ENDPOINT").context("missing `HONEYCOMB_API_KEY`")?;
+        let compression = {
+            use std::str::FromStr;
+            let raw = std::env::var("HONEYCOMB_COMPRESSION")
+                .context("missing `HONEYCOMB_API_KEY`")?
+                .to_ascii_lowercase();
+            Compression::from_str(&raw)?
+        };
         let exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_tonic()
             .with_tls_config(ClientTlsConfig::new().with_native_roots())
             .with_metadata(metadata)
-            .with_timeout(Duration::from_secs(10))
-            .with_compression(Compression::Gzip)
-            .with_endpoint("https://api.eu1.honeycomb.io:443")
+            .with_timeout(std::time::Duration::from_secs(10))
+            .with_compression(compression)
+            .with_endpoint(endpoint)
             .with_protocol(Protocol::Grpc)
             .with_temporality(Temporality::Delta)
             .build()
@@ -174,21 +258,44 @@ fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
 
 #[cfg(feature = "tracing")]
 fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
-    #[cfg(not(feature = "telemetry"))]
     let builder = sdktrace::SdkTracerProvider::builder().with_resource(resource());
-    #[cfg(feature = "telemetry")]
-    let mut builder = sdktrace::SdkTracerProvider::builder().with_resource(resource());
 
-    #[cfg(feature = "telemetry")]
-    {
+    #[cfg(feature = "stdout")]
+    let builder = {
+        use opentelemetry_stdout::SpanExporter;
+        let exporter = SpanExporter::default();
+        let batch = sdktrace::BatchSpanProcessor::builder(exporter)
+            .with_batch_config(
+                sdktrace::BatchConfigBuilder::default()
+                    .with_scheduled_delay(std::time::Duration::from_secs(5))
+                    .with_max_queue_size(2048)
+                    .build(),
+            )
+            .build();
+        builder.with_span_processor(batch)
+    };
+
+    #[cfg(feature = "honeycomb")]
+    let builder = {
+        use anyhow::Context;
+
         let metadata = get_metadata()?;
+        let endpoint =
+            std::env::var("HONEYCOMB_ENDPOINT").context("missing `HONEYCOMB_API_KEY`")?;
+        let compression = {
+            use std::str::FromStr;
+            let raw = std::env::var("HONEYCOMB_COMPRESSION")
+                .context("missing `HONEYCOMB_API_KEY`")?
+                .to_ascii_lowercase();
+            Compression::from_str(&raw)?
+        };
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
             .with_tls_config(ClientTlsConfig::new().with_native_roots())
             .with_metadata(metadata)
-            .with_timeout(Duration::from_secs(10))
-            .with_compression(Compression::Gzip)
-            .with_endpoint("https://api.eu1.honeycomb.io:443")
+            .with_timeout(std::time::Duration::from_secs(10))
+            .with_compression(compression)
+            .with_endpoint(endpoint)
             .with_protocol(Protocol::Grpc)
             .build()
             .context("failed to build tracer exporter")?;
@@ -196,14 +303,14 @@ fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
         let batch = sdktrace::BatchSpanProcessor::builder(exporter)
             .with_batch_config(
                 sdktrace::BatchConfigBuilder::default()
-                    .with_scheduled_delay(Duration::from_secs(5))
+                    .with_scheduled_delay(std::time::Duration::from_secs(5))
                     .with_max_queue_size(2048)
                     .build(),
             )
             .build();
 
-        builder = builder.with_span_processor(batch);
-    }
+        builder.with_span_processor(batch)
+    };
 
     Ok(builder.build())
 }
