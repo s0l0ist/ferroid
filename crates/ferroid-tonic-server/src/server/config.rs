@@ -26,6 +26,8 @@ pub struct CliArgs {
     /// requests are automatically chunked into smaller units.
     ///
     /// Environment variable: `MAX_ALLOWED_IDS`
+    ///
+    /// Default: `1_000_000_000`
     #[arg(long, env = "MAX_ALLOWED_IDS", default_value_t = 1_000_000_000)]
     pub max_allowed_ids: usize,
 
@@ -37,16 +39,31 @@ pub struct CliArgs {
     /// multi-tenant environments sharing a global ID namespace.
     ///
     /// Environment variable: `SHARD_OFFSET`
+    ///
+    /// Default: `0`
     #[arg(long, env = "SHARD_OFFSET", default_value_t = 0)]
     pub shard_offset: usize,
 
-    /// Number of worker tasks responsible for generating IDs concurrently.
+    /// Number of worker tasks generating IDs concurrently within this process.
     ///
-    /// Each worker is assigned a unique machine ID derived from its index and
-    /// the `shard_offset`. The value must not exceed the bit width of the
-    /// machine ID field in the Snowflake format.
+    /// This setting controls intra-node parallelism. Increasing it improves
+    /// throughput on a single node by running multiple ID generators in
+    /// parallel. Each worker is assigned a unique machine ID derived from its
+    /// index plus the `shard_offset`.
+    ///
+    /// In distributed deployments, prefer using multiple nodes with fewer
+    /// workers each, and assign each node a distinct `shard_offset`. This
+    /// ensures a globally unique machine ID space across your cluster while
+    /// balancing performance (more workers per node) with availability and
+    /// scalability (more nodes, fewer workers).
+    ///
+    /// The total number of distinct machine IDs (shard_offset + num_workers)
+    /// across all nodes must not exceed the machine ID bit width defined by
+    /// your Snowflake format.
     ///
     /// Environment variable: `NUM_WORKERS`
+    ///
+    /// Default: `1`
     #[arg(long, env = "NUM_WORKERS", default_value_t = 1)]
     pub num_workers: usize,
 
@@ -59,6 +76,8 @@ pub struct CliArgs {
     /// allocations.
     ///
     /// Environment variable: `IDS_PER_CHUNK`
+    ///
+    /// Default: `4096`
     #[arg(long, env = "IDS_PER_CHUNK", default_value_t = 4096)]
     pub ids_per_chunk: usize,
 
@@ -69,6 +88,8 @@ pub struct CliArgs {
     /// backpressure responsiveness; higher values enable deeper pipelining.
     ///
     /// Environment variable: `STREAM_BUFFER_SIZE`
+    ///
+    /// Default: `8`
     #[arg(long, env = "STREAM_BUFFER_SIZE", default_value_t = 8)]
     pub stream_buffer_size: usize,
 
@@ -78,11 +99,15 @@ pub struct CliArgs {
     /// Example: "0.0.0.0:50051" or "/tmp/tonic-uds.sock"
     ///
     /// Environment variable: `SERVER_ADDR`
+    ///
+    /// Default: `"0.0.0.0:50051"`
     #[arg(long, env = "SERVER_ADDR", default_value_t = String::from("0.0.0.0:50051"))]
     pub server_addr: String,
 
     /// Listen on a Unix socket instead of TCP. If set, `SERVER_ADDR` must be a
     /// file path.
+    ///
+    /// Default: `false`
     #[arg(short, long, default_value_t = false)]
     pub uds: bool,
 }
