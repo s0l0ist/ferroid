@@ -74,7 +74,7 @@ metrics = [
 ]
 
 telemetry = [
-    "tonic/tls-webpki-roots",
+    "tonic/tls-native-roots",
     "opentelemetry-otlp/tls",
     "opentelemetry-otlp/gzip-tonic",
     "opentelemetry-otlp/zstd-tonic",

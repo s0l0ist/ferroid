@@ -3,6 +3,7 @@ FROM public.ecr.aws/docker/library/alpine:latest AS builder
 
 # Install build-time dependencies
 RUN apk update && apk add --no-cache \
+    ca-certificates \
     curl \
     file \
     g++ \
@@ -29,6 +30,8 @@ RUN cargo build --bin tonic-server --profile bin-release --features tracing,metr
 FROM scratch AS app
 
 WORKDIR /app
+
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /work/target/bin-release/tonic-server /app/
 
 EXPOSE 50051

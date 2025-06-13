@@ -156,7 +156,7 @@ fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
         let metadata = get_metadata()?;
         let exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_tonic()
-            .with_tls_config(ClientTlsConfig::new().with_webpki_roots())
+            .with_tls_config(ClientTlsConfig::new().with_native_roots())
             .with_metadata(metadata)
             .with_timeout(Duration::from_secs(10))
             .with_compression(Compression::Gzip)
@@ -184,7 +184,7 @@ fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
         let metadata = get_metadata()?;
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
-            .with_tls_config(ClientTlsConfig::new().with_webpki_roots())
+            .with_tls_config(ClientTlsConfig::new().with_native_roots())
             .with_metadata(metadata)
             .with_timeout(Duration::from_secs(10))
             .with_compression(Compression::Gzip)
