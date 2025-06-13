@@ -14,7 +14,7 @@ use ferroid_tonic_core::types::{SNOWFLAKE_ID_SIZE, SnowflakeId};
 /// needs.
 #[derive(Parser, Debug, Clone)]
 #[command(
-    name = "tonic-server",
+    name = "ferroid-tonic-server",
     version,
     about = "A gRPC service for streaming Snowflake-like IDs"
 )]

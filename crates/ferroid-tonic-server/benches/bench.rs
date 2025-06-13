@@ -64,8 +64,6 @@ fn grpc_bench(c: &mut Criterion) {
     let mut server = Command::new("cargo")
         .args([
             "run",
-            "--bin",
-            "tonic-server",
             "--release",
             "--features",
             "tracing",
@@ -76,7 +74,7 @@ fn grpc_bench(c: &mut Criterion) {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
-        .expect("Failed to start tonic-server");
+        .expect("Failed to start ferroid-tonic-server");
     wait_for_port(uri.authority().expect("missing authority").as_str(), 300);
 
     let ids_per_request_cases = [10_000, 100_000, 1_000_000];

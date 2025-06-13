@@ -1,7 +1,7 @@
-//! # `ferroid-tonic`: Streaming Snowflake ID Generation Server
+//! # `ferroid-tonic-server`: Streaming Snowflake ID Generation Server
 //!
-//! `ferroid-tonic` is a high-performance, streaming gRPC server for batch
-//! Snowflake-style ID generation, built with [`tonic`] and powered by
+//! `ferroid-tonic-server` is a high-performance, streaming gRPC server for
+//! batch Snowflake-style ID generation, built with [`tonic`] and powered by
 //! [`ferroid`].
 //!
 //! This server is optimized for latency-sensitive and high-throughput
