@@ -110,8 +110,8 @@ async fn main() -> anyhow::Result<()> {
             let incoming = UnixListenerStream::new(uds);
             log_startup_info(&uds_path, &config);
             let res = run_server_with_incoming(providers, incoming, config).await;
-            // Always try to clean up the socket file, even if server failed or
-            // panicked.
+            // TODO: Best effort to clean up the socket file although a panic
+            // might leave it behind.
             let _ = std::fs::remove_file(&uds_path);
             res
         }

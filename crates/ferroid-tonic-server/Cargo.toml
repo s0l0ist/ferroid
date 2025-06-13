@@ -29,13 +29,10 @@ opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true, features = ["semconv_experimental"] }
 opentelemetry-stdout = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
-prost = { workspace = true, features = ["derive", "std"] }
-prost-types = { workspace = true, features = ["std"] }
-thiserror = { workspace = true }
 tokio = { workspace = true, features = ["parking_lot", "rt-multi-thread", "signal"] }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
-tonic = { workspace = true, features = ["prost", "transport", "router", "codegen", "zstd", "deflate", "gzip"] }
+tonic = { workspace = true, features = ["transport", "router", "zstd", "deflate", "gzip"] }
 tonic-health = { workspace = true }
 tonic-reflection = { workspace = true, features = ["server"] }
 tonic-web = { workspace = true }
