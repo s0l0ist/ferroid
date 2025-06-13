@@ -29,7 +29,7 @@ enum Compression {
 }
 
 impl fmt::Display for Compression {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Compression::None => write!(f, "none"),
             Compression::Deflate => write!(f, "deflate"),
@@ -69,9 +69,9 @@ fn grpc_bench(c: &mut Criterion) {
             "--release",
             "--features",
             "tracing",
-            // "--",
-            // "--num-workers",
-            // "16",
+            "--",
+            "--num-workers",
+            "128",
         ])
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
