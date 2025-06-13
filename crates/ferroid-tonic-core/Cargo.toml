@@ -1,0 +1,21 @@
+[package]
+name = "ferroid-tonic-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+readme.workspace = true
+description.workspace = true
+repository.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+publish = true
+
+[dependencies]
+ferroid = { version = "0.3.7", path = "../ferroid" }
+prost = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tonic = { workspace = true, features = ["prost", "codegen"] }
+
+[build-dependencies]
+tonic-build = { workspace = true, features = ["prost"] }

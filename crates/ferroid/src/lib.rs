@@ -18,7 +18,7 @@ pub use crate::futures::*;
 pub use crate::generator::*;
 pub use crate::id::*;
 pub use crate::mono_clock_native::*;
-#[allow(unused)]
+#[cfg(any(feature = "async-tokio", feature = "async-smol"))]
 pub use crate::runtime::*;
 pub use crate::status::*;
 pub use crate::time::*;
