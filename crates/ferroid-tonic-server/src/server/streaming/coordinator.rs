@@ -1,6 +1,6 @@
 use super::request::WorkRequest;
-use crate::{config::ServerConfig, pool::manager::WorkerPool};
-use ferroid_tonic::common::{Error, ferroid::IdChunk};
+use crate::server::{config::ServerConfig, pool::manager::WorkerPool};
+use ferroid_tonic_core::common::{Error, ferroid::IdChunk};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tonic::Status;
@@ -36,7 +36,7 @@ pub async fn feed_chunks(
     worker_pool: Arc<WorkerPool>,
     resp_tx: mpsc::Sender<Result<IdChunk, Status>>,
     config: ServerConfig,
-) -> ferroid_tonic::common::Result<()> {
+) -> ferroid_tonic_core::common::Result<()> {
     let mut remaining = total_ids;
 
     while remaining > 0 {

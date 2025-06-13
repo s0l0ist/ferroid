@@ -24,7 +24,7 @@ WORKDIR /work
 
 COPY . .
 
-RUN cargo build --bin tonic-server --profile bin-release --features tracing,metrics
+RUN cargo build --profile bin-release --features tracing,metrics
 
 # ---- Final minimal stage ----
 FROM scratch AS app

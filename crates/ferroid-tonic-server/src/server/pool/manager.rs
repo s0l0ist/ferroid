@@ -9,8 +9,8 @@
 //! independently. This model allows efficient parallelism without contention or
 //! locking.
 
-use crate::streaming::request::WorkRequest;
-use ferroid_tonic::common::Error;
+use crate::server::streaming::request::WorkRequest;
+use ferroid_tonic_core::common::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -82,27 +82,27 @@ impl WorkerPool {
 
         for (i, worker) in self.workers.iter().enumerate() {
             let (tx, rx) = oneshot::channel();
-            if let Err(e) = worker.send(WorkRequest::Shutdown { response: tx }).await {
+            if let Err(_e) = worker.send(WorkRequest::Shutdown { response: tx }).await {
                 #[cfg(feature = "tracing")]
-                tracing::error!("Failed to send shutdown to worker {i}: {e}");
+                tracing::error!("Failed to send shutdown to worker {i}: {_e}");
             } else {
                 shutdown_handles.push((i, rx));
             }
         }
 
-        let timeout_futures = shutdown_handles.into_iter().map(|(i, rx)| async move {
+        let timeout_futures = shutdown_handles.into_iter().map(|(_i, rx)| async move {
             match tokio::time::timeout(tokio::time::Duration::from_secs(3), rx).await {
                 Ok(Ok(())) => {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {i} shutdown acknowledged");
+                    tracing::debug!("Worker {_i} shutdown acknowledged");
                 }
-                Ok(Err(e)) => {
+                Ok(Err(_e)) => {
                     #[cfg(feature = "tracing")]
-                    tracing::error!("Worker {i} returned error: {e}");
+                    tracing::error!("Worker {_i} returned error: {_e}");
                 }
                 Err(_) => {
                     #[cfg(feature = "tracing")]
-                    tracing::warn!("Worker {i} shutdown timed out");
+                    tracing::warn!("Worker {_i} shutdown timed out");
                 }
             }
         });

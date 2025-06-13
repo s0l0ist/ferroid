@@ -1,5 +1,5 @@
 [package]
-name = "ferroid-tonic"
+name = "ferroid-tonic-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,8 +12,8 @@ keywords.workspace = true
 publish = false
 
 [[bin]]
-name = "tonic-server"
-path = "src/server/main.rs"
+name = "ferroid-tonic-server"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = { workspace = true, features = ["std"] }
@@ -21,6 +21,7 @@ bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env", "color", "error-context", "help", "std", "suggestions", "usage"] }
 dotenvy = { workspace = true }
 ferroid = { path = "../ferroid" }
+ferroid-tonic-core = { path = "../ferroid-tonic-core" }
 futures = { workspace = true }
 mimalloc = { workspace = true }
 opentelemetry = { workspace = true, optional = true }
@@ -43,9 +44,6 @@ tower-http = { workspace = true, features = ["cors"] }
 tracing = { workspace = true, optional = true }
 tracing-opentelemetry = { workspace = true, optional = true }
 tracing-subscriber = { workspace = true, features = ["smallvec", "fmt", "ansi", "tracing-log", "std", "env-filter", "json", "chrono"] }
-
-[build-dependencies]
-tonic-build = { workspace = true, features = ["prost"] }
 
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio"] }

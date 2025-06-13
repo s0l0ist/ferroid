@@ -1,6 +1,6 @@
-use crate::service::config::Generator;
+use crate::server::service::config::Generator;
 use ferroid::{IdGenStatus, Snowflake};
-use ferroid_tonic::common::{Error, ferroid::IdChunk, types::SNOWFLAKE_ID_SIZE};
+use ferroid_tonic_core::common::{Error, ferroid::IdChunk, types::SNOWFLAKE_ID_SIZE};
 use tokio::sync::mpsc;
 use tonic::Status;
 

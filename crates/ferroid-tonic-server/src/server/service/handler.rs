@@ -13,11 +13,11 @@
 //! - Handle backpressure, cancellation, and graceful shutdown.
 
 use crate::{
-    config::ServerConfig,
-    pool::{manager::WorkerPool, worker::worker_loop},
-    service::config::{Clock, Generator},
-    streaming::coordinator::feed_chunks,
-    telemetry::{
+    server::config::ServerConfig,
+    server::pool::{manager::WorkerPool, worker::worker_loop},
+    server::service::config::{Clock, Generator},
+    server::streaming::coordinator::feed_chunks,
+    server::telemetry::{
         decrement_streams_inflight, increment_ids_generated, increment_requests,
         increment_stream_errors, increment_streams_inflight, record_ids_per_request,
         record_stream_duration,
@@ -25,7 +25,7 @@ use crate::{
 };
 use core::pin::Pin;
 use ferroid::Snowflake;
-use ferroid_tonic::common::{
+use ferroid_tonic_core::common::{
     Error,
     ferroid::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
     types::{SNOWFLAKE_ID_SIZE, SnowflakeId},

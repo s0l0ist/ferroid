@@ -24,7 +24,7 @@
 //! Start the server locally:
 //!
 //! ```bash
-//! cargo run --bin tonic-server --release
+//! cargo run --release
 //! ```
 //!
 //! The server listens on `127.0.0.1:50051` by default. You can override the
@@ -64,18 +64,16 @@
 //! - [`streaming`] – Chunk dispatch and cancellation-aware delivery
 //! - [`telemetry`] – Tracing, metrics, and OpenTelemetry integrations
 
-mod config;
-mod pool;
-mod service;
-mod streaming;
-mod telemetry;
+mod server;
 
 use clap::Parser;
-use config::{CliArgs, ServerConfig};
-use ferroid_tonic::common::ferroid::{FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer};
+use ferroid_tonic_core::common::ferroid::{
+    FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer,
+};
 use futures::Stream;
-use service::handler::IdService;
-use telemetry::{TelemetryProviders, init_telemetry};
+use server::config::{CliArgs, ServerConfig};
+use server::service::handler::IdService;
+use server::telemetry::{TelemetryProviders, init_telemetry};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::signal;

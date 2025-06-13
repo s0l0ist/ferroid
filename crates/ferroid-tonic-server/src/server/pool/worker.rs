@@ -1,6 +1,6 @@
 use crate::{
-    service::config::Generator,
-    streaming::{processor::handle_stream_request, request::WorkRequest},
+    server::service::config::Generator,
+    server::streaming::{processor::handle_stream_request, request::WorkRequest},
 };
 use tokio::sync::mpsc;
 

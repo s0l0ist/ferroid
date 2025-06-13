@@ -35,25 +35,25 @@
 //! Enable tracing and export to Honeycomb:
 //!
 //! ```bash
-//! cargo run --bin tonic-server --features tracing,honeycomb
+//! cargo run --features tracing,honeycomb
 //! ```
 //!
 //! Enable metrics and export to Honeycomb:
 //!
 //! ```bash
-//! cargo run--bin tonic-server --features metrics,honeycomb
+//! cargo run--features metrics,honeycomb
 //! ```
 //!
 //! Enable tracing and metrics, exported to both Honeycomb and stdout:
 //!
 //! ```bash
-//! cargo run --bin tonic-server --features tracing,metrics,honeycomb,stdout
+//! cargo run --features tracing,metrics,honeycomb,stdout
 //! ```
 //!
 //! Enable only local stdout export (no remote backend):
 //!
 //! ```bash
-//! cargo run --bin tonic-server --features tracing,stdout
+//! cargo run --features tracing,stdout
 //! ```
 
 // Disallow using `honeycomb` without `tracing` or `metrics`
