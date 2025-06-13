@@ -52,7 +52,7 @@ pub struct CliArgs {
 
     /// Number of Snowflake IDs included in each response chunk.
     ///
-    /// Defines the size of each `IdUnitResponseChunk`. Ideally, this aligns
+    /// Defines the size of each `IdChunk`. Ideally, this aligns
     /// with the maximum sequence value of the Snowflake ID type. The default
     /// assumes a 12-bit sequence. While the gRPC protocol does impose message
     /// size limits, these are only a concern when using IDs with high sequence

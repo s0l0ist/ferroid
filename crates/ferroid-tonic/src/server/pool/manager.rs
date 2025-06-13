@@ -1,14 +1,24 @@
+//! Asynchronous worker pool for chunked ID generation.
+//!
+//! This module defines the [`WorkerPool`] struct, which manages a set of
+//! asynchronous workers responsible for processing [`WorkRequest`]s. It
+//! distributes work using round-robin scheduling and supports coordinated
+//! shutdown via a shared [`CancellationToken`].
+//!
+//! Each worker listens on its own bounded [`mpsc::Receiver`] and executes tasks
+//! independently. This model allows efficient parallelism without contention or
+//! locking.
+
 use crate::streaming::request::WorkRequest;
 use ferroid_tonic::common::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-/// Manages a pool of asynchronous workers for handling [`WorkRequest`]s.
+/// A cooperative pool of asynchronous workers that process [`WorkRequest`]s.
 ///
-/// Each worker operates independently, listening for incoming messages on a
-/// bounded MPSC channel. The pool distributes requests using round-robin
-/// scheduling and supports graceful, cooperative shutdown.
+/// Workers receive requests over bounded MPSC channels. Work is distributed in
+/// round-robin fashion and the pool supports graceful, cancellable shutdown.
 pub struct WorkerPool {
     workers: Vec<mpsc::Sender<WorkRequest>>,
     next_worker: AtomicUsize,
@@ -16,8 +26,8 @@ pub struct WorkerPool {
 }
 
 impl WorkerPool {
-    /// Creates a new [`WorkerPool`] from a pre-initialized list of worker
-    /// channels and a shared shutdown token.
+    /// Constructs a new [`WorkerPool`] from initialized worker channels and a
+    /// shared cancellation token.
     pub fn new(workers: Vec<mpsc::Sender<WorkRequest>>, shutdown_token: CancellationToken) -> Self {
         Self {
             workers,
@@ -26,15 +36,19 @@ impl WorkerPool {
         }
     }
 
-    /// Computes the next worker index using relaxed atomic round-robin logic.
+    /// Returns the index of the next worker to receive work (round-robin).
+    ///
+    /// Uses a relaxed atomic increment to minimize contention.
     pub fn next_worker_index(&self) -> usize {
         self.next_worker.fetch_add(1, Ordering::Relaxed) % self.workers.len()
     }
 
-    /// Attempts to send a [`WorkRequest`] to the next worker in the pool.
+    /// Sends a [`WorkRequest`] to the next available worker in the pool.
+    ///
+    /// # Errors
     ///
     /// Returns an error if:
-    /// - A server shutdown is triggered (shutdown_token)
+    /// - The service is shutting down (`shutdown_token` was cancelled).
     /// - The worker's channel is closed.
     pub async fn send_to_next_worker(&self, request: WorkRequest) -> Result<(), Error> {
         if self.shutdown_token.is_cancelled() {
@@ -46,64 +60,58 @@ impl WorkerPool {
 
         match worker.send(request).await {
             Ok(()) => Ok(()),
-            Err(_e) => Err(Error::ChannelError {
+            Err(_) => Err(Error::ChannelError {
                 context: format!("Worker {} channel closed", worker_idx),
             }),
         }
     }
 
-    /// Broadcasts a shutdown signal to all workers and waits for
-    /// acknowledgement.
+    /// Gracefully shuts down all workers in the pool.
     ///
-    /// - Cancels the shared [`CancellationToken`] to prevent further work
-    ///   dispatch.
-    /// - Sends a [`WorkRequest::Shutdown`] to each worker, along with a
-    ///   one-shot response channel.
-    /// - Waits up to 3 seconds per worker for confirmation.
+    /// - Cancels the shared [`CancellationToken`] to prevent new work.
+    /// - Sends a [`WorkRequest::Shutdown`] to each worker.
+    /// - Waits (up to 3 seconds per worker) for shutdown acknowledgements.
     ///
-    /// This is typically invoked during service shutdown.
+    /// This method is typically invoked during service termination.
     pub async fn shutdown(&self) -> Result<(), Error> {
         #[cfg(feature = "tracing")]
         tracing::info!("Initiating worker pool shutdown");
 
         self.shutdown_token.cancel();
-        let mut shutdown_handles = Vec::new();
+        let mut shutdown_handles = Vec::with_capacity(self.workers.len());
 
-        for (_i, worker) in self.workers.iter().enumerate() {
+        for (i, worker) in self.workers.iter().enumerate() {
             let (tx, rx) = oneshot::channel();
-            if let Err(_e) = worker.send(WorkRequest::Shutdown { response: tx }).await {
+            if let Err(e) = worker.send(WorkRequest::Shutdown { response: tx }).await {
                 #[cfg(feature = "tracing")]
-                tracing::error!("Failed to send shutdown signal to worker {}: {}", _i, _e);
+                tracing::error!("Failed to send shutdown to worker {i}: {e}");
             } else {
-                shutdown_handles.push(rx);
+                shutdown_handles.push((i, rx));
             }
         }
 
-        let timeout_futures: Vec<_> = shutdown_handles
-            .into_iter()
-            .enumerate()
-            .map(|(_i, handle)| async move {
-                match tokio::time::timeout(tokio::time::Duration::from_secs(3), handle).await {
-                    Ok(Ok(())) => {
-                        #[cfg(feature = "tracing")]
-                        tracing::debug!("Worker {} acked shutdown gracefully", _i);
-                    }
-                    Ok(Err(_e)) => {
-                        #[cfg(feature = "tracing")]
-                        tracing::error!("Worker {} shutdown response: {}", _i, _e);
-                    }
-                    Err(_) => {
-                        #[cfg(feature = "tracing")]
-                        tracing::warn!("Worker {} shutdown timeout", _i);
-                    }
+        let timeout_futures = shutdown_handles.into_iter().map(|(i, rx)| async move {
+            match tokio::time::timeout(tokio::time::Duration::from_secs(3), rx).await {
+                Ok(Ok(())) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::debug!("Worker {i} shutdown acknowledged");
                 }
-            })
-            .collect();
+                Ok(Err(e)) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!("Worker {i} returned error: {e}");
+                }
+                Err(_) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::warn!("Worker {i} shutdown timed out");
+                }
+            }
+        });
 
         futures::future::join_all(timeout_futures).await;
 
         #[cfg(feature = "tracing")]
         tracing::info!("Worker pool shutdown complete");
+
         Ok(())
     }
 }

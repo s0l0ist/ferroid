@@ -1,38 +1,40 @@
 use super::request::WorkRequest;
 use crate::{config::ServerConfig, pool::manager::WorkerPool};
-use ferroid_tonic::common::{Error, idgen::IdUnitResponseChunk};
+use ferroid_tonic::common::{Error, ferroid::IdChunk};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tonic::Status;
 
-/// Coordinates chunked ID generation and forwards results to the gRPC response
-/// stream.
+/// Splits a large ID generation request into chunks and delegates them to
+/// workers.
 ///
-/// This function splits a large stream request into fixed-size work units and
-/// dispatches them to the [`WorkerPool`] for parallel processing. Each response
-/// chunk is sent back to the client through a bounded MPSC channel connected to
-/// the gRPC stream. If the client disconnects or backpressure exceeds limits,
-/// the stream is cancelled early.
+/// This function handles the coordination logic for streaming Snowflake IDs
+/// back to the client. It breaks the total request into fixed-size chunks,
+/// dispatches each chunk to a worker via the [`WorkerPool`], and forwards
+/// results to the response stream channel.
+///
+/// If any error occurs during dispatch or transmission, the stream is
+/// terminated early and the error is surfaced to the client.
 ///
 /// # Arguments
 ///
-/// - `total_ids`: The total number of Snowflake IDs requested by the client.
-/// - `worker_pool`: A shared reference to the active [`WorkerPool`] instance.
-/// - `resp_tx`: Bounded MPSC channel to forward result chunks to the client.
-/// - `cancel`: Cancellation token triggered if the client disconnects or
-///   cancels.
+/// - `total_ids`: Total number of IDs requested by the client.
+/// - `worker_pool`: Shared pool of background workers responsible for
+///   generation.
+/// - `resp_tx`: Channel used to stream response chunks back to the client.
+/// - `config`: Server configuration, including chunk size and limits.
 ///
 /// # Behavior
 ///
-/// - If the request is cancelled mid-stream, the function exits cleanly.
-/// - Errors encountered during worker dispatch or chunk sending are forwarded
-///   to the client and terminate the stream.
-/// - Remaining IDs are decremented per chunk, and progress continues until
-///   zero.
+/// - Uses a per-chunk buffer size defined by `ids_per_chunk`.
+/// - Sends generated `IdChunk`s back to the gRPC stream channel (`resp_tx`).
+/// - On dispatch or send error, returns early and attempts to surface the
+///   issue.
+/// - Gracefully exits if the client disconnects mid-stream.
 pub async fn feed_chunks(
     total_ids: usize,
     worker_pool: Arc<WorkerPool>,
-    resp_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
+    resp_tx: mpsc::Sender<Result<IdChunk, Status>>,
     config: ServerConfig,
 ) -> ferroid_tonic::common::Result<()> {
     let mut remaining = total_ids;
@@ -41,6 +43,8 @@ pub async fn feed_chunks(
         let chunk_size = remaining.min(config.ids_per_chunk);
         remaining -= chunk_size;
 
+        // Temporary channel used to receive the generated chunk from the
+        // worker.
         let (chunk_tx, mut chunk_rx) = mpsc::channel(2);
 
         match worker_pool
@@ -57,7 +61,7 @@ pub async fn feed_chunks(
                     // it upstream.
                     if let Err(e) = resp_tx.send(msg).await {
                         return Err(Error::ChannelError {
-                            context: format!("Failed to forward chunk: {}", e),
+                            context: format!("Failed to forward chunk: {e}"),
                         });
                     }
                 }

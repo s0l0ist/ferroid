@@ -1,11 +1,11 @@
-/// Builds the gRPC client and server code for the `idgen.proto` definition using `tonic-build`.
+/// Builds the gRPC client and server code for the `ferroid.proto` definition using `tonic-build`.
 ///
 /// This code generation step processes the Protocol Buffer definitions located in the `proto`
 /// directory and emits Rust modules with gRPC bindings into the crate's `OUT_DIR`.
 ///
 /// # Byte Field Optimization
 ///
-/// The `packed_ids` field in the `IdUnitResponseChunk` message is explicitly marked with
+/// The `packed_ids` field in the `IdChunk` message is explicitly marked with
 /// `.bytes(...)` to ensure it is deserialized as a `Bytes` type (from the `bytes` crate)
 /// instead of the default `Vec<u8>`. This optimization:
 ///
@@ -15,7 +15,7 @@
 ///
 /// # Files and Paths
 ///
-/// - Proto file: `proto/idgen.proto`
+/// - Proto file: `proto/ferroid.proto`
 /// - Includes: `proto/`
 ///
 /// # Panics
@@ -37,8 +37,8 @@
 /// Generated code will be accessible in Rust via:
 ///
 /// ```rust
-/// pub mod idgen {
-///     tonic::include_proto!("idgen");
+/// pub mod ferroid {
+///     tonic::include_proto!("ferroid");
 /// }
 /// ```
 ///
@@ -48,16 +48,16 @@ use std::env;
 use std::path::PathBuf;
 fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let descriptor_path = out_dir.join("idgen_descriptor.bin");
+    let descriptor_path = out_dir.join("ferroid_descriptor.bin");
 
     let mut config = tonic_build::Config::new();
 
     // Ensure packed binary field is treated as `Bytes`, not `Vec<u8>`
     config
-        .bytes([".idgen.IdUnitResponseChunk.packed_ids"])
+        .bytes([".ferroid.IdChunk.packed_ids"])
         .file_descriptor_set_path(&descriptor_path);
 
     tonic_build::configure()
-        .compile_protos_with_config(config, &["proto/idgen.proto"], &["proto"])
+        .compile_protos_with_config(config, &["proto/ferroid.proto"], &["proto"])
         .unwrap();
 }

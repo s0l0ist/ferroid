@@ -1,32 +1,40 @@
-//! Common type definitions and constants shared across server and client.
+//! # Common Snowflake ID Types and Encoding Constants
 //!
-//! This module centralizes shared definitions for the Snowflake ID type and its
-//! binary serialization characteristics. It ensures consistent interpretation
-//! and encoding of Snowflake IDs across all components, including the gRPC
-//! service, client, and serialization logic.
+//! This module defines shared type aliases and constants for working with
+//! Snowflake-style IDs in both server and client contexts. It provides a single
+//! point of truth for:
+//!
+//! - The ID format used throughout the system
+//! - The expected serialization layout for network transmission
+//!
+//! These definitions ensure consistency across all components that generate,
+//! encode, or decode Snowflake IDs.
 //!
 //! ## Type Aliases
-//! - [`SnowflakeId`]: The concrete Snowflake ID implementation
-//!       (Twitter-style).
-//! - [`SnowflakeIdTy`]: The underlying primitive integer type used by the
-//!       Snowflake implementation.
+//!
+//! - [`SnowflakeId`] — The canonical Snowflake ID implementation used
+//!   (currently [`SnowflakeTwitterId`]).
+//! - [`SnowflakeIdTy`] — The primitive integer type backing the ID (typically
+//!   `u64`).
 //!
 //! ## Constants
-//! - [`SNOWFLAKE_ID_SIZE`]: The number of bytes required to encode a single
-//!       Snowflake ID.
+//!
+//! - [`SNOWFLAKE_ID_SIZE`] — The fixed number of bytes needed to encode one ID
+//!   in little-endian format.
 
 use ferroid::{Snowflake, SnowflakeTwitterId};
 
-/// [CHANGEME] The concrete Snowflake ID type used throughout the system.
+/// The canonical Snowflake ID implementation used across the system.
 ///
-/// Currently set to `SnowflakeTwitterId`, but feel free to override with any
-/// custom implementation.
+/// By default, this is set to [`SnowflakeTwitterId`], but it can be swapped for
+/// any other `Snowflake`-compatible implementation.
 pub type SnowflakeId = SnowflakeTwitterId;
 
-/// The primitive integer representation of the Snowflake ID (usually `u64`).
+/// The primitive integer type that backs a [`SnowflakeId`] (typically `u64`).
 pub type SnowflakeIdTy = <SnowflakeId as Snowflake>::Ty;
 
-/// Size in bytes of a single serialized Snowflake ID.
+/// The number of bytes required to encode a single [`SnowflakeId`] in binary
+/// form.
 ///
-/// This value is used to allocate buffers for chunked transmission and storage.
+/// This is used when allocating chunk buffers and parsing packed ID streams.
 pub const SNOWFLAKE_ID_SIZE: usize = std::mem::size_of::<SnowflakeIdTy>();

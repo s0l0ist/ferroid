@@ -2,9 +2,10 @@ use core::{fmt, hint::black_box};
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::Snowflake;
 use ferroid_tonic::common::{
-    idgen::{IdStreamRequest, id_gen_client::IdGenClient},
+    ferroid::{StreamIdsRequest, id_generator_client::IdGeneratorClient},
     types::{SNOWFLAKE_ID_SIZE, SnowflakeId, SnowflakeIdTy},
 };
+
 use futures::stream::FuturesUnordered;
 use std::{
     net::TcpStream,
@@ -22,18 +23,18 @@ use tonic::{
 #[derive(Clone, Copy, Debug)]
 enum Compression {
     None,
-    // Deflate,
-    // Gzip,
-    // Zstd,
+    Deflate,
+    Gzip,
+    Zstd,
 }
 
 impl fmt::Display for Compression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Compression::None => write!(f, "none"),
-            // Compression::Deflate => write!(f, "deflate"),
-            // Compression::Gzip => write!(f, "gzip"),
-            // Compression::Zstd => write!(f, "zstd"),
+            Compression::Deflate => write!(f, "deflate"),
+            Compression::Gzip => write!(f, "gzip"),
+            Compression::Zstd => write!(f, "zstd"),
         }
     }
 }
@@ -42,9 +43,9 @@ impl From<Compression> for Option<CompressionEncoding> {
     fn from(value: Compression) -> Self {
         match value {
             Compression::None => None,
-            // Compression::Deflate => Some(CompressionEncoding::Deflate),
-            // Compression::Gzip => Some(CompressionEncoding::Gzip),
-            // Compression::Zstd => Some(CompressionEncoding::Zstd),
+            Compression::Deflate => Some(CompressionEncoding::Deflate),
+            Compression::Gzip => Some(CompressionEncoding::Gzip),
+            Compression::Zstd => Some(CompressionEncoding::Zstd),
         }
     }
 }
@@ -82,9 +83,9 @@ fn grpc_bench(c: &mut Criterion) {
     let concurrency_cases = [1, 2, 4, 8, 16, 32];
     let compression_cases = [
         Compression::None,
-        // Compression::Zstd,
-        // Compression::Gzip,
-        // Compression::Deflate,
+        Compression::Zstd,
+        Compression::Gzip,
+        Compression::Deflate,
     ];
 
     // Generate cartesian product of all param combinations
@@ -152,13 +153,13 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
         let ids_per_request = params.ids_per_request;
 
         tasks.push(tokio::spawn(async move {
-            let mut client = IdGenClient::new(channel);
+            let mut client = IdGeneratorClient::new(channel);
             if let Some(encoding) = compression.into() {
                 client = client.accept_compressed(encoding).send_compressed(encoding)
             }
 
             let mut stream = client
-                .get_stream_ids(IdStreamRequest {
+                .stream_ids(StreamIdsRequest {
                     count: ids_per_request,
                 })
                 .await

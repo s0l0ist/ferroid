@@ -4,24 +4,30 @@ use crate::{
 };
 use tokio::sync::mpsc;
 
-/// Main execution loop for a worker task.
+/// Worker task responsible for processing [`WorkRequest`] messages.
 ///
-/// This function listens for [`WorkRequest`] messages on the provided channel.
-/// For each `Stream` request, it invokes the chunked ID generation pipeline.
-/// For `Shutdown`, it exits cleanly after acknowledging shutdown.
+/// Each worker owns its own [`Generator`] to produce unique Snowflake IDs. The
+/// worker listens on an MPSC channel and processes requests until a shutdown
+/// signal is received.
 ///
-/// Each worker owns its own [`Generator`] to maintain ID
-/// uniqueness.
+/// This function is designed to be spawned as a Tokio task and runs in an
+/// infinite loop until explicitly shut down.
 ///
 /// # Arguments
 ///
-/// - `worker_id`: Unique numeric ID of the worker, used for logging and
-///   tracing
-/// - `rx`: Receiver for incoming [`WorkRequest`] messages.
-/// - `generator`: The Snowflake ID generator owned by this worker.
+/// - `worker_id`: Unique numeric identifier for this worker (used for
+///   logs/tracing).
+/// - `rx`: Receiver through which [`WorkRequest`]s are received.
+/// - `generator`: A [`Generator`] instance that produces unique IDs for this
+///   worker.
+/// - `chunk_bytes`: The maximum size (in bytes) for a generated chunk.
 ///
-/// This function is intended to be spawned as a Tokio task and runs until a
-/// shutdown signal is received.
+/// # Request Types
+///
+/// - [`WorkRequest::Stream`] — Triggers a chunked ID generation request via
+///   [`handle_stream_request`].
+/// - [`WorkRequest::Shutdown`] — Signals the worker to stop and acknowledge
+///   shutdown.
 pub async fn worker_loop(
     worker_id: usize,
     mut rx: mpsc::Receiver<WorkRequest>,
@@ -29,11 +35,10 @@ pub async fn worker_loop(
     chunk_bytes: usize,
 ) {
     #[cfg(feature = "tracing")]
-    tracing::trace!("Worker {} started", worker_id);
+    tracing::trace!("Worker {worker_id} started");
 
-    // Create a reusable buffer based on the server config.
+    // Pre-allocate a reusable buffer to avoid heap churn during ID packing.
     let mut buff = vec![0_u8; chunk_bytes];
-    // A cursor that tracks where we've written
     let mut buff_pos = 0;
 
     while let Some(work) = rx.recv().await {
@@ -55,17 +60,17 @@ pub async fn worker_loop(
             }
             WorkRequest::Shutdown { response } => {
                 #[cfg(feature = "tracing")]
-                tracing::debug!("Worker {} received shutdown signal", worker_id);
-                if let Err(_) = response.send(()) {
-                    #[cfg(feature = "tracing")]
-                    tracing::error!("Worker {} failed to ack shutdown signal", worker_id);
-                }
+                tracing::debug!("Worker {worker_id} received shutdown signal");
 
+                if response.send(()).is_err() {
+                    #[cfg(feature = "tracing")]
+                    tracing::error!("Worker {worker_id} failed to acknowledge shutdown");
+                }
                 break;
             }
         }
     }
 
     #[cfg(feature = "tracing")]
-    tracing::trace!("Worker {} stopped", worker_id);
+    tracing::trace!("Worker {worker_id} stopped");
 }

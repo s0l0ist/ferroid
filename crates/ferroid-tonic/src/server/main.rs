@@ -1,51 +1,68 @@
-//! # `ferroid-tonic`: Streaming Snowflake ID Generation Service
+//! # `ferroid-tonic`: Streaming Snowflake ID Generation Server
 //!
-//! `ferroid-tonic` is a high-performance, gRPC-based Snowflake ID generation
-//! service built on top of [`ferroid`] for timestamp-based ID generation and
-//! [`tonic`] for HTTP/2 transport.
+//! `ferroid-tonic` is a high-performance, streaming gRPC server for batch
+//! Snowflake-style ID generation, built with [`tonic`] and powered by
+//! [`ferroid`].
 //!
-//! This crate powers a standalone server that accepts streaming requests for
-//! batches of Snowflake-like IDs. It is designed for workloads that demand:
+//! This server is optimized for latency-sensitive and high-throughput
+//! workloads—such as distributed queues, event ingestion pipelines, or scalable
+//! database key generation—where time-ordered, collision-free IDs are critical.
 //!
-//! - Time-ordered, collision-free IDs
-//! - Large batch throughput
-//! - Efficient use of memory and network bandwidth
+//! ## Features
 //!
-//! ## Highlights
+//! - **Streaming gRPC Interface**: Clients request batches of IDs via the
+//!   `StreamIds` endpoint; IDs are streamed back in compressed chunks.
+//! - **Per-Worker ID Generators**: Each async task owns its own generator and
+//!   shard, ensuring scale-out safety and eliminating contention.
+//! - **Backpressure-aware**: Bounded queues prevent unbounded memory growth.
+//! - **Graceful Shutdown**: Ensures all in-flight work completes.
+//! - **Client Cancellation**: Stream requests are interruptible mid-flight.
+//! - **Zstd, Gzip, Deflate Compression**: Negotiated via gRPC per stream.
 //!
-//! - **Streaming-only gRPC Endpoint**: Clients stream requests for up to
-//!   billions of IDs per call, delivered in compressed, chunked responses.
-//! - **Tokio Worker Pool**: Each worker runs a dedicated ID generator with
-//!   bounded task queues.
-//! - **Backpressure Aware**: All queues are size-limited to avoid memory
-//!   blowup.
-//! - **Client Cancellation**: Streamed requests are cancellable mid-flight.
-//! - **Graceful Shutdown**: Coordinated shutdown ensures no work is lost.
-//! - **Zstd Compression**: gRPC chunks are compressed for efficient transfer.
+//! ## Running the Server
 //!
-//! ## Usage
-//!
-//! Build and run the gRPC server with:
+//! Start the server locally:
 //!
 //! ```bash
 //! cargo run --bin tonic-server --release
 //! ```
 //!
-//! Then connect via gRPC on `127.0.0.1:50051` using the `GetStreamIds`
-//! endpoint.
+//! The server listens on `127.0.0.1:50051` by default. You can override the
+//! address via CLI or environment variables (see `--help`).
 //!
-//! ## Reflection
+//! ## Example: List Services via Reflection
+//!
 //! ```bash
 //! grpcurl -plaintext localhost:50051 list
+//! > ferroid.IdGenerator
 //! > grpc.reflection.v1.ServerReflection
-//! > idgen.IdGen
 //! ```
 //!
 //! ## Healthcheck
+//!
 //! ```bash
-//! ./grpc-health-probe -addr=localhost:50051 -service=idgen.IdGen
+//! ./grpc-health-probe -addr=localhost:50051 -service=ferroid.IdGenerator
 //! > status: SERVING
 //! ```
+//!
+//! ## Integration
+//!
+//! - Import the `.proto` file from `ferroid-tonic`
+//! - Use `IdGenerator.StreamIds` for streaming ID allocation
+//! - Each response chunk (`IdChunk`) contains a packed byte buffer of IDs
+//!
+//! ### Notes
+//!
+//! - ID size (e.g., `u64`, `u128`) must be inferred by the client
+//! - IDs are packed in little-endian binary format (see `IdChunk.packed_ids`)
+//!
+//! ## Crate Structure
+//!
+//! - [`config`] – CLI and runtime configuration
+//! - [`service`] – gRPC handlers and request coordination
+//! - [`pool`] – Worker pool and scheduling logic
+//! - [`streaming`] – Chunk dispatch and cancellation-aware delivery
+//! - [`telemetry`] – Tracing, metrics, and OpenTelemetry integrations
 
 mod config;
 mod pool;
@@ -55,7 +72,7 @@ mod telemetry;
 
 use clap::Parser;
 use config::{CliArgs, ServerConfig};
-use ferroid_tonic::common::idgen::{FILE_DESCRIPTOR_SET, id_gen_server::IdGenServer};
+use ferroid_tonic::common::ferroid::{FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer};
 use futures::Stream;
 use service::handler::IdService;
 use telemetry::{TelemetryProviders, init_telemetry};
@@ -95,7 +112,8 @@ async fn main() -> anyhow::Result<()> {
             let incoming = UnixListenerStream::new(uds);
             log_startup_info(&uds_path, &config);
             let res = run_server_with_incoming(providers, incoming, config).await;
-            // Always try to clean up the socket file, even if server failed or panicked.
+            // Always try to clean up the socket file, even if server failed or
+            // panicked.
             let _ = std::fs::remove_file(&uds_path);
             res
         }
@@ -124,7 +142,7 @@ where
 {
     let (health_reporter, health_service) = tonic_health::server::health_reporter();
     health_reporter
-        .set_serving::<IdGenServer<IdService>>()
+        .set_serving::<IdGeneratorServer<IdService>>()
         .await;
 
     let service = IdService::new(config.clone());
@@ -177,8 +195,8 @@ fn log_startup_info(_addr: &str, _config: &ServerConfig) {
         );
     }
 }
-fn build_id_service(service: IdService) -> IdGenServer<IdService> {
-    IdGenServer::new(service)
+fn build_id_service(service: IdService) -> IdGeneratorServer<IdService> {
+    IdGeneratorServer::new(service)
         .send_compressed(CompressionEncoding::Zstd)
         .send_compressed(CompressionEncoding::Gzip)
         .send_compressed(CompressionEncoding::Deflate)
@@ -224,7 +242,7 @@ async fn shutdown_signal(
     tracing::info!("Shutdown signal received, terminating gracefully...");
 
     health_reporter
-        .set_not_serving::<IdGenServer<IdService>>()
+        .set_not_serving::<IdGeneratorServer<IdService>>()
         .await;
 
     if let Err(_e) = service.shutdown().await {

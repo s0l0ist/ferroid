@@ -1,22 +1,17 @@
 //! gRPC service implementation for chunked Snowflake ID generation.
 //!
-//! This module defines the [`IdService`] struct, which implements the gRPC
-//! [`IdGen`] service defined in the protobuf specification. It provides a
-//! streaming endpoint that allows clients to request large batches of Snowflake
-//! IDs in a cancellable, chunked fashion.
+//! This module defines [`IdService`], the concrete implementation of the
+//! [`IdGenerator`] gRPC service defined in the protobuf specification. It
+//! exposes a high-throughput streaming endpoint that allows clients to request
+//! large batches of Snowflake-style IDs in a cancellable and chunked fashion.
 //!
-//! ## Key Responsibilities
+//! ## Responsibilities
 //!
-//! - Spawn and manage a pool of background worker tasks.
-//! - Validate and handle incoming `GetStreamIds` gRPC requests.
-//! - Coordinate chunked ID generation via [`feed_chunks`].
-//! - Support cancellation, backpressure, and graceful shutdown.
-//!
-//! ## Related Modules
-//!
-//! - [`crate::server::service::pool`] - worker pool and routing.
-//! - [`crate::server::service::streaming`] - stream coordination and chunk
-//!   processing.
+//! - Spawn and manage a background worker pool for ID generation.
+//! - Validate incoming `StreamIds` requests and enforce limits.
+//! - Dispatch ID generation tasks across workers via [`feed_chunks`].
+//! - Handle backpressure, cancellation, and graceful shutdown.
+
 use crate::{
     config::ServerConfig,
     pool::{manager::WorkerPool, worker::worker_loop},
@@ -32,7 +27,7 @@ use core::pin::Pin;
 use ferroid::Snowflake;
 use ferroid_tonic::common::{
     Error,
-    idgen::{IdStreamRequest, IdUnitResponseChunk, id_gen_server::IdGen},
+    ferroid::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
     types::{SNOWFLAKE_ID_SIZE, SnowflakeId},
 };
 use futures::TryStreamExt;
@@ -42,11 +37,15 @@ use tokio_stream::{Stream, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 
-/// gRPC service for distributed Snowflake ID generation.
+/// High-throughput gRPC service for distributed Snowflake ID generation.
 ///
-/// This struct implements the [`IdGen`] trait defined in the protobuf service
-/// definition. It processes streaming ID generation requests by dispatching
-/// chunked work to a pool of background worker tasks.
+/// Implements the [`IdGenerator`] service defined in the protobuf schema. This
+/// service enables clients to request large batches of unique Snowflake IDs
+/// using a stream-based interface. Internally, it dispatches chunked work to a
+/// pool of asynchronous background worker tasks.
+///
+/// Each client request is broken into fixed-size chunks and streamed back to
+/// the client in binary-encoded form (`IdChunk`).
 #[derive(Clone)]
 pub struct IdService {
     config: ServerConfig,
@@ -54,11 +53,16 @@ pub struct IdService {
 }
 
 impl IdService {
-    /// Initializes the service and spawns `num_workers` background tasks.
+    /// Creates a new `IdService` and spawns a pool of background worker tasks.
     ///
-    /// Each worker is assigned a unique Snowflake machine ID and runs its own
-    /// generator and bounded channel. All workers share a global shutdown
-    /// token.
+    /// Each worker is assigned a unique machine ID and maintains its own
+    /// bounded channel. Workers operate independently and communicate through
+    /// MPSC queues.
+    ///
+    /// This service uses a *sequential dispatch* model, where each worker
+    /// handles one chunk at a time. This avoids overloading workers and enables
+    /// efficient batching, resulting in predictable throughput and low memory
+    /// pressure.
     pub fn new(config: ServerConfig) -> Self {
         let mut workers = Vec::with_capacity(config.num_workers);
         let clock = Clock::default();
@@ -104,30 +108,39 @@ impl IdService {
         }
     }
 
-    /// Initiates graceful shutdown of the worker pool.
+    /// Initiates a graceful shutdown of the worker pool.
     ///
-    /// This cancels all in-flight streams and waits for each worker to
-    /// acknowledge shutdown.
+    /// All in-flight requests are cancelled, and the shutdown process blocks
+    /// until each worker acknowledges termination.
     pub async fn shutdown(&self) -> Result<(), Error> {
         self.worker_pool.shutdown().await
     }
 }
 
 #[tonic::async_trait]
-impl IdGen for IdService {
-    type GetStreamIdsStream =
-        Pin<Box<dyn Stream<Item = Result<IdUnitResponseChunk, Status>> + Send>>;
+impl IdGenerator for IdService {
+    type StreamIdsStream = Pin<Box<dyn Stream<Item = Result<IdChunk, Status>> + Send>>;
 
-    /// Handles a streaming ID generation request from the client.
+    /// Handles a streaming request for Snowflake IDs.
     ///
-    /// The total requested count is validated and split into fixed-size chunks.
-    /// Each chunk is delegated to the worker pool. Cancellation is supported
-    /// via a scoped [`CancellationToken`].
+    /// Validates the requested count, splits it into fixed-size chunks, and
+    /// streams binary-packed responses (`IdChunk`) back to the client. Chunks
+    /// are processed sequentially across worker threads.
+    ///
+    /// If `tracing`` is enabled, spans are instrumented per request for
+    /// observability.
+    ///
+    /// If `metrics` is enabled, emits telemetry for:
+    /// - request rate
+    /// - number of IDs requested/generated
+    /// - concurrent stream count
+    /// - stream duration
+    /// - stream errors
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all, fields(count = req.get_ref().count)))]
-    async fn get_stream_ids(
+    async fn stream_ids(
         &self,
-        req: Request<IdStreamRequest>,
-    ) -> Result<Response<Self::GetStreamIdsStream>, Status> {
+        req: Request<StreamIdsRequest>,
+    ) -> Result<Response<Self::StreamIdsStream>, Status> {
         let start = std::time::Instant::now();
         let total_ids = req.get_ref().count as usize;
 
@@ -155,7 +168,7 @@ impl IdGen for IdService {
         increment_streams_inflight();
 
         let (resp_tx, resp_rx) =
-            mpsc::channel::<Result<IdUnitResponseChunk, Status>>(self.config.stream_buffer_size);
+            mpsc::channel::<Result<IdChunk, Status>>(self.config.stream_buffer_size);
 
         let worker_pool = Arc::clone(&self.worker_pool);
         let config = self.config.clone();
@@ -185,9 +198,8 @@ impl IdGen for IdService {
         let stream = ReceiverStream::new(resp_rx)
             .inspect_ok(|chunk| {
                 // packed_ids contains binary representation of the IDs,
-                // therefore, we must divide by the size of the
-                // snowflake ID to get the actual number of IDs
-                // generated.
+                // therefore, we must divide by the size of the snowflake ID to
+                // get the actual number of IDs generated.
                 increment_ids_generated((chunk.packed_ids.len() / SNOWFLAKE_ID_SIZE) as u64);
             })
             .inspect_err(move |_e| {

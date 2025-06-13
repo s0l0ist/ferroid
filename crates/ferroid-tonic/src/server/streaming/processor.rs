@@ -1,43 +1,42 @@
 use crate::service::config::Generator;
 use ferroid::{IdGenStatus, Snowflake};
-use ferroid_tonic::common::{Error, idgen::IdUnitResponseChunk, types::SNOWFLAKE_ID_SIZE};
+use ferroid_tonic::common::{Error, ferroid::IdChunk, types::SNOWFLAKE_ID_SIZE};
 use tokio::sync::mpsc;
 use tonic::Status;
 
-/// Handles a single streamed ID generation task for a worker.
+/// Handles a single ID generation task within a worker.
 ///
-/// IDs are generated sequentially using the provided [`Generator`]
-/// and buffered into a fixed-size byte array. When the buffer is full, it is
-/// sent downstream as a gRPC response chunk. Remaining IDs (if any) are sent as
-/// a final partial chunk.
+/// This function generates a fixed number of Snowflake-style IDs (`chunk_size`)
+/// using the worker’s [`Generator`]. IDs are written into a reusable byte
+/// buffer and streamed back to the client as serialized [`IdChunk`] messages.
 ///
-/// The function respects both explicit client-side cancellation and
-/// backpressure (closed channels) by checking cancellation before sending each
-/// chunk.
+/// Chunks are emitted once the buffer is full, and any remaining IDs are
+/// flushed at the end as a partial chunk. If the client disconnects or the
+/// output channel is closed, the task exits early.
 ///
 /// # Arguments
 ///
-/// - `_worker_id`: Used for tracing and debugging.
-/// - `chunk_size`: Number of Snowflake IDs to generate.
-/// - `chunk_tx`: Output channel for sending serialized chunks to the response
-///   stream.
-/// - `cancelled`: Shared cancellation token (triggered by stream termination).
-/// - `generator`: Local Snowflake ID generator unique to the worker.
+/// - `_worker_id`: Identifier for this worker, used in logs and tracing.
+/// - `chunk_buf`: Preallocated buffer to hold packed ID bytes.
+/// - `buff_pos`: Tracks the write position within `chunk_buf`.
+/// - `chunk_bytes`: Maximum number of bytes per response chunk.
+/// - `chunk_size`: Total number of IDs to generate.
+/// - `chunk_tx`: Channel used to send completed chunks back to the gRPC stream.
+/// - `generator`: Local Snowflake ID generator owned by the worker.
 ///
 /// # Behavior
 ///
-/// - Aborts early if the cancellation token is triggered or the output channel
-///   is closed.
-/// - Emits zero or more [`IdUnitResponseChunk`]s, depending on how many IDs
-///   were successfully generated.
-/// - Propagates [`Error::IdGeneration`] to the client on failure.
+/// - Generates exactly `chunk_size` IDs unless cancelled early.
+/// - Batches IDs into fixed-size chunks and sends them through `chunk_tx`.
+/// - On error, sends a single [`Error::IdGeneration`] response and exits.
+/// - Uses cooperative yielding (`yield_now`) when generation is pending.
 pub async fn handle_stream_request(
     _worker_id: usize,
     chunk_buf: &mut [u8],
     buff_pos: &mut usize,
     chunk_bytes: usize,
     chunk_size: usize,
-    chunk_tx: mpsc::Sender<Result<IdUnitResponseChunk, Status>>,
+    chunk_tx: mpsc::Sender<Result<IdChunk, Status>>,
     generator: &mut Generator,
 ) {
     let mut generated = 0;
@@ -47,24 +46,23 @@ pub async fn handle_stream_request(
             Ok(IdGenStatus::Ready { id }) => {
                 generated += 1;
 
+                // Write the ID as little-endian bytes into the buffer.
                 let id_bytes = id.to_raw().to_le_bytes();
                 chunk_buf[*buff_pos..*buff_pos + SNOWFLAKE_ID_SIZE].copy_from_slice(&id_bytes);
                 *buff_pos += SNOWFLAKE_ID_SIZE;
 
+                // If the buffer is full, send it as a chunk.
                 if *buff_pos == chunk_bytes {
                     if chunk_tx.is_closed() {
                         #[cfg(feature = "tracing")]
-                        tracing::debug!("Worker {} stopping before chunk send", _worker_id);
+                        tracing::debug!("Worker {_worker_id} exiting before chunk send");
                         return;
                     }
 
                     let bytes = bytes::Bytes::copy_from_slice(&chunk_buf);
-                    if let Err(_e) = chunk_tx
-                        .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
-                        .await
-                    {
+                    if let Err(_e) = chunk_tx.send(Ok(IdChunk { packed_ids: bytes })).await {
                         #[cfg(feature = "tracing")]
-                        tracing::debug!("Worker {} failed to send chunk: {}", _worker_id, _e);
+                        tracing::debug!("Worker {_worker_id} failed to send chunk: {_e}");
                         return;
                     }
 
@@ -72,22 +70,19 @@ pub async fn handle_stream_request(
                 }
             }
             Ok(IdGenStatus::Pending { .. }) => {
-                // Tokio's timer granularity is 1ms, but `yield_now` requeues
-                // the task allowing others to proceed. By the time we're polled
-                // again, enough time has typically passed for progress to
-                // resume.
+                // Yield to the scheduler to avoid busy looping.
                 tokio::task::yield_now().await;
             }
             Err(e) => {
                 if chunk_tx.is_closed() {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {} stopping after ID generation error", _worker_id);
+                    tracing::debug!("Worker {_worker_id} exiting after generation error");
                     return;
                 }
 
                 if let Err(_e) = chunk_tx.send(Err(Error::IdGeneration(e).into())).await {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {} failed to send error: {}", _worker_id, _e);
+                    tracing::debug!("Worker {_worker_id} failed to send error: {_e}");
                 }
 
                 return;
@@ -95,16 +90,13 @@ pub async fn handle_stream_request(
         }
     }
 
-    // Send final partial chunk if buffer is non-empty
+    // Flush final partial chunk if anything remains in the buffer.
     if *buff_pos > 0 && !chunk_tx.is_closed() {
         let bytes = bytes::Bytes::copy_from_slice(&chunk_buf[..*buff_pos]);
         *buff_pos = 0;
-        if let Err(_e) = chunk_tx
-            .send(Ok(IdUnitResponseChunk { packed_ids: bytes }))
-            .await
-        {
+        if let Err(_e) = chunk_tx.send(Ok(IdChunk { packed_ids: bytes })).await {
             #[cfg(feature = "tracing")]
-            tracing::debug!("Worker {} failed to send final chunk: {}", _worker_id, _e);
+            tracing::debug!("Worker {_worker_id} failed to send final chunk: {_e}");
         }
     }
 }
