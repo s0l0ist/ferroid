@@ -5,7 +5,7 @@
 //! [`ferroid`].
 //!
 //! This server is optimized for latency-sensitive and high-throughput
-//! workloads-such as distributed queues, event ingestion pipelines, or scalable
+//! workloads - such as distributed queues, event ingestion pipelines, or scalable
 //! database key generation-where time-ordered, collision-free IDs are critical.
 //!
 //! ## Features
