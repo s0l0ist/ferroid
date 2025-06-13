@@ -10,7 +10,7 @@
 //! locking.
 
 use crate::server::streaming::request::WorkRequest;
-use ferroid_tonic_core::common::Error;
+use ferroid_tonic_core::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;

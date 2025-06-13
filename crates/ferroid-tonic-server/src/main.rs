@@ -27,7 +27,7 @@
 //! cargo run --release
 //! ```
 //!
-//! The server listens on `127.0.0.1:50051` by default. You can override the
+//! The server listens on `0.0.0.0:50051` by default. You can override the
 //! address via CLI or environment variables (see `--help`).
 //!
 //! ## Example: List Services via Reflection
@@ -55,21 +55,11 @@
 //!
 //! - ID size (e.g., `u64`, `u128`) must be inferred by the client
 //! - IDs are packed in little-endian binary format (see `IdChunk.packed_ids`)
-//!
-//! ## Crate Structure
-//!
-//! - [`config`] – CLI and runtime configuration
-//! - [`service`] – gRPC handlers and request coordination
-//! - [`pool`] – Worker pool and scheduling logic
-//! - [`streaming`] – Chunk dispatch and cancellation-aware delivery
-//! - [`telemetry`] – Tracing, metrics, and OpenTelemetry integrations
 
 mod server;
 
 use clap::Parser;
-use ferroid_tonic_core::common::ferroid::{
-    FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer,
-};
+use ferroid_tonic_core::proto::{FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer};
 use futures::Stream;
 use server::config::{CliArgs, ServerConfig};
 use server::service::handler::IdService;

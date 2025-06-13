@@ -19,7 +19,7 @@ pub mod types;
 
 pub use error::{Error, Result};
 
-pub mod ferroid {
+pub mod proto {
     tonic::include_proto!("ferroid");
     pub const FILE_DESCRIPTOR_SET: &[u8] =
         tonic::include_file_descriptor_set!("ferroid_descriptor");

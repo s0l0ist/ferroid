@@ -25,9 +25,9 @@ use crate::{
 };
 use core::pin::Pin;
 use ferroid::Snowflake;
-use ferroid_tonic_core::common::{
+use ferroid_tonic_core::{
     Error,
-    ferroid::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
+    proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
     types::{SNOWFLAKE_ID_SIZE, SnowflakeId},
 };
 use futures::TryStreamExt;

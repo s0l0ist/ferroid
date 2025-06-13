@@ -1,4 +1,4 @@
-use ferroid_tonic_core::common::ferroid::IdChunk;
+use ferroid_tonic_core::proto::IdChunk;
 use tokio::sync::{mpsc, oneshot};
 use tonic::Status;
 
