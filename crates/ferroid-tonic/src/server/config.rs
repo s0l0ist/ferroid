@@ -47,7 +47,7 @@ pub struct CliArgs {
     /// machine ID field in the Snowflake format.
     ///
     /// Environment variable: `NUM_WORKERS`
-    #[arg(long, env = "NUM_WORKERS", default_value_t = 128)]
+    #[arg(long, env = "NUM_WORKERS", default_value_t = 1)]
     pub num_workers: usize,
 
     /// Number of Snowflake IDs included in each response chunk.
@@ -102,6 +102,10 @@ impl TryFrom<CliArgs> for ServerConfig {
 
     fn try_from(args: CliArgs) -> Result<Self, Self::Error> {
         let max_machine_id = SnowflakeId::max_machine_id() as usize + 1;
+
+        if args.num_workers == 0 {
+            bail!("NUM_WORKERS must be greater than 0");
+        }
 
         if args.num_workers > max_machine_id {
             bail!(

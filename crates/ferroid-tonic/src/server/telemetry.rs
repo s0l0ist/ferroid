@@ -32,7 +32,7 @@ use opentelemetry_sdk::metrics::Temporality;
 #[cfg(feature = "metrics")]
 use std::sync::OnceLock;
 
-// Both
+// Either
 #[cfg(any(feature = "metrics", feature = "tracing"))]
 use opentelemetry::{InstrumentationScope, KeyValue};
 #[cfg(any(feature = "metrics", feature = "tracing"))]
