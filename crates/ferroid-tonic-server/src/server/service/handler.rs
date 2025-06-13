@@ -12,23 +12,22 @@
 //! - Dispatch ID generation tasks across workers via [`feed_chunks`].
 //! - Handle backpressure, cancellation, and graceful shutdown.
 
-use crate::{
-    server::config::ServerConfig,
-    server::pool::{manager::WorkerPool, worker::worker_loop},
-    server::service::config::{Clock, Generator},
-    server::streaming::coordinator::feed_chunks,
-    server::telemetry::{
+use crate::server::{
+    config::ServerConfig,
+    pool::{manager::WorkerPool, worker::worker_loop},
+    streaming::coordinator::feed_chunks,
+    telemetry::{
         decrement_streams_inflight, increment_ids_generated, increment_requests,
         increment_stream_errors, increment_streams_inflight, record_ids_per_request,
         record_stream_duration,
     },
 };
 use core::pin::Pin;
-use ferroid::Snowflake;
 use ferroid_tonic_core::{
     Error,
+    ferroid::Snowflake,
     proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
-    types::{SNOWFLAKE_ID_SIZE, SnowflakeId},
+    types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
 };
 use futures::TryStreamExt;
 use std::sync::Arc;
@@ -65,7 +64,7 @@ impl IdService {
     /// pressure.
     pub fn new(config: ServerConfig) -> Self {
         let mut workers = Vec::with_capacity(config.num_workers);
-        let clock = Clock::default();
+        let clock = Clock::with_epoch(EPOCH);
         let shutdown_token = CancellationToken::new();
 
         for worker_id in 0..config.num_workers {

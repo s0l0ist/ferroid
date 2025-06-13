@@ -132,8 +132,9 @@ pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
         .build();
 
     // Always subscribe to standard tracing logs printed to the console via
-    // `tracing_subscriber::fmt`. This is unrelated to the `opentelemetry_stdout`
-    // exporter - it logs spans/events as human-readable output.
+    // `tracing_subscriber::fmt`. This is unrelated to the
+    // `opentelemetry_stdout` exporter - it logs spans/events as human-readable
+    // output.
     let registry = tracing_subscriber::registry()
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()))
         .with(
@@ -218,7 +219,7 @@ fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
         use opentelemetry_stdout::MetricExporter;
         let exporter = MetricExporter::default();
         let reader = opentelemetry_sdk::metrics::PeriodicReader::builder(exporter)
-            .with_interval(std::time::Duration::from_secs(5))
+            .with_interval(core::time::Duration::from_secs(5))
             .build();
 
         builder.with_reader(reader)
@@ -242,7 +243,7 @@ fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
             .with_tonic()
             .with_tls_config(ClientTlsConfig::new().with_native_roots())
             .with_metadata(metadata)
-            .with_timeout(std::time::Duration::from_secs(10))
+            .with_timeout(core::time::Duration::from_secs(10))
             .with_compression(compression)
             .with_endpoint(endpoint)
             .with_protocol(Protocol::Grpc)
@@ -267,7 +268,7 @@ fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
         let batch = sdktrace::BatchSpanProcessor::builder(exporter)
             .with_batch_config(
                 sdktrace::BatchConfigBuilder::default()
-                    .with_scheduled_delay(std::time::Duration::from_secs(5))
+                    .with_scheduled_delay(core::time::Duration::from_secs(5))
                     .with_max_queue_size(2048)
                     .build(),
             )
@@ -293,7 +294,7 @@ fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
             .with_tonic()
             .with_tls_config(ClientTlsConfig::new().with_native_roots())
             .with_metadata(metadata)
-            .with_timeout(std::time::Duration::from_secs(10))
+            .with_timeout(core::time::Duration::from_secs(10))
             .with_compression(compression)
             .with_endpoint(endpoint)
             .with_protocol(Protocol::Grpc)
@@ -303,7 +304,7 @@ fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
         let batch = sdktrace::BatchSpanProcessor::builder(exporter)
             .with_batch_config(
                 sdktrace::BatchConfigBuilder::default()
-                    .with_scheduled_delay(std::time::Duration::from_secs(5))
+                    .with_scheduled_delay(core::time::Duration::from_secs(5))
                     .with_max_queue_size(2048)
                     .build(),
             )

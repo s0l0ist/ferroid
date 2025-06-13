@@ -20,7 +20,6 @@ anyhow = { workspace = true, features = ["std"] }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env", "color", "error-context", "help", "std", "suggestions", "usage"] }
 dotenvy = { workspace = true }
-ferroid = { version = "0.3.7", path = "../ferroid" }
 ferroid-tonic-core = { version = "0.3.7", path = "../ferroid-tonic-core" }
 futures = { workspace = true }
 mimalloc = { workspace = true }

@@ -627,7 +627,6 @@ dependencies = [
  "clap",
  "criterion",
  "dotenvy",
- "ferroid",
  "ferroid-tonic-core",
  "futures",
  "mimalloc",

@@ -7,8 +7,6 @@
 //!
 //! ## Structure
 //!
-//! - [`config`] - Compile-time tuning parameters and generator type aliases.
 //! - [`handler`] - gRPC service entry point (`IdService`).
 
-pub mod config;
 pub mod handler;
