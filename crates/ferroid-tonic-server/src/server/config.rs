@@ -2,7 +2,7 @@ use anyhow::bail;
 use clap::Parser;
 use ferroid_tonic_core::types::{SNOWFLAKE_ID_SIZE, SnowflakeId};
 
-/// Runtime configuration for the `id-server` binary.
+/// Runtime configuration for the `ferroid-tonic-server` binary.
 ///
 /// These settings control the concurrency, buffering, and chunking behavior of
 /// the Snowflake ID generation service. All values are parsed from CLI
@@ -52,11 +52,11 @@ pub struct CliArgs {
 
     /// Number of Snowflake IDs included in each response chunk.
     ///
-    /// Defines the size of each `IdChunk`. Ideally, this aligns
-    /// with the maximum sequence value of the Snowflake ID type. The default
-    /// assumes a 12-bit sequence. While the gRPC protocol does impose message
-    /// size limits, these are only a concern when using IDs with high sequence
-    /// bit allocations.
+    /// Defines the size of each `IdChunk`. Ideally, this aligns with the
+    /// maximum sequence value of the Snowflake ID type. The default assumes a
+    /// 12-bit sequence. While the gRPC protocol does impose message size
+    /// limits, these are only a concern when using IDs with high sequence bit
+    /// allocations.
     ///
     /// Environment variable: `IDS_PER_CHUNK`
     #[arg(long, env = "IDS_PER_CHUNK", default_value_t = 4096)]
@@ -72,7 +72,8 @@ pub struct CliArgs {
     #[arg(long, env = "STREAM_BUFFER_SIZE", default_value_t = 8)]
     pub stream_buffer_size: usize,
 
-    /// Address to listen on (TCP or Unix socket path; use --uds for Unix socket).
+    /// Address to listen on (TCP or Unix socket path; use --uds for Unix
+    /// socket).
     ///
     /// Example: "0.0.0.0:50051" or "/tmp/tonic-uds.sock"
     ///
@@ -80,7 +81,8 @@ pub struct CliArgs {
     #[arg(long, env = "SERVER_ADDR", default_value_t = String::from("0.0.0.0:50051"))]
     pub server_addr: String,
 
-    /// Listen on a Unix socket instead of TCP. If set, `SERVER_ADDR` must be a file path.
+    /// Listen on a Unix socket instead of TCP. If set, `SERVER_ADDR` must be a
+    /// file path.
     #[arg(short, long, default_value_t = false)]
     pub uds: bool,
 }
