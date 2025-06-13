@@ -24,9 +24,9 @@ use tokio::sync::mpsc;
 ///
 /// # Request Types
 ///
-/// - [`WorkRequest::Stream`] — Triggers a chunked ID generation request via
+/// - [`WorkRequest::Stream`] - Triggers a chunked ID generation request via
 ///   [`handle_stream_request`].
-/// - [`WorkRequest::Shutdown`] — Signals the worker to stop and acknowledge
+/// - [`WorkRequest::Shutdown`] - Signals the worker to stop and acknowledge
 ///   shutdown.
 pub async fn worker_loop(
     worker_id: usize,

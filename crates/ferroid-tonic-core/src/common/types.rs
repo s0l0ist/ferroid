@@ -12,14 +12,14 @@
 //!
 //! ## Type Aliases
 //!
-//! - [`SnowflakeId`] — The canonical Snowflake ID implementation used
+//! - [`SnowflakeId`] - The canonical Snowflake ID implementation used
 //!   (currently [`SnowflakeTwitterId`]).
-//! - [`SnowflakeIdTy`] — The primitive integer type backing the ID (typically
+//! - [`SnowflakeIdTy`] - The primitive integer type backing the ID (typically
 //!   `u64`).
 //!
 //! ## Constants
 //!
-//! - [`SNOWFLAKE_ID_SIZE`] — The fixed number of bytes needed to encode one ID
+//! - [`SNOWFLAKE_ID_SIZE`] - The fixed number of bytes needed to encode one ID
 //!   in little-endian format.
 
 use ferroid::{Snowflake, SnowflakeTwitterId};
