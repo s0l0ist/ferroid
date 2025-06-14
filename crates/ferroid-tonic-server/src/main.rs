@@ -111,7 +111,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 async fn main() -> anyhow::Result<()> {
     // Load from .env
     let _ = dotenvy::dotenv();
-    let args = CliArgs::try_parse()?;
+    let args = CliArgs::parse();
     let config = ServerConfig::try_from(args)?;
 
     let providers = init_telemetry()?;
