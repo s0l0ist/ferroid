@@ -54,8 +54,8 @@ pub struct CliArgs {
     /// In distributed deployments, prefer using multiple nodes with fewer
     /// workers each, and assign each node a distinct `shard_offset`. This
     /// ensures a globally unique machine ID space across your cluster while
-    /// balancing performance (more workers per node) with availability and
-    /// scalability (more nodes, fewer workers).
+    /// balancing performance (more workers per node) with availability (more
+    /// nodes, fewer workers).
     ///
     /// The total number of distinct machine IDs (shard_offset + num_workers)
     /// across all nodes must not exceed the machine ID bit width defined by
