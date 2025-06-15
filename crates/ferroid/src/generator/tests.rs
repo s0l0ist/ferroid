@@ -1,9 +1,11 @@
 use crate::{
-    IdGenStatus, MonotonicClock, Snowflake, SnowflakeTwitterId, TimeSource, ToU64,
+    BasicFluidGenerator, Fluid, FluidGenerator, IdGenStatus, MonotonicClock, RandSource, Snowflake,
+    SnowflakeTwitterId, TimeSource, ToU64, Ulid,
     generator::{
         AtomicSnowflakeGenerator, BasicSnowflakeGenerator, LockSnowflakeGenerator,
         SnowflakeGenerator,
     },
+    random_native::ThreadRandom,
 };
 use core::{cell::Cell, fmt, hash::Hash};
 use std::collections::HashSet;
@@ -18,6 +20,42 @@ struct MockTime {
 impl TimeSource<u64> for MockTime {
     fn current_millis(&self) -> u64 {
         self.millis
+    }
+}
+
+impl TimeSource<u128> for MockTime {
+    fn current_millis(&self) -> u128 {
+        self.millis as u128
+    }
+}
+
+// Mock RNG for deterministic testing
+struct MockRng {
+    value: u128,
+}
+
+impl RandSource<u128> for MockRng {
+    fn rand(&mut self) -> u128 {
+        self.value
+    }
+}
+
+// Counter RNG that increments each time
+struct CounterRng {
+    counter: u128,
+}
+
+impl CounterRng {
+    fn new() -> Self {
+        Self { counter: 0 }
+    }
+}
+
+impl RandSource<u128> for CounterRng {
+    fn rand(&mut self) -> u128 {
+        let val = self.counter;
+        self.counter += 1;
+        val
     }
 }
 
@@ -335,5 +373,232 @@ where
             IdGenStatus::Ready { id } => panic!("unexpected ready ({})", id),
             IdGenStatus::Pending { yield_for } => yield_for,
         }
+    }
+}
+
+fn run_fluid_ids_have_correct_timestamp<G, ID, T, R>(mut generator: G, expected_timestamp: ID::Ty)
+where
+    G: FluidGenerator<ID, T, R>,
+    ID: Fluid + fmt::Debug,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    let id1 = generator.next_id();
+    let id2 = generator.next_id();
+    let id3 = generator.next_id();
+
+    assert_eq!(id1.timestamp(), expected_timestamp);
+    assert_eq!(id2.timestamp(), expected_timestamp);
+    assert_eq!(id3.timestamp(), expected_timestamp);
+}
+
+fn run_fluid_ids_have_different_random_components<G, ID, T, R>(mut generator: G)
+where
+    G: FluidGenerator<ID, T, R>,
+    ID: Fluid + fmt::Debug + PartialEq,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    let id1 = generator.next_id();
+    let id2 = generator.next_id();
+    let id3 = generator.next_id();
+
+    // With a counter RNG, random components should be different
+    assert_ne!(id1.randomness(), id2.randomness());
+    assert_ne!(id2.randomness(), id3.randomness());
+    assert_ne!(id1.randomness(), id3.randomness());
+
+    // But timestamps should be the same (using fixed time)
+    assert_eq!(id1.timestamp(), id2.timestamp());
+    assert_eq!(id2.timestamp(), id3.timestamp());
+}
+
+fn run_fluid_try_next_id_never_fails<G, ID, T, R>(mut generator: G)
+where
+    G: FluidGenerator<ID, T, R>,
+    ID: Fluid + fmt::Debug,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    // Generate many IDs - should never fail
+    for _ in 0..1000 {
+        let result = generator.try_next_id();
+        assert!(
+            result.is_ok(),
+            "try_next_id should never fail for Fluid generators"
+        );
+    }
+}
+
+fn run_fluid_ids_are_unique_with_real_rng<G, ID, T, R>(mut generator: G)
+where
+    G: FluidGenerator<ID, T, R>,
+    ID: Fluid + fmt::Debug + Clone + std::hash::Hash + Eq,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    let mut seen = HashSet::new();
+    const NUM_IDS: usize = 10000;
+
+    for _ in 0..NUM_IDS {
+        let id = generator.next_id();
+        assert!(seen.insert(id.clone()), "Generated duplicate ID: {:?}", id);
+    }
+
+    assert_eq!(seen.len(), NUM_IDS);
+}
+
+fn run_fluid_ids_are_time_ordered<G, ID, T, R>(mut generator: G)
+where
+    G: FluidGenerator<ID, T, R>,
+    ID: Fluid + fmt::Debug,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    let mut last_timestamp = None;
+
+    for _ in 0..100 {
+        let id = generator.next_id();
+        let timestamp = id.timestamp();
+
+        if let Some(last_ts) = last_timestamp {
+            // Timestamps should be monotonically non-decreasing
+            assert!(
+                timestamp >= last_ts,
+                "Timestamp went backwards: {} < {}",
+                timestamp,
+                last_ts
+            );
+        }
+
+        last_timestamp = Some(timestamp);
+
+        // Small delay to ensure time advances
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
+fn run_fluid_generator_is_fast<G, ID, T, R>(mut generator: G)
+where
+    G: FluidGenerator<ID, T, R>,
+    ID: Fluid + fmt::Debug,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    const NUM_IDS: usize = 100_000;
+    let start = std::time::Instant::now();
+
+    for _ in 0..NUM_IDS {
+        let _ = generator.next_id();
+    }
+
+    let elapsed = start.elapsed();
+    let ids_per_sec = NUM_IDS as f64 / elapsed.as_secs_f64();
+
+    // Should be able to generate at least 1M IDs per second
+    assert!(
+        ids_per_sec > 1_000_000.0,
+        "Generator too slow: {:.0} IDs/sec",
+        ids_per_sec
+    );
+}
+
+#[test]
+fn basic_fluid_generator_timestamp_test() {
+    let mock_time = MockTime { millis: 1234567890 };
+    let mock_rng = MockRng { value: 42 };
+    let generator: BasicFluidGenerator<Ulid, _, _> = BasicFluidGenerator::new(mock_time, mock_rng);
+
+    run_fluid_ids_have_correct_timestamp(generator, 1234567890);
+}
+
+#[test]
+fn basic_fluid_generator_random_component_test() {
+    let mock_time = MockTime { millis: 42 };
+    let counter_rng = CounterRng::new();
+    let generator: BasicFluidGenerator<Ulid, _, _> =
+        BasicFluidGenerator::new(mock_time, counter_rng);
+
+    run_fluid_ids_have_different_random_components(generator);
+}
+
+#[test]
+fn basic_fluid_generator_try_next_id_test() {
+    let mock_time = MockTime { millis: 42 };
+    let mock_rng = MockRng { value: 123 };
+    let generator: BasicFluidGenerator<Ulid, _, _> = BasicFluidGenerator::new(mock_time, mock_rng);
+
+    run_fluid_try_next_id_never_fails(generator);
+}
+
+#[test]
+fn basic_fluid_generator_uniqueness_test() {
+    let clock = MonotonicClock::default();
+    let rng = ThreadRandom::default();
+    let generator: BasicFluidGenerator<Ulid, _, _> = BasicFluidGenerator::new(clock, rng);
+
+    run_fluid_ids_are_unique_with_real_rng(generator);
+}
+
+#[test]
+fn basic_fluid_generator_time_ordering_test() {
+    let clock = MonotonicClock::default();
+    let rng = ThreadRandom::default();
+    let generator: BasicFluidGenerator<Ulid, _, _> = BasicFluidGenerator::new(clock, rng);
+
+    run_fluid_ids_are_time_ordered(generator);
+}
+
+#[test]
+fn basic_fluid_generator_performance_test() {
+    let clock = MonotonicClock::default();
+    let rng = ThreadRandom::default();
+    let generator: BasicFluidGenerator<Ulid, _, _> = BasicFluidGenerator::new(clock, rng);
+
+    run_fluid_generator_is_fast(generator);
+}
+
+#[test]
+fn basic_fluid_generator_components_test() {
+    let mock_time = MockTime {
+        millis: 0x123456789ABC,
+    };
+    let mock_rng = MockRng {
+        value: 0xDEF012345678,
+    };
+    let mut generator: BasicFluidGenerator<Ulid, _, _> =
+        BasicFluidGenerator::new(mock_time, mock_rng);
+
+    let id = generator.next_id();
+
+    // Verify the ID was constructed correctly from components
+    assert_eq!(id.timestamp(), 0x123456789ABC);
+    assert_eq!(id.randomness(), 0xDEF012345678);
+
+    // Verify we can reconstruct the ID from its components
+    let reconstructed = Ulid::from_components(id.timestamp(), id.randomness());
+    assert_eq!(id, reconstructed);
+}
+
+#[test]
+fn basic_fluid_generator_deterministic_test() {
+    // Two generators with identical time and RNG should produce identical sequences
+    let mock_time1 = MockTime { millis: 42 };
+    let mock_rng1 = CounterRng::new();
+    let mut generator1: BasicFluidGenerator<Ulid, _, _> =
+        BasicFluidGenerator::new(mock_time1, mock_rng1);
+
+    let mock_time2 = MockTime { millis: 42 };
+    let mock_rng2 = CounterRng::new();
+    let mut generator2: BasicFluidGenerator<Ulid, _, _> =
+        BasicFluidGenerator::new(mock_time2, mock_rng2);
+
+    for _ in 0..10 {
+        let id1 = generator1.next_id();
+        let id2 = generator2.next_id();
+        assert_eq!(
+            id1, id2,
+            "Generators with identical inputs should produce identical outputs"
+        );
     }
 }

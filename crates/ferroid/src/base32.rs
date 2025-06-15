@@ -1,4 +1,4 @@
-use crate::{Error, Result, Snowflake};
+use crate::{Error, Fluid, Result, Snowflake};
 use base32::{Alphabet, decode, encode};
 use core::convert::TryInto;
 
@@ -75,6 +75,29 @@ where
 impl<ID> SnowflakeBase32Ext for ID
 where
     ID: Snowflake,
+    ID::Ty: BeBytes,
+{
+}
+
+pub trait FluidBase32Ext: Fluid
+where
+    Self::Ty: BeBytes,
+{
+    fn encode(&self) -> String {
+        let bytes = self.to_raw().to_be_bytes();
+        encode(Alphabet::Crockford, bytes.as_ref())
+    }
+
+    fn decode(s: &str) -> Result<Self> {
+        let bytes = decode(Alphabet::Crockford, s).ok_or(Error::DecodeNonAsciiValue)?;
+        let raw = Self::Ty::from_be_bytes(&bytes).ok_or(Error::DecodeInvalidLen)?;
+        Ok(Self::from_raw(raw))
+    }
+}
+
+impl<ID> FluidBase32Ext for ID
+where
+    ID: Fluid,
     ID::Ty: BeBytes,
 {
 }

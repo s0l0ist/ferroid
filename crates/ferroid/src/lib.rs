@@ -6,6 +6,8 @@ mod futures;
 mod generator;
 mod id;
 mod mono_clock_native;
+mod rand;
+mod random_native;
 mod runtime;
 mod status;
 mod time;
@@ -18,6 +20,7 @@ pub use crate::futures::*;
 pub use crate::generator::*;
 pub use crate::id::*;
 pub use crate::mono_clock_native::*;
+pub use crate::rand::*;
 #[cfg(any(feature = "async-tokio", feature = "async-smol"))]
 pub use crate::runtime::*;
 pub use crate::status::*;

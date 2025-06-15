@@ -1,4 +1,7 @@
-use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{
+    Fluid, FluidGenerator, IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource,
+    rand::RandSource,
+};
 use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -219,5 +222,78 @@ where
 
     fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
         self.try_next_id()
+    }
+}
+
+/// A non-concurrent Fluid ID generator suitable for single-threaded
+/// environments.
+///
+/// This generator is lightweight and fast, but **not thread-safe**. It combines
+/// timestamps with random values to create probabilistically unique IDs without
+/// requiring sequence coordination.
+///
+/// ## Features
+///
+/// - ❌ Not thread-safe
+/// - ✅ Probabilistically unique (no coordination required)
+/// - ✅ Time-ordered with microsecond precision
+/// - ✅ Suitable for distributed systems
+/// - ✅ No sequence exhaustion issues
+///
+/// ## Recommended When
+/// - You're in a single-threaded environment (no shared access)
+/// - You want probabilistic uniqueness without coordination overhead
+/// - You need time-ordered IDs across distributed nodes
+/// - You want to avoid sequence exhaustion scenarios
+///
+/// ## Trade-offs
+/// - **Uniqueness**: Probabilistic (collision chance ≈ 1 in 2^random_bits)
+/// - **Performance**: Very fast (no sequence management)
+/// - **Ordering**: Time-ordered, but not strictly sequential
+/// - **Coordination**: None required between generators
+pub struct BasicFluidGenerator<ID, T, R>
+where
+    ID: Fluid,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    clock: T,
+    rng: R,
+    _id: core::marker::PhantomData<ID>,
+}
+
+impl<ID, T, R> BasicFluidGenerator<ID, T, R>
+where
+    ID: Fluid,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    pub fn new(clock: T, rng: R) -> Self {
+        Self {
+            clock,
+            rng,
+            _id: core::marker::PhantomData,
+        }
+    }
+}
+
+impl<ID, T, R> FluidGenerator<ID, T, R> for BasicFluidGenerator<ID, T, R>
+where
+    ID: Fluid,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    fn new(clock: T, rng: R) -> Self {
+        Self::new(clock, rng)
+    }
+
+    fn next_id(&mut self) -> ID {
+        let ts = self.clock.current_millis();
+        let rand = self.rng.rand();
+        ID::from_components(ts, rand)
+    }
+
+    fn try_next_id(&mut self) -> Result<ID> {
+        Ok(self.next_id())
     }
 }
