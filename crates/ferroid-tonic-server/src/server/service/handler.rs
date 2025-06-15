@@ -205,17 +205,13 @@ impl IdGenerator for IdService {
         let config = self.config.clone();
 
         let fut = async move {
-            match feed_chunks(total_ids, worker_pool, resp_tx, config).await {
-                Ok(_) => {
-                    decrement_streams_inflight(); // global
-                    decrement_streams_inflight_metric();
-                    record_stream_duration_metric(start.elapsed().as_millis() as f64);
-                }
-                Err(_e) => {
-                    #[cfg(feature = "tracing")]
-                    tracing::warn!("Error: {}", _e);
-                }
+            if let Err(_e) = feed_chunks(total_ids, worker_pool, resp_tx, config).await {
+                #[cfg(feature = "tracing")]
+                tracing::warn!("Error: {}", _e);
             }
+            decrement_streams_inflight(); // global
+            decrement_streams_inflight_metric();
+            record_stream_duration_metric(start.elapsed().as_millis() as f64);
         };
         #[cfg(feature = "tracing")]
         let fut = {

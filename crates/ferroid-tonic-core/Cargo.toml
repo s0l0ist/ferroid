@@ -12,7 +12,7 @@ keywords.workspace = true
 publish = true
 
 [dependencies]
-ferroid = { version = "0.3.10", path = "../ferroid" }
+ferroid = { version = "0.3.11", path = "../ferroid" }
 prost = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tonic = { workspace = true, features = ["prost", "codegen"] }
