@@ -56,12 +56,10 @@ static STREAMS_INFLIGHT: AtomicU64 = AtomicU64::new(0);
 pub fn increment_streams_inflight() {
     STREAMS_INFLIGHT.fetch_add(1, Ordering::Relaxed);
 }
-
 pub fn decrement_streams_inflight() {
     STREAMS_INFLIGHT.fetch_sub(1, Ordering::Relaxed);
 }
-
-pub fn get_streams() -> u64 {
+pub fn get_streams_inflight() -> u64 {
     STREAMS_INFLIGHT.load(Ordering::Relaxed)
 }
 

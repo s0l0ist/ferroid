@@ -10,7 +10,7 @@
 //! locking.
 
 use crate::server::{
-    service::handler::{get_streams, set_global_shutdown},
+    service::handler::{get_streams_inflight, set_global_shutdown},
     streaming::request::WorkRequest,
 };
 use core::time::Duration;
@@ -94,9 +94,12 @@ impl WorkerPool {
 
         // === Phase 1: Wait for in-flight streams to drain (up to 3s) ===
         #[cfg(feature = "tracing")]
-        tracing::info!("Draining in-flight streams ({} active)", get_streams());
+        tracing::info!(
+            "Draining in-flight streams ({} active)",
+            get_streams_inflight()
+        );
         let drain_result = timeout(Duration::from_secs(self.shutdown_timeout as u64), async {
-            while get_streams() > 0 {
+            while get_streams_inflight() > 0 {
                 sleep(Duration::from_millis(100)).await;
             }
         })
@@ -111,7 +114,7 @@ impl WorkerPool {
                 #[cfg(feature = "tracing")]
                 tracing::warn!(
                     "Graceful drain timed out ({} streams still active)",
-                    get_streams()
+                    get_streams_inflight()
                 );
             }
         }
