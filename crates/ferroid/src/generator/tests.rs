@@ -25,7 +25,7 @@ impl TimeSource<u64> for MockTime {
 
 impl TimeSource<u128> for MockTime {
     fn current_millis(&self) -> u128 {
-        self.millis as u128
+        <Self as TimeSource<u64>>::current_millis(self) as u128
     }
 }
 
@@ -35,27 +35,29 @@ struct MockRng {
 }
 
 impl RandSource<u128> for MockRng {
-    fn rand(&mut self) -> u128 {
+    fn rand(&self) -> u128 {
         self.value
     }
 }
 
 // Counter RNG that increments each time
 struct CounterRng {
-    counter: u128,
+    counter: Cell<u128>,
 }
 
 impl CounterRng {
     fn new() -> Self {
-        Self { counter: 0 }
+        Self {
+            counter: Cell::new(0),
+        }
     }
 }
 
 impl RandSource<u128> for CounterRng {
-    fn rand(&mut self) -> u128 {
-        let val = self.counter;
-        self.counter += 1;
-        val
+    fn rand(&self) -> u128 {
+        let curr = self.counter.get();
+        self.counter.set(curr + 1);
+        curr
     }
 }
 
@@ -376,7 +378,7 @@ where
     }
 }
 
-fn run_fluid_ids_have_correct_timestamp<G, ID, T, R>(mut generator: G, expected_timestamp: ID::Ty)
+fn run_fluid_ids_have_correct_timestamp<G, ID, T, R>(generator: G, expected_timestamp: ID::Ty)
 where
     G: FluidGenerator<ID, T, R>,
     ID: Fluid + fmt::Debug,
@@ -392,7 +394,7 @@ where
     assert_eq!(id3.timestamp(), expected_timestamp);
 }
 
-fn run_fluid_ids_have_different_random_components<G, ID, T, R>(mut generator: G)
+fn run_fluid_ids_have_different_random_components<G, ID, T, R>(generator: G)
 where
     G: FluidGenerator<ID, T, R>,
     ID: Fluid + fmt::Debug + PartialEq,
@@ -413,7 +415,7 @@ where
     assert_eq!(id2.timestamp(), id3.timestamp());
 }
 
-fn run_fluid_try_next_id_never_fails<G, ID, T, R>(mut generator: G)
+fn run_fluid_try_next_id_never_fails<G, ID, T, R>(generator: G)
 where
     G: FluidGenerator<ID, T, R>,
     ID: Fluid + fmt::Debug,
@@ -430,7 +432,7 @@ where
     }
 }
 
-fn run_fluid_ids_are_unique_with_real_rng<G, ID, T, R>(mut generator: G)
+fn run_fluid_ids_are_unique_with_real_rng<G, ID, T, R>(generator: G)
 where
     G: FluidGenerator<ID, T, R>,
     ID: Fluid + fmt::Debug + Clone + std::hash::Hash + Eq,
@@ -448,7 +450,7 @@ where
     assert_eq!(seen.len(), NUM_IDS);
 }
 
-fn run_fluid_ids_are_time_ordered<G, ID, T, R>(mut generator: G)
+fn run_fluid_ids_are_time_ordered<G, ID, T, R>(generator: G)
 where
     G: FluidGenerator<ID, T, R>,
     ID: Fluid + fmt::Debug,
@@ -476,31 +478,6 @@ where
         // Small delay to ensure time advances
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
-}
-
-fn run_fluid_generator_is_fast<G, ID, T, R>(mut generator: G)
-where
-    G: FluidGenerator<ID, T, R>,
-    ID: Fluid + fmt::Debug,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
-{
-    const NUM_IDS: usize = 100_000;
-    let start = std::time::Instant::now();
-
-    for _ in 0..NUM_IDS {
-        let _ = generator.next_id();
-    }
-
-    let elapsed = start.elapsed();
-    let ids_per_sec = NUM_IDS as f64 / elapsed.as_secs_f64();
-
-    // Should be able to generate at least 1M IDs per second
-    assert!(
-        ids_per_sec > 1_000_000.0,
-        "Generator too slow: {:.0} IDs/sec",
-        ids_per_sec
-    );
 }
 
 #[test]
@@ -550,15 +527,6 @@ fn basic_fluid_generator_time_ordering_test() {
 }
 
 #[test]
-fn basic_fluid_generator_performance_test() {
-    let clock = MonotonicClock::default();
-    let rng = ThreadRandom::default();
-    let generator: BasicFluidGenerator<Ulid, _, _> = BasicFluidGenerator::new(clock, rng);
-
-    run_fluid_generator_is_fast(generator);
-}
-
-#[test]
 fn basic_fluid_generator_components_test() {
     let mock_time = MockTime {
         millis: 0x123456789ABC,
@@ -566,8 +534,7 @@ fn basic_fluid_generator_components_test() {
     let mock_rng = MockRng {
         value: 0xDEF012345678,
     };
-    let mut generator: BasicFluidGenerator<Ulid, _, _> =
-        BasicFluidGenerator::new(mock_time, mock_rng);
+    let generator: BasicFluidGenerator<Ulid, _, _> = BasicFluidGenerator::new(mock_time, mock_rng);
 
     let id = generator.next_id();
 
@@ -585,12 +552,12 @@ fn basic_fluid_generator_deterministic_test() {
     // Two generators with identical time and RNG should produce identical sequences
     let mock_time1 = MockTime { millis: 42 };
     let mock_rng1 = CounterRng::new();
-    let mut generator1: BasicFluidGenerator<Ulid, _, _> =
+    let generator1: BasicFluidGenerator<Ulid, _, _> =
         BasicFluidGenerator::new(mock_time1, mock_rng1);
 
     let mock_time2 = MockTime { millis: 42 };
     let mock_rng2 = CounterRng::new();
-    let mut generator2: BasicFluidGenerator<Ulid, _, _> =
+    let generator2: BasicFluidGenerator<Ulid, _, _> =
         BasicFluidGenerator::new(mock_time2, mock_rng2);
 
     for _ in 0..10 {

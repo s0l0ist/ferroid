@@ -27,8 +27,8 @@ where
     fn new(clock: T, rng: R) -> Self;
 
     /// Returns the next available ID
-    fn next_id(&mut self) -> ID;
-    
+    fn next_id(&self) -> ID;
+
     /// A fallible version of [`Self::next_id`] that returns a [`Result`].
-    fn try_next_id(&mut self) -> Result<ID>;
+    fn try_next_id(&self) -> Result<ID>;
 }

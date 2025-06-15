@@ -602,7 +602,6 @@ dependencies = [
  "num_cpus",
  "pin-project-lite",
  "rand",
- "rand_core",
  "serde",
  "smol",
  "tokio",

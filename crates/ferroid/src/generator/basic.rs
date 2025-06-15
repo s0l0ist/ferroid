@@ -287,13 +287,13 @@ where
         Self::new(clock, rng)
     }
 
-    fn next_id(&mut self) -> ID {
+    fn next_id(&self) -> ID {
         let ts = self.clock.current_millis();
         let rand = self.rng.rand();
         ID::from_components(ts, rand)
     }
 
-    fn try_next_id(&mut self) -> Result<ID> {
+    fn try_next_id(&self) -> Result<ID> {
         Ok(self.next_id())
     }
 }

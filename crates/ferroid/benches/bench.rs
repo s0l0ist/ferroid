@@ -2,9 +2,10 @@ use core::hint::black_box;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
-    MonotonicClock, Result, SmolSleep, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt,
-    SnowflakeTwitterId, TimeSource, TokioSleep,
+    AtomicSnowflakeGenerator, BasicFluidGenerator, BasicSnowflakeGenerator, FluidGenerator,
+    IdGenStatus, LockSnowflakeGenerator, MonotonicClock, Result, SmolSleep, Snowflake,
+    SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource,
+    TokioSleep, Ulid,
 };
 use futures::future::try_join_all;
 use smol::Task;
@@ -409,6 +410,30 @@ pub fn bench_generator_async_smol<G, ID, T>(
     group.finish();
 }
 
+fn bench_fluid_generator(c: &mut Criterion) {
+    let mut group = c.benchmark_group("mono/sequential/thread-random");
+    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+
+    group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
+        b.iter_custom(|iters| {
+            let clock = MonotonicClock::default();
+            let rng = ThreadRandom::default();
+            let generator = BasicFluidGenerator::<Ulid, _, _>::new(clock, rng);
+            let start = Instant::now();
+            for _ in 0..iters {
+                for _ in 0..TOTAL_IDS {
+                    let id = generator.next_id();
+                    black_box(id);
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+}
+
 // --- MOCK CLOCK (fixed, non-advancing time) ---
 
 /// Single-threaded benchmark for `BasicSnowflakeGenerator` with a fixed clock.
@@ -588,27 +613,28 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
 
 criterion_group!(
     benches,
+    bench_fluid_generator,
     //Mock clock
-    benchmark_mock_sequential_basic,
-    benchmark_mock_sequential_lock,
-    benchmark_mock_sequential_atomic,
-    benchmark_mock_contended_lock,
-    benchmark_mock_contended_atomic, // yields because of CAS failures
-    // Monotonic clocks (yielding)
-    benchmark_mono_sequential_basic,
-    benchmark_mono_sequential_lock,
-    benchmark_mono_sequential_atomic,
-    benchmark_mono_threaded_lock,
-    benchmark_mono_threaded_atomic,
-    // Async single worker, single generator
-    benchmark_mono_sequential_tokio_lock,
-    benchmark_mono_sequential_tokio_atomic,
-    benchmark_mono_sequential_smol_lock,
-    benchmark_mono_sequential_smol_atomic,
-    // Async multi worker, multi generator
-    benchmark_mono_tokio_lock,
-    benchmark_mono_tokio_atomic,
-    benchmark_mono_smol_lock,
-    benchmark_mono_smol_atomic,
+    // benchmark_mock_sequential_basic,
+    // benchmark_mock_sequential_lock,
+    // benchmark_mock_sequential_atomic,
+    // benchmark_mock_contended_lock,
+    // benchmark_mock_contended_atomic, // yields because of CAS failures
+    // // Monotonic clocks (yielding)
+    // benchmark_mono_sequential_basic,
+    // benchmark_mono_sequential_lock,
+    // benchmark_mono_sequential_atomic,
+    // benchmark_mono_threaded_lock,
+    // benchmark_mono_threaded_atomic,
+    // // Async single worker, single generator
+    // benchmark_mono_sequential_tokio_lock,
+    // benchmark_mono_sequential_tokio_atomic,
+    // benchmark_mono_sequential_smol_lock,
+    // benchmark_mono_sequential_smol_atomic,
+    // // Async multi worker, multi generator
+    // benchmark_mono_tokio_lock,
+    // benchmark_mono_tokio_atomic,
+    // benchmark_mono_smol_lock,
+    // benchmark_mono_smol_atomic,
 );
 criterion_main!(benches);

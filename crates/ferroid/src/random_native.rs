@@ -1,5 +1,5 @@
 use crate::RandSource;
-use rand::{Rng, rngs::ThreadRng};
+use rand::{Rng, rng};
 
 /// A `RandSource` that uses the thread-local RNG (`rand::thread_rng()`).
 ///
@@ -8,18 +8,16 @@ use rand::{Rng, rngs::ThreadRng};
 ///
 /// Suitable for high-throughput, contention-free ID generation.
 #[derive(Default, Clone)]
-pub struct ThreadRandom {
-    rng: ThreadRng,
-}
+pub struct ThreadRandom;
 
 impl RandSource<u64> for ThreadRandom {
-    fn rand(&mut self) -> u64 {
-        self.rng.random()
+    fn rand(&self) -> u64 {
+        rng().random()
     }
 }
 
 impl RandSource<u128> for ThreadRandom {
-    fn rand(&mut self) -> u128 {
-        self.rng.random()
+    fn rand(&self) -> u128 {
+        rng().random()
     }
 }

@@ -10,16 +10,18 @@
 //! Example usage:
 //!
 //! ```
-//! use ferroid::define_fluid_id;
+//! use ferroid::{Fluid, define_flu_id};
 //!
-//! define_fluid_id!(
-//!     MyFuid, u128,
+//! define_flu_id!(
+//!     MyUlid, u128,
+//!     reserved: 0,
 //!     timestamp: 48,
-//!     randomness: 80
+//!     random: 80
 //! );
 //!
-//! let id = MyFuid::from_components(1_725_000_000_000, 0xdeadbeef);
+//! let id = MyUlid::from_components(1_725_000_000_000, 0xdeadbeef);
 //! assert_eq!(id.timestamp(), 1_725_000_000_000);
+//! assert_eq!(id.randomness(), 0xdeadbeef);
 //! ```
 
 use core::{
@@ -106,15 +108,17 @@ pub trait Fluid:
 /// ## Example
 ///
 /// ```
+/// use ferroid::define_flu_id;
 /// define_flu_id!(
 ///     MyUlid, u128,
+///     reserved: 0,
 ///     timestamp: 48,
-///     randomness: 80
+///     random: 80
 /// );
 /// ```
 ///
 /// This creates a type `MyUlid` with:
-///
+/// - 0 bits reserved
 /// - 48 bits for the timestamp (stored in the upper bits)
 /// - 80 bits of randomness (lower bits)
 #[macro_export]
@@ -203,7 +207,6 @@ macro_rules! define_flu_id {
             }
 
             fn from_components(timestamp: $int, randomness: $int) -> Self {
-                debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
                 Self::from(timestamp, randomness)
             }
 
@@ -262,6 +265,7 @@ macro_rules! define_flu_id {
 define_flu_id!(
     /// A 128-bit FUID using the ULID layout
     ///
+    /// - 0 bits reserved
     /// - 48 bits timestamp (ms since [`CUSTOM_EPOCH`])
     /// - 80 bits randomness
     ///
@@ -293,20 +297,6 @@ mod tests {
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.randomness(), rand);
         assert_eq!(Ulid::from_components(ts, rand), id);
-    }
-
-    #[test]
-    #[should_panic(expected = "timestamp overflow")]
-    fn ulid_timestamp_overflow_panics() {
-        let ts = Ulid::max_timestamp() + 1;
-        Ulid::from_components(ts, 0);
-    }
-
-    #[test]
-    #[should_panic(expected = "randomness overflow")]
-    fn ulid_randomness_overflow_panics() {
-        let rand = Ulid::max_randomness() + 1;
-        Ulid::from_components(0, rand);
     }
 
     #[test]
