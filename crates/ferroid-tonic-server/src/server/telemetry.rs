@@ -318,42 +318,42 @@ fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
 
 // Metric handles - only compiled when metrics feature is enabled
 #[cfg(feature = "metrics")]
-static REQUESTS: OnceLock<Counter<u64>> = OnceLock::new();
+static REQUESTS_METRIC: OnceLock<Counter<u64>> = OnceLock::new();
 #[cfg(feature = "metrics")]
-static STREAMS_INFLIGHT: OnceLock<UpDownCounter<i64>> = OnceLock::new();
+static STREAMS_INFLIGHT_METRIC: OnceLock<UpDownCounter<i64>> = OnceLock::new();
 #[cfg(feature = "metrics")]
-static STREAM_ERRORS: OnceLock<Counter<u64>> = OnceLock::new();
+static STREAM_ERRORS_METRIC: OnceLock<Counter<u64>> = OnceLock::new();
 #[cfg(feature = "metrics")]
-static STREAM_DURATION_MS: OnceLock<Histogram<f64>> = OnceLock::new();
+static STREAM_DURATION_MS_METRIC: OnceLock<Histogram<f64>> = OnceLock::new();
 #[cfg(feature = "metrics")]
-static IDS_GENERATED: OnceLock<Counter<u64>> = OnceLock::new();
+static IDS_GENERATED_METRIC: OnceLock<Counter<u64>> = OnceLock::new();
 #[cfg(feature = "metrics")]
-static IDS_PER_REQUEST: OnceLock<Histogram<f64>> = OnceLock::new();
+static IDS_PER_REQUEST_METRIC: OnceLock<Histogram<f64>> = OnceLock::new();
 
 #[cfg(feature = "metrics")]
 fn init_metric_handles(meter: Meter) {
-    let _ = REQUESTS.set(
+    let _ = REQUESTS_METRIC.set(
         meter
             .u64_counter("requests")
             .with_description("Total gRPC stream requests")
             .build(),
     );
 
-    let _ = STREAMS_INFLIGHT.set(
+    let _ = STREAMS_INFLIGHT_METRIC.set(
         meter
             .i64_up_down_counter("streams_inflight")
             .with_description("Concurrent gRPC streams")
             .build(),
     );
 
-    let _ = STREAM_ERRORS.set(
+    let _ = STREAM_ERRORS_METRIC.set(
         meter
             .u64_counter("errors")
             .with_description("Errored/cancelled streams")
             .build(),
     );
 
-    let _ = STREAM_DURATION_MS.set(
+    let _ = STREAM_DURATION_MS_METRIC.set(
         meter
             .f64_histogram("stream_duration")
             .with_unit("ms")
@@ -361,14 +361,14 @@ fn init_metric_handles(meter: Meter) {
             .build(),
     );
 
-    let _ = IDS_GENERATED.set(
+    let _ = IDS_GENERATED_METRIC.set(
         meter
             .u64_counter("ids_generated")
             .with_description("Total Snowflake IDs generated")
             .build(),
     );
 
-    let _ = IDS_PER_REQUEST.set(
+    let _ = IDS_PER_REQUEST_METRIC.set(
         meter
             .f64_histogram("ids_per_request")
             .with_description("IDs requested per stream")
@@ -378,71 +378,71 @@ fn init_metric_handles(meter: Meter) {
 
 // Convenience functions that compile to no-ops when metrics are disabled
 #[cfg(feature = "metrics")]
-pub fn increment_requests() {
-    if let Some(counter) = REQUESTS.get() {
+pub fn increment_requests_metric() {
+    if let Some(counter) = REQUESTS_METRIC.get() {
         counter.add(1, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn increment_requests() {}
+pub fn increment_requests_metric() {}
 
 #[cfg(feature = "metrics")]
-pub fn increment_streams_inflight() {
-    if let Some(counter) = STREAMS_INFLIGHT.get() {
+pub fn increment_streams_inflight_metric() {
+    if let Some(counter) = STREAMS_INFLIGHT_METRIC.get() {
         counter.add(1, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn increment_streams_inflight() {}
+pub fn increment_streams_inflight_metric() {}
 
 #[cfg(feature = "metrics")]
-pub fn decrement_streams_inflight() {
-    if let Some(counter) = STREAMS_INFLIGHT.get() {
+pub fn decrement_streams_inflight_metric() {
+    if let Some(counter) = STREAMS_INFLIGHT_METRIC.get() {
         counter.add(-1, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn decrement_streams_inflight() {}
+pub fn decrement_streams_inflight_metric() {}
 
 #[cfg(feature = "metrics")]
-pub fn increment_stream_errors() {
-    if let Some(counter) = STREAM_ERRORS.get() {
+pub fn increment_stream_errors_metric() {
+    if let Some(counter) = STREAM_ERRORS_METRIC.get() {
         counter.add(1, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn increment_stream_errors() {}
+pub fn increment_stream_errors_metric() {}
 
 #[cfg(feature = "metrics")]
-pub fn record_stream_duration(duration_ms: f64) {
-    if let Some(histogram) = STREAM_DURATION_MS.get() {
+pub fn record_stream_duration_metric(duration_ms: f64) {
+    if let Some(histogram) = STREAM_DURATION_MS_METRIC.get() {
         histogram.record(duration_ms, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn record_stream_duration(_duration_ms: f64) {}
+pub fn record_stream_duration_metric(_duration_ms: f64) {}
 
 #[cfg(feature = "metrics")]
-pub fn increment_ids_generated(count: u64) {
-    if let Some(counter) = IDS_GENERATED.get() {
+pub fn increment_ids_generated_metric(count: u64) {
+    if let Some(counter) = IDS_GENERATED_METRIC.get() {
         counter.add(count, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn increment_ids_generated(_count: u64) {}
+pub fn increment_ids_generated_metric(_count: u64) {}
 
 #[cfg(feature = "metrics")]
-pub fn record_ids_per_request(count: f64) {
-    if let Some(histogram) = IDS_PER_REQUEST.get() {
+pub fn record_ids_per_request_metric(count: f64) {
+    if let Some(histogram) = IDS_PER_REQUEST_METRIC.get() {
         histogram.record(count, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn record_ids_per_request(_count: f64) {}
+pub fn record_ids_per_request_metric(_count: f64) {}

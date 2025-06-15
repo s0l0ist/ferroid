@@ -17,9 +17,10 @@ use crate::server::{
     pool::{manager::WorkerPool, worker::worker_loop},
     streaming::coordinator::feed_chunks,
     telemetry::{
-        decrement_streams_inflight, increment_ids_generated, increment_requests,
-        increment_stream_errors, increment_streams_inflight, record_ids_per_request,
-        record_stream_duration,
+        decrement_streams_inflight_metric, increment_ids_generated_metric,
+        increment_requests_metric, increment_stream_errors_metric,
+        increment_streams_inflight_metric, record_ids_per_request_metric,
+        record_stream_duration_metric,
     },
 };
 use core::pin::Pin;
@@ -30,11 +31,39 @@ use ferroid_tonic_core::{
     types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
 };
 use futures::TryStreamExt;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+};
 use tokio::sync::mpsc;
 use tokio_stream::{Stream, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
+
+// Global flag indicating shutdown has been initiated.
+// Used to refuse new incoming requests.
+static SHUTDOWN: AtomicBool = AtomicBool::new(false);
+pub fn set_global_shutdown() {
+    SHUTDOWN.store(true, Ordering::Relaxed);
+}
+pub fn get_global_shutdown() -> bool {
+    SHUTDOWN.load(Ordering::Relaxed)
+}
+
+// Global counter tracking the number of active in-flight streams.
+// Used to coordinate graceful shutdown.
+static STREAMS_INFLIGHT: AtomicU64 = AtomicU64::new(0);
+pub fn increment_streams_inflight() {
+    STREAMS_INFLIGHT.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn decrement_streams_inflight() {
+    STREAMS_INFLIGHT.fetch_sub(1, Ordering::Relaxed);
+}
+
+pub fn get_streams() -> u64 {
+    STREAMS_INFLIGHT.load(Ordering::Relaxed)
+}
 
 /// High-throughput gRPC service for distributed Snowflake ID generation.
 ///
@@ -140,11 +169,15 @@ impl IdGenerator for IdService {
         &self,
         req: Request<StreamIdsRequest>,
     ) -> Result<Response<Self::StreamIdsStream>, Status> {
+        if get_global_shutdown() {
+            return Err(Error::ServiceShutdown.into());
+        }
+
         let start = std::time::Instant::now();
         let total_ids = req.get_ref().count as usize;
 
         if total_ids == 0 {
-            increment_stream_errors();
+            increment_stream_errors_metric();
             return Err(Error::InvalidRequest {
                 reason: "Count must be greater than 0".to_string(),
             }
@@ -152,7 +185,7 @@ impl IdGenerator for IdService {
         }
 
         if total_ids > self.config.max_allowed_ids {
-            increment_stream_errors();
+            increment_stream_errors_metric();
             return Err(Error::InvalidRequest {
                 reason: format!(
                     "Count {} exceeds maximum allowed ({})",
@@ -162,9 +195,10 @@ impl IdGenerator for IdService {
             .into());
         }
 
-        increment_requests();
-        record_ids_per_request(total_ids as f64);
-        increment_streams_inflight();
+        increment_requests_metric();
+        record_ids_per_request_metric(total_ids as f64);
+        increment_streams_inflight(); // global
+        increment_streams_inflight_metric();
 
         let (resp_tx, resp_rx) =
             mpsc::channel::<Result<IdChunk, Status>>(self.config.stream_buffer_size);
@@ -175,8 +209,9 @@ impl IdGenerator for IdService {
         let fut = async move {
             match feed_chunks(total_ids, worker_pool, resp_tx, config).await {
                 Ok(_) => {
-                    decrement_streams_inflight();
-                    record_stream_duration(start.elapsed().as_millis() as f64);
+                    decrement_streams_inflight(); // global
+                    decrement_streams_inflight_metric();
+                    record_stream_duration_metric(start.elapsed().as_millis() as f64);
                 }
                 Err(_e) => {
                     #[cfg(feature = "tracing")]
@@ -199,10 +234,10 @@ impl IdGenerator for IdService {
                 // packed_ids contains binary representation of the IDs,
                 // therefore, we must divide by the size of the snowflake ID to
                 // get the actual number of IDs generated.
-                increment_ids_generated((chunk.packed_ids.len() / SNOWFLAKE_ID_SIZE) as u64);
+                increment_ids_generated_metric((chunk.packed_ids.len() / SNOWFLAKE_ID_SIZE) as u64);
             })
             .inspect_err(move |_e| {
-                increment_stream_errors();
+                increment_stream_errors_metric();
             });
 
         Ok(Response::new(Box::pin(stream)))
