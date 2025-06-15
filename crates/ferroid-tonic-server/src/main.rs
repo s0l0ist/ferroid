@@ -77,7 +77,7 @@
 //! - Use `IdGenerator.StreamIds` for streaming ID allocation
 //! - Each response chunk (`IdChunk`) contains a packed byte buffer of IDs
 //!
-//! ### Notes
+//! ### ⚠️ Note
 //!
 //! - ID size (e.g., `u64`, `u128`) must be inferred by the client
 //! - IDs are packed in little-endian binary format (see `IdChunk.packed_ids`)

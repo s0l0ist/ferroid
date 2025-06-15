@@ -10,9 +10,9 @@
 //! Example usage:
 //!
 //! ```
-//! use ferroid::{Fluid, define_flu_id};
+//! use ferroid::{Fluid, define_fluid};
 //!
-//! define_flu_id!(
+//! define_fluid!(
 //!     MyUlid, u128,
 //!     reserved: 0,
 //!     timestamp: 48,
@@ -108,8 +108,8 @@ pub trait Fluid:
 /// ## Example
 ///
 /// ```
-/// use ferroid::define_flu_id;
-/// define_flu_id!(
+/// use ferroid::define_fluid;
+/// define_fluid!(
 ///     MyUlid, u128,
 ///     reserved: 0,
 ///     timestamp: 48,
@@ -122,7 +122,7 @@ pub trait Fluid:
 /// - 48 bits for the timestamp (stored in the upper bits)
 /// - 80 bits of randomness (lower bits)
 #[macro_export]
-macro_rules! define_flu_id {
+macro_rules! define_fluid {
     (
         $(#[$meta:meta])*
         $name:ident, $int:ty,
@@ -262,21 +262,20 @@ macro_rules! define_flu_id {
     };
 }
 
-define_flu_id!(
-    /// A 128-bit FUID using the ULID layout
+define_fluid!(
+    /// A 128-bit Fluid using the ULID layout
     ///
     /// - 0 bits reserved
-    /// - 48 bits timestamp (ms since [`CUSTOM_EPOCH`])
+    /// - 48 bits timestamp
     /// - 80 bits randomness
     ///
     /// ```text
     ///  Bit Index:  127            80 79             0
-    ///              +----------------+---------------+
-    ///  Field:      | timestamp (48) | sequence (80) |
-    ///              +----------------+---------------+
-    ///              |<--- MSB -- 128 bits -- LSB --->|
+    ///              +----------------+-------------+
+    ///  Field:      | timestamp (48) | random (80) |
+    ///              +----------------+-------------+
+    ///              |<-- MSB -- 128 bits -- LSB -->|
     /// ```
-    /// [`CUSTOM_EPOCH`]: crate::CUSTOM_EPOCH
     Ulid, u128,
     reserved: 0,
     timestamp: 48,

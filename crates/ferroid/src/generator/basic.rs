@@ -91,7 +91,7 @@ where
     /// # Returns
     /// A new generator instance preloaded with the given state.
     ///
-    /// # Note
+    /// # ⚠️ Note
     /// In typical use cases, you should prefer [`Self::new`] to let the
     /// generator initialize itself from the current time.
     pub fn from_components(

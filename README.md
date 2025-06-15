@@ -173,7 +173,7 @@ define_snowflake_id!(
 );
 ```
 
-> Note: All four sections (`reserved`, `timestamp`, `machine_id`, and `sequence`) must be
+> ⚠️ Note: All four sections (`reserved`, `timestamp`, `machine_id`, and `sequence`) must be
 > specified in the macro, even if a section uses 0 bits. `reserved` bits are always
 > stored as **zero** and can be used for future expansion.
 

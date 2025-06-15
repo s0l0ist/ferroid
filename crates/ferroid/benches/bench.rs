@@ -613,28 +613,27 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    bench_fluid_generator,
     //Mock clock
-    // benchmark_mock_sequential_basic,
-    // benchmark_mock_sequential_lock,
-    // benchmark_mock_sequential_atomic,
-    // benchmark_mock_contended_lock,
-    // benchmark_mock_contended_atomic, // yields because of CAS failures
-    // // Monotonic clocks (yielding)
-    // benchmark_mono_sequential_basic,
-    // benchmark_mono_sequential_lock,
-    // benchmark_mono_sequential_atomic,
-    // benchmark_mono_threaded_lock,
-    // benchmark_mono_threaded_atomic,
-    // // Async single worker, single generator
-    // benchmark_mono_sequential_tokio_lock,
-    // benchmark_mono_sequential_tokio_atomic,
-    // benchmark_mono_sequential_smol_lock,
-    // benchmark_mono_sequential_smol_atomic,
-    // // Async multi worker, multi generator
-    // benchmark_mono_tokio_lock,
-    // benchmark_mono_tokio_atomic,
-    // benchmark_mono_smol_lock,
-    // benchmark_mono_smol_atomic,
+    benchmark_mock_sequential_basic,
+    benchmark_mock_sequential_lock,
+    benchmark_mock_sequential_atomic,
+    benchmark_mock_contended_lock,
+    benchmark_mock_contended_atomic, // yields because of CAS failures
+    // Monotonic clocks (yielding)
+    benchmark_mono_sequential_basic,
+    benchmark_mono_sequential_lock,
+    benchmark_mono_sequential_atomic,
+    benchmark_mono_threaded_lock,
+    benchmark_mono_threaded_atomic,
+    // Async single worker, single generator
+    benchmark_mono_sequential_tokio_lock,
+    benchmark_mono_sequential_tokio_atomic,
+    benchmark_mono_sequential_smol_lock,
+    benchmark_mono_sequential_smol_atomic,
+    // Async multi worker, multi generator
+    benchmark_mono_tokio_lock,
+    benchmark_mono_tokio_atomic,
+    benchmark_mono_smol_lock,
+    benchmark_mono_smol_atomic,
 );
 criterion_main!(benches);
