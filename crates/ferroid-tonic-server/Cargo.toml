@@ -20,7 +20,7 @@ anyhow = { workspace = true, features = ["std"] }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env", "color", "error-context", "help", "std", "suggestions", "usage"] }
 dotenvy = { workspace = true }
-ferroid-tonic-core = { version = "0.3.9", path = "../ferroid-tonic-core" }
+ferroid-tonic-core = { version = "0.3.10", path = "../ferroid-tonic-core" }
 futures = { workspace = true }
 mimalloc = { workspace = true }
 opentelemetry = { workspace = true, optional = true }
@@ -52,30 +52,36 @@ harness = false
 default = []
 tracing = [
     "dep:tracing",
-    "opentelemetry/trace",
+    "dep:opentelemetry",
+    "opentelemetry?/trace",
     "dep:opentelemetry-otlp",
-    "opentelemetry-otlp/trace",
-    "opentelemetry_sdk/trace",
+    "opentelemetry-otlp?/trace",
+    "dep:opentelemetry_sdk",
+    "opentelemetry_sdk?/trace",
     "dep:opentelemetry-semantic-conventions",
     "dep:tracing-opentelemetry"
 ]
 metrics = [
-    "opentelemetry/metrics",
+    "dep:opentelemetry",
+    "opentelemetry?/metrics",
     "dep:opentelemetry-otlp",
-    "opentelemetry-otlp/metrics",
-    "opentelemetry_sdk/metrics",
+    "opentelemetry-otlp?/metrics",
+    "dep:opentelemetry_sdk",
+    "opentelemetry_sdk?/metrics",
     "dep:opentelemetry-semantic-conventions",
-    "tracing-opentelemetry/metrics"
+    "dep:tracing-opentelemetry",
+    "tracing-opentelemetry?/metrics"
 ]
 stdout = [
     "dep:opentelemetry-stdout",
-    "opentelemetry-stdout/trace",
-    "opentelemetry-stdout/metrics"
+    "opentelemetry-stdout?/trace",
+    "opentelemetry-stdout?/metrics"
 ]
 honeycomb = [
-    "opentelemetry-otlp/tls",
-    "opentelemetry-otlp/gzip-tonic",
-    "opentelemetry-otlp/zstd-tonic",
-    "opentelemetry-otlp/grpc-tonic",
+    "dep:opentelemetry-otlp",
+    "opentelemetry-otlp?/tls",
+    "opentelemetry-otlp?/gzip-tonic",
+    "opentelemetry-otlp?/zstd-tonic",
+    "opentelemetry-otlp?/grpc-tonic",
     "tonic/tls-native-roots"
 ]

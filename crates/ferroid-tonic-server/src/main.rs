@@ -255,10 +255,12 @@ async fn shutdown_signal(
     #[cfg(feature = "tracing")]
     tracing::info!("Shutdown signal received, terminating gracefully...");
 
+    // 1. Publish the status
     health_reporter
         .set_not_serving::<IdGeneratorServer<IdService>>()
         .await;
 
+    // 2. Perform graceful shutdown
     if let Err(_e) = service.shutdown().await {
         #[cfg(feature = "tracing")]
         tracing::error!("Error during service shutdown: {:?}", _e);

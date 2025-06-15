@@ -110,6 +110,19 @@ pub struct CliArgs {
     /// Default: `false`
     #[arg(short, long, default_value_t = false)]
     pub uds: bool,
+
+    /// Maximum time (in seconds) to wait for active client streams to complete
+    /// during shutdown.
+    ///
+    /// This grace period allows in-flight requests to finish cleanly before
+    /// forcibly shutting down workers. If the timeout is reached and streams are
+    /// still active, the server proceeds with termination and logs a warning.
+    ///
+    /// Environment variable: `SHUTDOWN_TIMEOUT`
+    ///
+    /// Default: `3`
+    #[arg(long, env = "SHUTDOWN_TIMEOUT", default_value_t = 3)]
+    pub shutdown_timeout: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -122,6 +135,7 @@ pub struct ServerConfig {
     pub chunk_bytes: usize,
     pub server_addr: String,
     pub uds: bool,
+    pub shutdown_timeout: usize,
 }
 
 impl TryFrom<CliArgs> for ServerConfig {
@@ -156,6 +170,7 @@ impl TryFrom<CliArgs> for ServerConfig {
             server_addr: args.server_addr,
             chunk_bytes,
             uds: args.uds,
+            shutdown_timeout: args.shutdown_timeout,
         })
     }
 }

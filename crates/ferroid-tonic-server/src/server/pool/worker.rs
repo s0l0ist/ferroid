@@ -58,7 +58,7 @@ pub async fn worker_loop(
             }
             WorkRequest::Shutdown { response } => {
                 #[cfg(feature = "tracing")]
-                tracing::debug!("Worker {worker_id} received shutdown signal");
+                tracing::trace!("Worker {worker_id} received shutdown signal");
 
                 if response.send(()).is_err() {
                     #[cfg(feature = "tracing")]

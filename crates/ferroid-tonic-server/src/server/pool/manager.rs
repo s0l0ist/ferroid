@@ -9,10 +9,17 @@
 //! independently. This model allows efficient parallelism without contention or
 //! locking.
 
-use crate::server::streaming::request::WorkRequest;
+use crate::server::{
+    service::handler::{get_streams_inflight, set_global_shutdown},
+    streaming::request::WorkRequest,
+};
+use core::time::Duration;
 use ferroid_tonic_core::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tokio::sync::{mpsc, oneshot};
+use tokio::{
+    sync::{mpsc, oneshot},
+    time::{sleep, timeout},
+};
 use tokio_util::sync::CancellationToken;
 
 /// A cooperative pool of asynchronous workers that process [`WorkRequest`]s.
@@ -23,16 +30,22 @@ pub struct WorkerPool {
     workers: Vec<mpsc::Sender<WorkRequest>>,
     next_worker: AtomicUsize,
     shutdown_token: CancellationToken,
+    shutdown_timeout: usize,
 }
 
 impl WorkerPool {
     /// Constructs a new [`WorkerPool`] from initialized worker channels and a
     /// shared cancellation token.
-    pub fn new(workers: Vec<mpsc::Sender<WorkRequest>>, shutdown_token: CancellationToken) -> Self {
+    pub fn new(
+        workers: Vec<mpsc::Sender<WorkRequest>>,
+        shutdown_token: CancellationToken,
+        shutdown_timeout: usize,
+    ) -> Self {
         Self {
             workers,
             next_worker: AtomicUsize::new(0),
             shutdown_token,
+            shutdown_timeout,
         }
     }
 
@@ -74,10 +87,46 @@ impl WorkerPool {
     ///
     /// This method is typically invoked during service termination.
     pub async fn shutdown(&self) -> Result<(), Error> {
+        // === Phase 0: Stop accepting new requests ===
         #[cfg(feature = "tracing")]
-        tracing::info!("Initiating worker pool shutdown");
+        tracing::info!("Refusing new requests");
+        set_global_shutdown();
 
+        // === Phase 1: Wait for in-flight streams to drain (up to 3s) ===
+        #[cfg(feature = "tracing")]
+        tracing::info!(
+            "Draining in-flight streams ({} active)",
+            get_streams_inflight()
+        );
+        let drain_result = timeout(Duration::from_secs(self.shutdown_timeout as u64), async {
+            while get_streams_inflight() > 0 {
+                sleep(Duration::from_millis(100)).await;
+            }
+        })
+        .await;
+
+        match drain_result {
+            Ok(_) => {
+                #[cfg(feature = "tracing")]
+                tracing::debug!("All in-flight streams drained successfully");
+            }
+            Err(_) => {
+                #[cfg(feature = "tracing")]
+                tracing::warn!(
+                    "Graceful drain timed out ({} streams still active)",
+                    get_streams_inflight()
+                );
+            }
+        }
+
+        // === Phase 2: Cancel any remaining work ===
+        #[cfg(feature = "tracing")]
+        tracing::debug!("Cancelling remaining work via shutdown token");
         self.shutdown_token.cancel();
+
+        // === Phase 3: Notify workers to shut down ===
+        #[cfg(feature = "tracing")]
+        tracing::debug!("Notifying all workers to shut down");
         let mut shutdown_handles = Vec::with_capacity(self.workers.len());
 
         for (i, worker) in self.workers.iter().enumerate() {
@@ -90,11 +139,14 @@ impl WorkerPool {
             }
         }
 
+        #[cfg(feature = "tracing")]
+        tracing::debug!("Waiting for up to 3s per worker for shutdown acknowledgements");
+
         let timeout_futures = shutdown_handles.into_iter().map(|(_i, rx)| async move {
-            match tokio::time::timeout(tokio::time::Duration::from_secs(3), rx).await {
+            match timeout(Duration::from_secs(3), rx).await {
                 Ok(Ok(())) => {
                     #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {_i} shutdown acknowledged");
+                    tracing::trace!("Worker {_i} shutdown acknowledged");
                 }
                 Ok(Err(_e)) => {
                     #[cfg(feature = "tracing")]
