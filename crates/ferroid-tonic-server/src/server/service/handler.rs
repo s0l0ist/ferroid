@@ -128,7 +128,7 @@ impl IdService {
             tokio::spawn(worker_loop(worker_id, rx, generator, config.chunk_bytes));
         }
 
-        let worker_pool = WorkerPool::new(workers, shutdown_token);
+        let worker_pool = WorkerPool::new(workers, shutdown_token, config.shutdown_timeout);
 
         Self {
             config,

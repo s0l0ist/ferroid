@@ -30,16 +30,22 @@ pub struct WorkerPool {
     workers: Vec<mpsc::Sender<WorkRequest>>,
     next_worker: AtomicUsize,
     shutdown_token: CancellationToken,
+    shutdown_timeout: usize,
 }
 
 impl WorkerPool {
     /// Constructs a new [`WorkerPool`] from initialized worker channels and a
     /// shared cancellation token.
-    pub fn new(workers: Vec<mpsc::Sender<WorkRequest>>, shutdown_token: CancellationToken) -> Self {
+    pub fn new(
+        workers: Vec<mpsc::Sender<WorkRequest>>,
+        shutdown_token: CancellationToken,
+        shutdown_timeout: usize,
+    ) -> Self {
         Self {
             workers,
             next_worker: AtomicUsize::new(0),
             shutdown_token,
+            shutdown_timeout,
         }
     }
 
@@ -89,7 +95,7 @@ impl WorkerPool {
         // === Phase 1: Wait for in-flight streams to drain (up to 3s) ===
         #[cfg(feature = "tracing")]
         tracing::info!("Draining in-flight streams ({} active)", get_streams());
-        let drain_result = timeout(Duration::from_secs(3), async {
+        let drain_result = timeout(Duration::from_secs(self.shutdown_timeout as u64), async {
             while get_streams() > 0 {
                 sleep(Duration::from_millis(100)).await;
             }
