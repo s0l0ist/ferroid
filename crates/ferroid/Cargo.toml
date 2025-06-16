@@ -27,10 +27,11 @@ tokio = { workspace = true, optional = true, features = ["time", "rt-multi-threa
 tracing = { workspace = true, optional = true, features = ["attributes"] }
 
 [dev-dependencies]
+async-lock = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
 futures = { workspace = true,  features = ["alloc"] }
 num_cpus = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros", "sync"] }
 
 [[bench]]
 name = "bench"
