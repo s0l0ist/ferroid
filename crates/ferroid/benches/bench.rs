@@ -314,11 +314,13 @@ fn bench_generator_fluid_contended<ID, G, T, R>(
                 b.iter_custom(|iters| {
                     let generator = Arc::new(generator_fn());
                     let barrier = Arc::new(Barrier::new(thread_count + 1));
+                    let done = Arc::new(Barrier::new(thread_count + 1));
 
                     scope(|s| {
                         for _ in 0..thread_count {
                             let generator = Arc::clone(&generator);
                             let barrier = Arc::clone(&barrier);
+                            let done = Arc::clone(&done);
 
                             s.spawn(move || {
                                 for _ in 0..iters {
@@ -328,6 +330,8 @@ fn bench_generator_fluid_contended<ID, G, T, R>(
                                         let id = generator.next_id();
                                         black_box(id);
                                     }
+
+                                    done.wait();
                                 }
                             });
                         }
@@ -336,6 +340,7 @@ fn bench_generator_fluid_contended<ID, G, T, R>(
 
                         for _ in 0..iters {
                             barrier.wait();
+                            done.wait();
                         }
 
                         start.elapsed()
