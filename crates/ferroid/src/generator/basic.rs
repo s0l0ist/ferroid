@@ -2,7 +2,7 @@ use crate::{
     Fluid, FluidGenerator, IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource,
     rand::RandSource,
 };
-use core::{cell::Cell, cmp::Ordering};
+use core::{cell::Cell, cmp::Ordering, marker::PhantomData};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -249,7 +249,7 @@ where
 /// ## Trade-offs
 /// - **Uniqueness**: Probabilistic (collision chance ≈ 1 in 2^random_bits)
 /// - **Performance**: Very fast (no sequence management)
-/// - **Ordering**: Time-ordered, but not strictly sequential
+/// - **Ordering**: Time-ordered, but not strictly monotonic
 /// - **Coordination**: None required between generators
 pub struct BasicFluidGenerator<ID, T, R>
 where
@@ -259,7 +259,7 @@ where
 {
     clock: T,
     rng: R,
-    _id: core::marker::PhantomData<ID>,
+    _id: PhantomData<ID>,
 }
 
 impl<ID, T, R> BasicFluidGenerator<ID, T, R>
@@ -272,7 +272,7 @@ where
         Self {
             clock,
             rng,
-            _id: core::marker::PhantomData,
+            _id: PhantomData,
         }
     }
 }
