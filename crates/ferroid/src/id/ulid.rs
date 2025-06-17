@@ -250,7 +250,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_snowflake_ulid_id_fields_and_bounds() {
+    fn test_ulid_id_fields_and_bounds() {
         let ts = ULID::max_timestamp();
         let rand = ULID::max_randomness();
 
