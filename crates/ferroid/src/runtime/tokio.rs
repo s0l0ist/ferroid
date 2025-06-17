@@ -1,4 +1,7 @@
-use crate::{Result, SleepProvider, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{
+    RandSource, Result, SleepProvider, Snowflake, SnowflakeGenerator, TimeSource, Ulid,
+    UlidGenerator,
+};
 use core::pin::Pin;
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
@@ -25,6 +28,46 @@ where
     ///
     /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
+}
+
+impl<G, ID, T, R> UlidGeneratorAsyncTokioExt<ID, T, R> for G
+where
+    G: UlidGenerator<ID, T, R>,
+    ID: Ulid,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+        <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<TokioSleep>(self)
+    }
+}
+
+/// Extension trait for asynchronously generating ULIDs using the
+/// [`tokio`](https://docs.rs/tokio) async runtime.
+///
+/// This trait provides a convenience method for using a [`SleepProvider`]
+/// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
+/// without specifying the sleep strategy manually.
+pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
+where
+    ID: Ulid,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    /// Returns a future that resolves to the next available Snowflake ID using
+    /// the [`TokioSleep`] provider.
+    ///
+    /// Internally delegates to
+    /// [`UlidGeneratorAsyncExt::try_next_id_async`] method with
+    /// [`TokioSleep`] as the sleep strategy.
+    ///
+    /// # Errors
+    ///
+    /// This future may return an error if the underlying generator does.
+    ///
+    /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
+    ///     crate::UlidGeneratorAsyncExt::try_next_id_async
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
 }
 

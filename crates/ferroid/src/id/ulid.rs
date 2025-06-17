@@ -1,34 +1,5 @@
-//! # Flexible ULID-style ID Generator
-//!
-//! This module provides a macro-based system for defining layout-safe,
-//! monotonic ULID-style IDs using a customizable bit partition between
-//! `timestamp` and `randomness`.
-//!
-//! Unlike Snowflake IDs, ULIDs do not include machine identifiers or sequences.
-//! Instead, they use random entropy.
-//!
-//! Example usage:
-//!
-//! ```
-//! use ferroid::{Ulid, define_ulid};
-//!
-//! define_ulid!(
-//!     MyUlid, u128,
-//!     reserved: 0,
-//!     timestamp: 48,
-//!     random: 80
-//! );
-//!
-//! let id = MyUlid::from_components(1_725_000_000_000, 0xdeadbeef);
-//! assert_eq!(id.timestamp(), 1_725_000_000_000);
-//! assert_eq!(id.randomness(), 0xdeadbeef);
-//! ```
-
-use core::{
-    fmt,
-    hash::Hash,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
-};
+use crate::Id;
+use core::{fmt, hash::Hash};
 
 /// Trait for layout-compatible ULID-style identifiers.
 ///
@@ -41,25 +12,8 @@ use core::{
 ///
 /// Unlike `Snowflake`, this trait does not assume a sequence or machine ID.
 pub trait Ulid:
-    Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
+    Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
-    type Ty: Copy
-        + Clone
-        + Add<Output = Self::Ty>
-        + AddAssign
-        + Sub<Output = Self::Ty>
-        + SubAssign
-        + Mul<Output = Self::Ty>
-        + MulAssign
-        + Div<Output = Self::Ty>
-        + DivAssign
-        + Ord
-        + PartialOrd
-        + Eq
-        + PartialEq
-        + fmt::Debug
-        + fmt::Display;
-
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -74,12 +28,6 @@ pub trait Ulid:
 
     /// Constructs a new Ulid from its components.
     fn from_components(timestamp: Self::Ty, randomness: Self::Ty) -> Self;
-
-    /// Converts this type into its raw type representation
-    fn to_raw(&self) -> Self::Ty;
-
-    /// Converts a raw type into this type
-    fn from_raw(raw: Self::Ty) -> Self;
 
     fn to_padded_string(&self) -> String;
 }
@@ -184,10 +132,34 @@ macro_rules! define_ulid {
             pub const fn max_randomness() -> $int {
                 (1 << Self::RANDOM_BITS) - 1
             }
+
+            /// Converts this type into its raw type representation
+            pub const fn to_raw(&self) -> $int {
+                self.id
+            }
+
+            /// Converts a raw type into this type
+            pub const fn from_raw(raw: $int) -> Self {
+                Self { id: raw }
+            }
         }
 
-        impl $crate::Ulid for $name {
+        impl $crate::Id for $name {
             type Ty = $int;
+
+            /// Converts this type into its raw type representation
+            fn to_raw(&self) -> Self::Ty {
+                self.id
+            }
+
+            /// Converts a raw type into this type
+            fn from_raw(raw: Self::Ty) -> Self {
+                Self { id: raw }
+            }
+        }
+
+
+        impl $crate::Ulid for $name {
 
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
@@ -208,15 +180,6 @@ macro_rules! define_ulid {
 
             fn from_components(timestamp: $int, randomness: $int) -> Self {
                 Self::from(timestamp, randomness)
-            }
-
-
-            fn to_raw(&self) -> Self::Ty {
-                self.id
-            }
-
-            fn from_raw(raw: Self::Ty) -> Self {
-                 Self { id: raw }
             }
 
             fn to_padded_string(&self) -> String {
@@ -249,7 +212,7 @@ macro_rules! define_ulid {
 
                 #[cfg(feature = "base32")]
                 {
-                    use $crate::UlidBase32Ext;
+                    use $crate::Base32Ext;
                     dbg.field("base32", &self.encode());
                 }
 

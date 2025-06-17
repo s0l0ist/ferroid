@@ -1,4 +1,4 @@
-use crate::Snowflake;
+use crate::Id;
 
 /// Represents the result of attempting to generate a new Snowflake ID.
 ///
@@ -29,7 +29,7 @@ use crate::Snowflake;
 /// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IdGenStatus<T: Snowflake> {
+pub enum IdGenStatus<T: Id> {
     /// A new Snowflake ID was successfully generated.
     Ready {
         /// The generated Snowflake ID.

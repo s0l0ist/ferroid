@@ -275,6 +275,19 @@ where
             _id: PhantomData,
         }
     }
+
+    pub fn next_id(&self) -> IdGenStatus<ID> {
+        self.try_next_id().unwrap()
+    }
+
+    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+        let t = self.clock.current_millis();
+        let r = self.rng.rand();
+        Ok(IdGenStatus::Ready {
+            id: ID::from_components(t, r),
+        })
+    }
 }
 
 impl<ID, T, R> UlidGenerator<ID, T, R> for BasicUlidGenerator<ID, T, R>
@@ -287,13 +300,11 @@ where
         Self::new(clock, rng)
     }
 
-    fn next_id(&self) -> ID {
-        let ts = self.clock.current_millis();
-        let rand = self.rng.rand();
-        ID::from_components(ts, rand)
+    fn next_id(&self) -> IdGenStatus<ID> {
+        self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<ID> {
-        Ok(self.next_id())
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+        self.try_next_id()
     }
 }

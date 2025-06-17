@@ -1,9 +1,5 @@
-use crate::{Error, Result};
-use core::{
-    fmt,
-    hash::Hash,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
-};
+use crate::{Error, Id, Result};
+use core::{fmt, hash::Hash};
 
 /// Trait for converting numeric-like values into a `u64`.
 ///
@@ -63,30 +59,8 @@ impl ToU64 for u128 {
 /// assert_eq!(id.sequence(), 1);
 /// ```
 pub trait Snowflake:
-    Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
+    Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
-    /// Scalar type for all bit fields (typically `u64`)
-    type Ty: Copy
-        + Clone
-        + Add<Output = Self::Ty>
-        + AddAssign
-        + Sub<Output = Self::Ty>
-        + SubAssign
-        + Mul<Output = Self::Ty>
-        + MulAssign
-        + Div<Output = Self::Ty>
-        + DivAssign
-        + Into<Self::Ty>
-        + From<Self::Ty>
-        + Ord
-        + PartialOrd
-        + Eq
-        + PartialEq
-        + Hash
-        + ToU64
-        + fmt::Debug
-        + fmt::Display;
-
     /// Zero value (used for resetting the sequence)
     const ZERO: Self::Ty;
 
@@ -113,12 +87,6 @@ pub trait Snowflake:
 
     /// Constructs a new Snowflake ID from its components.
     fn from_components(timestamp: Self::Ty, machine_id: Self::Ty, sequence: Self::Ty) -> Self;
-
-    /// Converts this type into its raw type representation
-    fn to_raw(&self) -> Self::Ty;
-
-    /// Converts a raw type into this type
-    fn from_raw(raw: Self::Ty) -> Self;
 
     /// Returns true if the current sequence value can be incremented.
     fn has_sequence_room(&self) -> bool {
@@ -265,11 +233,33 @@ macro_rules! define_snowflake_id {
             pub const fn max_sequence() -> $int {
                 (1 << Self::SEQUENCE_BITS) - 1
             }
+
+            /// Converts this type into its raw type representation
+            pub const fn to_raw(&self) -> $int {
+                self.id
+            }
+
+            /// Converts a raw type into this type
+            pub const fn from_raw(raw: $int) -> Self {
+                Self { id: raw }
+            }
+        }
+
+        impl $crate::Id for $name {
+            type Ty = $int;
+
+            /// Converts this type into its raw type representation
+            fn to_raw(&self) -> Self::Ty {
+                self.id
+            }
+
+            /// Converts a raw type into this type
+            fn from_raw(raw: Self::Ty) -> Self {
+                Self { id: raw }
+            }
         }
 
         impl $crate::Snowflake for $name {
-            type Ty = $int;
-
             const ZERO: $int = 0;
             const ONE: $int = 1;
 
@@ -304,14 +294,6 @@ macro_rules! define_snowflake_id {
                 Self::from(timestamp, machine_id, sequence)
             }
 
-            fn to_raw(&self) -> Self::Ty {
-                self.id
-            }
-
-            fn from_raw(raw: Self::Ty) -> Self {
-                 Self { id: raw }
-            }
-
             fn to_padded_string(&self) -> String {
                 let max = Self::Ty::MAX;
                 let mut n = max;
@@ -342,7 +324,7 @@ macro_rules! define_snowflake_id {
 
                 #[cfg(feature = "base32")]
                 {
-                    use $crate::SnowflakeBase32Ext;
+                    use $crate::Base32Ext;
                     dbg.field("base32", &self.encode());
                 }
 

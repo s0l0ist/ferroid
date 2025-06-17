@@ -1,5 +1,5 @@
 use crate::{
-    BasicUlidGenerator, IdGenStatus, MonotonicClock, RandSource, Snowflake, SnowflakeTwitterId,
+    BasicUlidGenerator, Id, IdGenStatus, MonotonicClock, RandSource, Snowflake, SnowflakeTwitterId,
     TimeSource, ToU64, ULID, Ulid, UlidGenerator,
     generator::{
         AtomicSnowflakeGenerator, BasicSnowflakeGenerator, LockSnowflakeGenerator,
@@ -7,7 +7,7 @@ use crate::{
     },
     random_native::ThreadRandom,
 };
-use core::{cell::Cell, fmt, hash::Hash};
+use core::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -64,7 +64,7 @@ impl RandSource<u128> for CounterRng {
 fn run_id_sequence_increments_within_same_tick<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug + fmt::Display,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     let id1 = generator.next_id().unwrap_ready();
@@ -83,7 +83,7 @@ where
 fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug + fmt::Display,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     let yield_for = generator.next_id().unwrap_pending();
@@ -93,7 +93,7 @@ where
 fn run_generator_handles_rollover<G, ID, T>(generator: G, shared_time: SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug + fmt::Display,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     for i in 0..=ID::max_sequence().to_u64().unwrap() {
@@ -115,7 +115,7 @@ where
 fn run_generator_monotonic<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     let mut last_timestamp = ID::ZERO;
@@ -150,7 +150,7 @@ where
 fn run_generator_monotonic_threaded<G, ID, T>(make_generator: impl Fn() -> G)
 where
     G: SnowflakeGenerator<ID, T> + Send + Sync,
-    ID: Snowflake + PartialEq + Eq + Hash + Send,
+    ID: Snowflake + Send,
     T: TimeSource<ID::Ty>,
 {
     const THREADS: usize = 8;
@@ -349,8 +349,7 @@ fn atomic_generator_threaded_monotonic() {
 
 trait IdGenStatusExt<T>
 where
-    T: Snowflake + fmt::Display,
-    T::Ty: fmt::Display,
+    T: Id,
 {
     fn unwrap_ready(self) -> T;
     fn unwrap_pending(self) -> T::Ty;
@@ -358,8 +357,7 @@ where
 
 impl<T> IdGenStatusExt<T> for IdGenStatus<T>
 where
-    T: Snowflake + fmt::Display,
-    T::Ty: fmt::Display,
+    T: Id,
 {
     fn unwrap_ready(self) -> T {
         match self {
@@ -381,13 +379,13 @@ where
 fn run_ulid_ids_have_correct_timestamp<G, ID, T, R>(generator: G, expected_timestamp: ID::Ty)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid + fmt::Debug,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    let id1 = generator.next_id();
-    let id2 = generator.next_id();
-    let id3 = generator.next_id();
+    let id1 = generator.next_id().unwrap_ready();
+    let id2 = generator.next_id().unwrap_ready();
+    let id3 = generator.next_id().unwrap_ready();
 
     assert_eq!(id1.timestamp(), expected_timestamp);
     assert_eq!(id2.timestamp(), expected_timestamp);
@@ -397,13 +395,13 @@ where
 fn run_ulid_ids_have_different_random_components<G, ID, T, R>(generator: G)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid + fmt::Debug + PartialEq,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    let id1 = generator.next_id();
-    let id2 = generator.next_id();
-    let id3 = generator.next_id();
+    let id1 = generator.next_id().unwrap_ready();
+    let id2 = generator.next_id().unwrap_ready();
+    let id3 = generator.next_id().unwrap_ready();
 
     // With a counter RNG, random components should be different
     assert_ne!(id1.randomness(), id2.randomness());
@@ -418,7 +416,7 @@ where
 fn run_ulid_try_next_id_never_fails<G, ID, T, R>(generator: G)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid + fmt::Debug,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -435,7 +433,7 @@ where
 fn run_ulid_ids_are_unique_with_real_rng<G, ID, T, R>(generator: G)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid + fmt::Debug + Clone + std::hash::Hash + Eq,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -443,7 +441,7 @@ where
     const NUM_IDS: usize = 10000;
 
     for _ in 0..NUM_IDS {
-        let id = generator.next_id();
+        let id = generator.next_id().unwrap_ready();
         assert!(seen.insert(id.clone()), "Generated duplicate ID: {:?}", id);
     }
 
@@ -453,14 +451,14 @@ where
 fn run_ulid_ids_are_time_ordered<G, ID, T, R>(generator: G)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid + fmt::Debug,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
     let mut last_timestamp = None;
 
     for _ in 0..100 {
-        let id = generator.next_id();
+        let id = generator.next_id().unwrap_ready();
         let timestamp = id.timestamp();
 
         if let Some(last_ts) = last_timestamp {
@@ -535,7 +533,7 @@ fn basic_ulid_generator_components_test() {
     };
     let generator: BasicUlidGenerator<ULID, _, _> = BasicUlidGenerator::new(mock_time, mock_rng);
 
-    let id = generator.next_id();
+    let id = generator.next_id().unwrap_ready();
 
     // Verify the ID was constructed correctly from components
     assert_eq!(id.timestamp(), 0x123456789ABC);

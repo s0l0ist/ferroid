@@ -1,4 +1,4 @@
-use crate::{Error, Result, Snowflake, Ulid};
+use crate::{Error, Id, Result};
 use base32::{Alphabet, decode, encode};
 use core::convert::TryInto;
 
@@ -56,7 +56,7 @@ impl BeBytes for u128 {
 
 /// A trait for types that can be encoded to and decoded from base32 (crockford)
 /// strings.
-pub trait SnowflakeBase32Ext: Snowflake
+pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
@@ -72,32 +72,9 @@ where
     }
 }
 
-impl<ID> SnowflakeBase32Ext for ID
+impl<ID> Base32Ext for ID
 where
-    ID: Snowflake,
-    ID::Ty: BeBytes,
-{
-}
-
-pub trait UlidBase32Ext: Ulid
-where
-    Self::Ty: BeBytes,
-{
-    fn encode(&self) -> String {
-        let bytes = self.to_raw().to_be_bytes();
-        encode(Alphabet::Crockford, bytes.as_ref())
-    }
-
-    fn decode(s: &str) -> Result<Self> {
-        let bytes = decode(Alphabet::Crockford, s).ok_or(Error::DecodeNonAsciiValue)?;
-        let raw = Self::Ty::from_be_bytes(&bytes).ok_or(Error::DecodeInvalidLen)?;
-        Ok(Self::from_raw(raw))
-    }
-}
-
-impl<ID> UlidBase32Ext for ID
-where
-    ID: Ulid,
+    ID: Id,
     ID::Ty: BeBytes,
 {
 }
@@ -106,13 +83,14 @@ where
 mod tests {
     use super::*;
     use crate::{
-        SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId, SnowflakeTwitterId,
+        Snowflake, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
+        SnowflakeTwitterId,
     };
     use core::{any::type_name, fmt};
 
     fn test_encode_decode<T>(id: T, label: &str)
     where
-        T: Snowflake + SnowflakeBase32Ext + PartialEq + fmt::Debug,
+        T: Snowflake + Base32Ext + PartialEq + fmt::Debug,
         T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
     {
         let raw = id.to_raw();

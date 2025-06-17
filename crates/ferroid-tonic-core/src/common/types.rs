@@ -42,9 +42,7 @@
 //! > binary encoding. To change the format, fork or wrap the binary crate and
 //! > inject your own implementation.
 
-use ferroid::{
-    BasicSnowflakeGenerator, CUSTOM_EPOCH, MonotonicClock, Snowflake, SnowflakeTwitterId,
-};
+use ferroid::{BasicSnowflakeGenerator, CUSTOM_EPOCH, Id, MonotonicClock, SnowflakeTwitterId};
 
 /// The canonical Snowflake ID type used across the system.
 ///
@@ -53,7 +51,7 @@ use ferroid::{
 pub type SnowflakeId = SnowflakeTwitterId;
 
 /// The primitive integer type that backs a [`SnowflakeId`] (typically `u64`).
-pub type SnowflakeIdTy = <SnowflakeId as Snowflake>::Ty;
+pub type SnowflakeIdTy = <SnowflakeId as Id>::Ty;
 
 /// The number of bytes required to serialize a single [`SnowflakeId`] in
 /// little-endian format.
