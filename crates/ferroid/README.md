@@ -59,7 +59,10 @@ strictly monotonic.
 | `BasicSnowflakeGenerator`  | ❌          | ❌        | Highest    | Sharded / single-threaded                   |
 | `LockSnowflakeGenerator`   | ✅          | ❌        | Medium     | Fair multithreaded access                   |
 | `AtomicSnowflakeGenerator` | ✅          | ✅        | High       | Fast concurrent generation (less fair)      |
-| `BasicUlidGenerator`       | ✅          | ✅        | Lower      | Scalable, zero-coordination ULID generation |
+| `BasicUlidGenerator`       | ✅          | ⚠️        | Lower      | Scalable, zero-coordination ULID generation |
+
+[⚠️]: Uses thread-local RNG with no global locks, but not strictly lock-free in
+the atomic/CAS sense.
 
 Snowflake IDs are always unique and strictly ordered. ULIDs are globally
 sortable but only monotonic per timestamp interval.
@@ -92,19 +95,22 @@ let id: SnowflakeTwitterId = loop {
     }
 };
 
-// Similarly, generate a ULID (--features "ulid")
-use ferroid::{ThreadRandom, BasicUlidGenerator, ULID};
 
-let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
-let rand = ThreadRandom::default();
-let generator = BasicUlidGenerator::new(clock, rand);
+#[cfg(features = "ulid")]
+{
+    use ferroid::{ThreadRandom, BasicUlidGenerator, ULID};
 
-let id: ULID = match generator.next_id() {
-    IdGenStatus::Ready { id } => id,
-    IdGenStatus::Pending { .. } =>  unreachable!()
-};
+    let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
+    let rand = ThreadRandom::default();
+    let generator = BasicUlidGenerator::new(clock, rand);
 
-println!("Generated ID: {}", id);
+    let id: ULID = match generator.next_id() {
+        IdGenStatus::Ready { id } => id,
+        IdGenStatus::Pending { .. } =>  unreachable!()
+    };
+
+    println!("Generated ID: {}", id);
+}
 ```
 
 #### Asynchronous
@@ -136,16 +142,17 @@ async fn main() -> Result<()> {
     let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
     println!("Generated ID: {}", id);
 
-    // Similarly, generate a ULID (--features "ulid")
-    use ferroid::{ThreadRandom, UlidGeneratorAsyncTokioExt, BasicUlidGenerator, ULID};
+    #[cfg(features = "ulid")]
+    {
+        use ferroid::{ThreadRandom, UlidGeneratorAsyncTokioExt, BasicUlidGenerator, ULID};
 
-    let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-    let rand = ThreadRandom::default();
-    let generator = BasicUlidGenerator::new(clock, rand);
+        let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+        let rand = ThreadRandom::default();
+        let generator = BasicUlidGenerator::new(clock, rand);
 
-    let id: ULID = generator.try_next_id_async().await?;
-    println!("Generated ID: {}", id);
-
+        let id: ULID = generator.try_next_id_async().await?;
+        println!("Generated ID: {}", id);
+    }
     Ok(())
 }
 ```
@@ -166,15 +173,17 @@ fn main() -> Result<()> {
         let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
         println!("Generated ID: {}", id);
 
-        // Similarly, generate a ULID (--features "ulid")
-        use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID};
+        #[cfg(features = "ulid")]
+        {
+            use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID};
 
-        let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-        let rand = ThreadRandom::default();
-        let generator = BasicUlidGenerator::new(clock, rand);
+            let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+            let rand = ThreadRandom::default();
+            let generator = BasicUlidGenerator::new(clock, rand);
 
-        let id: ULID = generator.try_next_id_async().await?;
-        println!("Generated ID: {}", id);
+            let id: ULID = generator.try_next_id_async().await?;
+            println!("Generated ID: {}", id);
+        }
 
         Ok(())
     })
@@ -247,9 +256,10 @@ define_ulid!(
 ```
 
 > ⚠️ Note: All four sections (`reserved`, `timestamp`, `machine_id`, and
-> `sequence`) must be specified in the macro, even if a section uses 0 bits.
-> `reserved` bits are always stored as **zero** and can be used for future
-> expansion.
+> `sequence`) must be specified in the snowflake macro, even if a section uses 0
+> bits. `reserved` bits are always stored as **zero** and can be used for future
+> expansion. Similarly ulid macro requries (`reserved`, `timestamp`, `random`)
+> fields.
 
 ### Behavior
 
@@ -317,8 +327,7 @@ sequence limit per millisecond.
 
 - **Sync Snowflake**: Benchmarks the hot path without yielding to the clock.
 - **Async Snowflake**: Also uses 4096-ID batches, but may yield (sequence
-  exhaustion/CAS failure) or await due to task scheduling, reducing
-  throughput.
+  exhaustion/CAS failure) or await due to task scheduling, reducing throughput.
 - **ULID**: Benchmarked using the same chunk size, but performance is primarily
   limited by random number generation, not sequence or clock behavior.
 

@@ -1,4 +1,4 @@
-# 🧊 ferroid
+# 🤖 ferroid
 
 **ferroid** is a modular Rust workspace for generating and streaming
 time-sortable IDs - including Snowflake-style IDs and ULIDs - with optional

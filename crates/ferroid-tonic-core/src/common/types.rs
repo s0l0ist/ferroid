@@ -48,6 +48,8 @@ use ferroid::{BasicSnowflakeGenerator, CUSTOM_EPOCH, Id, MonotonicClock, Snowfla
 ///
 /// Defaults to [`SnowflakeTwitterId`], but can be replaced in custom builds
 /// with any type implementing [`Snowflake`].
+///
+/// [`Snowflake`]: crate::ferroid::Snowflake
 pub type SnowflakeId = SnowflakeTwitterId;
 
 /// The primitive integer type that backs a [`SnowflakeId`] (typically `u64`).
