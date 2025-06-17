@@ -7,7 +7,6 @@ use core::{
     task::{Context, Poll},
     time::Duration,
 };
-
 use pin_project_lite::pin_project;
 
 /// Extension trait for asynchronously generating Snowflake IDs.

@@ -20,7 +20,7 @@ crate-type = ["cdylib", "rlib"]
 base32 = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 pin-project-lite = { workspace = true, optional = true }
-rand = { workspace = true, features = ["thread_rng"] }
+rand = { workspace = true, optional = true, features = ["thread_rng"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
 smol = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["time", "rt-multi-thread"] }
@@ -42,6 +42,7 @@ default = []
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
 base32 = ["dep:base32"]
+ulid = ["dep:rand"]
 futures = ["dep:futures", "dep:pin-project-lite"]
 async-tokio = ["futures", "dep:tokio"]
 async-smol = ["futures", "dep:smol"]
