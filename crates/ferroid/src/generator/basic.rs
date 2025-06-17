@@ -1,5 +1,5 @@
 use crate::{
-    Fluid, FluidGenerator, IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource,
+    IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource, Ulid, UlidGenerator,
     rand::RandSource,
 };
 use core::{cell::Cell, cmp::Ordering, marker::PhantomData};
@@ -225,7 +225,7 @@ where
     }
 }
 
-/// A non-concurrent Fluid ID generator suitable for single-threaded
+/// A non-concurrent Ulid ID generator suitable for single-threaded
 /// environments.
 ///
 /// This generator is lightweight and fast, but **not thread-safe**. It combines
@@ -251,9 +251,9 @@ where
 /// - **Performance**: Very fast (no sequence management)
 /// - **Ordering**: Time-ordered, but not strictly monotonic
 /// - **Coordination**: None required between generators
-pub struct BasicFluidGenerator<ID, T, R>
+pub struct BasicUlidGenerator<ID, T, R>
 where
-    ID: Fluid,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -262,9 +262,9 @@ where
     _id: PhantomData<ID>,
 }
 
-impl<ID, T, R> BasicFluidGenerator<ID, T, R>
+impl<ID, T, R> BasicUlidGenerator<ID, T, R>
 where
-    ID: Fluid,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -277,9 +277,9 @@ where
     }
 }
 
-impl<ID, T, R> FluidGenerator<ID, T, R> for BasicFluidGenerator<ID, T, R>
+impl<ID, T, R> UlidGenerator<ID, T, R> for BasicUlidGenerator<ID, T, R>
 where
-    ID: Fluid,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {

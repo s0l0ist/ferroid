@@ -4,15 +4,15 @@
 //! monotonic ULID-style IDs using a customizable bit partition between
 //! `timestamp` and `randomness`.
 //!
-//! Unlike Snowflake IDs, FUIDs do not include machine identifiers or sequences.
-//! Instead, they prioritize compact encoding of wall-clock time and entropy.
+//! Unlike Snowflake IDs, ULIDs do not include machine identifiers or sequences.
+//! Instead, they use random entropy.
 //!
 //! Example usage:
 //!
 //! ```
-//! use ferroid::{Fluid, define_fluid};
+//! use ferroid::{Ulid, define_ulid};
 //!
-//! define_fluid!(
+//! define_ulid!(
 //!     MyUlid, u128,
 //!     reserved: 0,
 //!     timestamp: 48,
@@ -36,11 +36,11 @@ use core::{
 /// fixed-size integer (e.g., `u128`) used for high-entropy time-sortable ID
 /// generation.
 ///
-/// Types implementing `Fluid` expose methods for construction, encoding, and
+/// Types implementing `Ulid` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
 ///
 /// Unlike `Snowflake`, this trait does not assume a sequence or machine ID.
-pub trait Fluid:
+pub trait Ulid:
     Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
     type Ty: Copy
@@ -72,7 +72,7 @@ pub trait Fluid:
     /// Returns the maximum possible value for the randomness field.
     fn max_randomness() -> Self::Ty;
 
-    /// Constructs a new Fluid from its components.
+    /// Constructs a new Ulid from its components.
     fn from_components(timestamp: Self::Ty, randomness: Self::Ty) -> Self;
 
     /// Converts this type into its raw type representation
@@ -84,7 +84,7 @@ pub trait Fluid:
     fn to_padded_string(&self) -> String;
 }
 
-/// Declares a `FluID`-compatible type with custom timestamp and randomness bit
+/// Declares a `Ulid`-compatible type with custom timestamp and randomness bit
 /// layouts.
 ///
 /// This macro defines a packed ID structure using a fixed-width integer (e.g.,
@@ -98,18 +98,18 @@ pub trait Fluid:
 /// The ID is packed from **MSB to LSB**:
 ///
 /// ```text
-///  Bit Index:  high bits               low bits
-///              +---------------+----------------+
-///  Field:      | timestamp (N) | randomness (M) |
-///              +---------------+----------------+
-///              |<--- MSB -- 128 bits -- LSB --->|
+///  Bit Index:  127            M M - 1       0
+///              +---------------+------------+
+///  Field:      | timestamp (N) | random (M) |
+///              +---------------+------------+
+///              |<-- MSB - 128 bits - LSB -->|
 /// ```
 ///
 /// ## Example
 ///
 /// ```
-/// use ferroid::define_fluid;
-/// define_fluid!(
+/// use ferroid::define_ulid;
+/// define_ulid!(
 ///     MyUlid, u128,
 ///     reserved: 0,
 ///     timestamp: 48,
@@ -122,7 +122,7 @@ pub trait Fluid:
 /// - 48 bits for the timestamp (stored in the upper bits)
 /// - 80 bits of randomness (lower bits)
 #[macro_export]
-macro_rules! define_fluid {
+macro_rules! define_ulid {
     (
         $(#[$meta:meta])*
         $name:ident, $int:ty,
@@ -141,7 +141,7 @@ macro_rules! define_fluid {
             // type. This is to avoid aliasing surprises.
             assert!(
                 $reserved_bits + $timestamp_bits + $random_bits == <$int>::BITS,
-                "Fluid layout overflows the underlying integer type"
+                "Ulid layout overflows the underlying integer type"
             );
         };
 
@@ -186,7 +186,7 @@ macro_rules! define_fluid {
             }
         }
 
-        impl $crate::Fluid for $name {
+        impl $crate::Ulid for $name {
             type Ty = $int;
 
             fn timestamp(&self) -> Self::Ty {
@@ -244,12 +244,12 @@ macro_rules! define_fluid {
                 let mut dbg = f.debug_struct(name);
                 dbg.field("id", &format_args!("{:} (0x{:x})", self.to_raw(), self.to_raw()));
 
-                use $crate::Fluid;
+                use $crate::Ulid;
                 dbg.field("padded", &self.to_padded_string());
 
                 #[cfg(feature = "base32")]
                 {
-                    use $crate::FluidBase32Ext;
+                    use $crate::UlidBase32Ext;
                     dbg.field("base32", &self.encode());
                 }
 
@@ -262,8 +262,8 @@ macro_rules! define_fluid {
     };
 }
 
-define_fluid!(
-    /// A 128-bit Fluid using the ULID layout
+define_ulid!(
+    /// A 128-bit Ulid using the ULID layout
     ///
     /// - 0 bits reserved
     /// - 48 bits timestamp
@@ -276,7 +276,7 @@ define_fluid!(
     ///              +----------------+-------------+
     ///              |<-- MSB -- 128 bits -- LSB -->|
     /// ```
-    Ulid, u128,
+    ULID, u128,
     reserved: 0,
     timestamp: 48,
     random: 80
@@ -288,23 +288,23 @@ mod tests {
 
     #[test]
     fn test_snowflake_ulid_id_fields_and_bounds() {
-        let ts = Ulid::max_timestamp();
-        let rand = Ulid::max_randomness();
+        let ts = ULID::max_timestamp();
+        let rand = ULID::max_randomness();
 
-        let id = Ulid::from(ts, rand);
+        let id = ULID::from(ts, rand);
         println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.randomness(), rand);
-        assert_eq!(Ulid::from_components(ts, rand), id);
+        assert_eq!(ULID::from_components(ts, rand), id);
     }
 
     #[test]
     fn ulid_low_bit_fields() {
-        let id = Ulid::from_components(0, 0);
+        let id = ULID::from_components(0, 0);
         assert_eq!(id.timestamp(), 0);
         assert_eq!(id.randomness(), 0);
 
-        let id = Ulid::from_components(1, 1);
+        let id = ULID::from_components(1, 1);
         assert_eq!(id.timestamp(), 1);
         assert_eq!(id.randomness(), 1);
     }

@@ -3,10 +3,10 @@ use core::hint::black_box;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, BasicFluidGenerator, BasicSnowflakeGenerator, Error, Fluid,
-    FluidGenerator, IdGenStatus, LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep,
-    Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom,
-    TimeSource, TokioSleep, Ulid,
+    AtomicSnowflakeGenerator, BasicSnowflakeGenerator, BasicUlidGenerator, Error, IdGenStatus,
+    LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
+    SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource, TokioSleep, ULID,
+    Ulid, UlidGenerator,
 };
 use futures::future::try_join_all;
 use std::{
@@ -259,13 +259,13 @@ pub fn bench_generator_async_smol<ID, G, T>(
     group.finish();
 }
 
-fn bench_generator_fluid<ID, G, T, R>(
+fn bench_generator_ulid<ID, G, T, R>(
     c: &mut Criterion,
     group_name: &str,
     generator_factory: impl Fn() -> G,
 ) where
-    ID: Fluid,
-    G: FluidGenerator<ID, T, R>,
+    ID: Ulid,
+    G: UlidGenerator<ID, T, R>,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -292,13 +292,13 @@ fn bench_generator_fluid<ID, G, T, R>(
 }
 
 /// Benchmarks shared generator across threads, with no yielding (fixed clock).
-fn bench_generator_fluid_contended<ID, G, T, R>(
+fn bench_generator_ulid_contended<ID, G, T, R>(
     c: &mut Criterion,
     group_name: &str,
     generator_fn: impl Fn() -> G,
 ) where
-    ID: Fluid,
-    G: FluidGenerator<ID, T, R> + Send + Sync,
+    ID: Ulid,
+    G: UlidGenerator<ID, T, R> + Send + Sync,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -452,17 +452,17 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
     );
 }
 
-// --- Fluid ---
-/// Single-threaded benchmark for `BasicFluidGenerator` with a fixed clock.
-fn benchmark_mono_sequential_fluid(c: &mut Criterion) {
-    bench_generator_fluid::<Ulid, _, _, _>(c, "mock/sequential/fluid", || {
-        BasicFluidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+// --- Ulid ---
+/// Single-threaded benchmark for `BasicUlidGenerator` with a fixed clock.
+fn benchmark_mono_sequential_ulid(c: &mut Criterion) {
+    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid", || {
+        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
     });
 }
 
-fn benchmark_mono_contended_fluid(c: &mut Criterion) {
-    bench_generator_fluid_contended::<Ulid, _, _, _>(c, "mock/contended/fluid", || {
-        BasicFluidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+fn benchmark_mono_contended_ulid(c: &mut Criterion) {
+    bench_generator_ulid_contended::<ULID, _, _, _>(c, "mock/contended/ulid", || {
+        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
     });
 }
 
@@ -481,8 +481,8 @@ criterion_group!(
     benchmark_mono_tokio_atomic,
     benchmark_mono_smol_lock,
     benchmark_mono_smol_atomic,
-    // Fluid
-    benchmark_mono_sequential_fluid,
-    benchmark_mono_contended_fluid,
+    // Ulid
+    benchmark_mono_sequential_ulid,
+    benchmark_mono_contended_ulid,
 );
 criterion_main!(benches);

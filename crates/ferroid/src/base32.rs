@@ -1,4 +1,4 @@
-use crate::{Error, Fluid, Result, Snowflake};
+use crate::{Error, Result, Snowflake, Ulid};
 use base32::{Alphabet, decode, encode};
 use core::convert::TryInto;
 
@@ -79,7 +79,7 @@ where
 {
 }
 
-pub trait FluidBase32Ext: Fluid
+pub trait UlidBase32Ext: Ulid
 where
     Self::Ty: BeBytes,
 {
@@ -95,9 +95,9 @@ where
     }
 }
 
-impl<ID> FluidBase32Ext for ID
+impl<ID> UlidBase32Ext for ID
 where
-    ID: Fluid,
+    ID: Ulid,
     ID::Ty: BeBytes,
 {
 }

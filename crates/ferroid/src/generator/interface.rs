@@ -1,4 +1,4 @@
-use crate::{Fluid, IdGenStatus, Result, Snowflake, TimeSource, rand::RandSource};
+use crate::{IdGenStatus, Result, Snowflake, TimeSource, Ulid, rand::RandSource};
 
 /// A minimal interface for generating Snowflake IDs
 pub trait SnowflakeGenerator<ID, T>
@@ -16,10 +16,10 @@ where
     fn try_next_id(&self) -> Result<IdGenStatus<ID>>;
 }
 
-/// A minimal interface for generating FLuid IDs
-pub trait FluidGenerator<ID, T, R>
+/// A minimal interface for generating Ulid IDs
+pub trait UlidGenerator<ID, T, R>
 where
-    ID: Fluid,
+    ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
