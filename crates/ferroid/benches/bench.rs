@@ -610,16 +610,16 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
 }
 
 // --- Ulid ---
-/// Single-threaded benchmark for `BasicUlidGenerator` with a fixed clock.
+/// Single-threaded benchmark for `BasicUlidGenerator` with a monotonic clock.
 fn benchmark_mono_sequential_ulid(c: &mut Criterion) {
-    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid", || {
-        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid", || {
+        BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
     });
 }
 
 fn benchmark_mono_contended_ulid(c: &mut Criterion) {
-    bench_generator_ulid_contended::<ULID, _, _, _>(c, "mock/contended/ulid", || {
-        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+    bench_generator_ulid_contended::<ULID, _, _, _>(c, "mono/contended/ulid", || {
+        BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
     });
 }
 

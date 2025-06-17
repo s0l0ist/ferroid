@@ -6,6 +6,8 @@ use crate::{RandSource, Result, SmolSleep, TimeSource, Ulid, UlidGenerator};
 /// This trait provides a convenience method for using a [`SleepProvider`]
 /// backed by the `smol` runtime, allowing you to call `.try_next_id_async()`
 /// without needing to specify the sleep strategy manually.
+///
+/// [`SleepProvider`]: crate::SleepProvider
 pub trait UlidGeneratorAsyncSmolExt<ID, T, R>
 where
     ID: Ulid,

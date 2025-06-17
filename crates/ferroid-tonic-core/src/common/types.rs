@@ -13,16 +13,16 @@
 //!
 //! ## Type Aliases
 //!
-//! - [`SnowflakeId`] — The default Snowflake ID type (backed by
+//! - [`SnowflakeId`] - The default Snowflake ID type (backed by
 //!   [`SnowflakeTwitterId`])
-//! - [`SnowflakeIdTy`] — The primitive integer backing the ID (typically `u64`)
-//! - [`Clock`] — The system clock used for timestamp embedding
-//! - [`Generator`] — The default ID generator used by worker tasks
+//! - [`SnowflakeIdTy`] - The primitive integer backing the ID (typically `u64`)
+//! - [`Clock`] - The system clock used for timestamp embedding
+//! - [`Generator`] - The default ID generator used by worker tasks
 //!
 //! ## Constants
 //!
-//! - [`SNOWFLAKE_ID_SIZE`] — Size (in bytes) of a serialized ID
-//! - [`EPOCH`] — Epoch offset used for timestamp generation
+//! - [`SNOWFLAKE_ID_SIZE`] - Size (in bytes) of a serialized ID
+//! - [`EPOCH`] - Epoch offset used for timestamp generation
 //!
 //! ## Customization
 //!

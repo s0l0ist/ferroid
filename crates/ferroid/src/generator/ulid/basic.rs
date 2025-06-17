@@ -41,7 +41,7 @@ use tracing::instrument;
 /// `thread_rng()` internally, making it safe for concurrent use across threads
 /// without contention.
 ///
-/// [`ThreadRandom`]: crate::rand::ThreadRandom
+/// [`ThreadRandom`]: crate::ThreadRandom
 /// [`TimeSource`]: crate::TimeSource
 /// [`RandSource`]: crate::rand::RandSource
 pub struct BasicUlidGenerator<ID, T, R>

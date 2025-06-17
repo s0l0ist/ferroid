@@ -6,6 +6,8 @@ use crate::{RandSource, Result, TimeSource, TokioSleep, Ulid, UlidGenerator};
 /// This trait provides a convenience method for using a [`SleepProvider`]
 /// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
 /// without specifying the sleep strategy manually.
+/// 
+/// [`SleepProvider`]: crate::SleepProvider
 pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
 where
     ID: Ulid,

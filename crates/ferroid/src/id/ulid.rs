@@ -233,7 +233,7 @@ define_ulid!(
     /// - 80 bits randomness
     ///
     /// ```text
-    ///  Bit Index:  127            80 79             0
+    ///  Bit Index:  127            80 79           0
     ///              +----------------+-------------+
     ///  Field:      | timestamp (48) | random (80) |
     ///              +----------------+-------------+

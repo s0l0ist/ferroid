@@ -6,6 +6,8 @@ use crate::{Result, SmolSleep, Snowflake, SnowflakeGenerator, TimeSource};
 /// This trait provides a convenience method for using a [`SleepProvider`]
 /// backed by the `smol` runtime, allowing you to call `.try_next_id_async()`
 /// without needing to specify the sleep strategy manually.
+///
+/// [`SleepProvider`]: crate::SleepProvider
 pub trait SnowflakeGeneratorAsyncSmolExt<ID, T>
 where
     ID: Snowflake,
