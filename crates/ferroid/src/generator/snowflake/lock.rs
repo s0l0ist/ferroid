@@ -170,7 +170,7 @@ where
     ///     Ok(IdGenStatus::Pending { yield_for }) => {
     ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
-    ///     Err(err) => eprintln!("Generator error: {}", err),
+    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]

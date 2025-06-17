@@ -623,8 +623,8 @@ fn benchmark_mono_contended_ulid(c: &mut Criterion) {
     });
 }
 
-/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across
-/// tokio tasks.
+/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across tokio
+/// tasks.
 fn benchmark_mono_tokio_ulid(c: &mut Criterion) {
     bench_ulid_generator_async_tokio::<ULID, _, _, _>(
         c,
@@ -635,8 +635,8 @@ fn benchmark_mono_tokio_ulid(c: &mut Criterion) {
     );
 }
 
-/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across
-/// smol tasks.
+/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across smol
+/// tasks.
 fn benchmark_mono_smol_ulid(c: &mut Criterion) {
     bench_ulid_generator_async_smol::<ULID, _, _, _>(
         c,
@@ -650,6 +650,7 @@ fn benchmark_mono_smol_ulid(c: &mut Criterion) {
 criterion_group!(
     benches,
     // --- Snowflake ---
+    //
     // Mock clock
     benchmark_mock_sequential_basic,
     benchmark_mock_sequential_lock,
@@ -664,6 +665,12 @@ criterion_group!(
     benchmark_mono_smol_lock,
     benchmark_mono_smol_atomic,
     // --- Ulid ---
+    //
+    // Mock clock
+    //
+    // (Ulid doesn't have these because the benchmark is
+    // completely dominated by the RandomSource.
+    //
     // Monotonic clocks
     benchmark_mono_sequential_ulid,
     benchmark_mono_contended_ulid,

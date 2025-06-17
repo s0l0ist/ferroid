@@ -1,8 +1,5 @@
-use crate::{
-    IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource, Ulid, UlidGenerator,
-    rand::RandSource,
-};
-use core::{cell::Cell, cmp::Ordering, marker::PhantomData};
+use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -172,7 +169,7 @@ where
     ///     Ok(IdGenStatus::Pending { yield_for }) => {
     ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
-    ///     Err(err) => eprintln!("Generator error: {}", err),
+    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
@@ -214,90 +211,6 @@ where
 {
     fn new(machine_id: ID::Ty, clock: T) -> Self {
         Self::new(machine_id, clock)
-    }
-
-    fn next_id(&self) -> IdGenStatus<ID> {
-        self.next_id()
-    }
-
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
-        self.try_next_id()
-    }
-}
-
-/// A non-concurrent Ulid ID generator suitable for single-threaded
-/// environments.
-///
-/// This generator is lightweight and fast, but **not thread-safe**. It combines
-/// timestamps with random values to create probabilistically unique IDs without
-/// requiring sequence coordination.
-///
-/// ## Features
-///
-/// - ❌ Not thread-safe
-/// - ✅ Probabilistically unique (no coordination required)
-/// - ✅ Time-ordered with microsecond precision
-/// - ✅ Suitable for distributed systems
-/// - ✅ No sequence exhaustion issues
-///
-/// ## Recommended When
-/// - You're in a single-threaded environment (no shared access)
-/// - You want probabilistic uniqueness without coordination overhead
-/// - You need time-ordered IDs across distributed nodes
-/// - You want to avoid sequence exhaustion scenarios
-///
-/// ## Trade-offs
-/// - **Uniqueness**: Probabilistic (collision chance ≈ 1 in 2^random_bits)
-/// - **Performance**: Very fast (no sequence management)
-/// - **Ordering**: Time-ordered, but not strictly monotonic
-/// - **Coordination**: None required between generators
-pub struct BasicUlidGenerator<ID, T, R>
-where
-    ID: Ulid,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
-{
-    clock: T,
-    rng: R,
-    _id: PhantomData<ID>,
-}
-
-impl<ID, T, R> BasicUlidGenerator<ID, T, R>
-where
-    ID: Ulid,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
-{
-    pub fn new(clock: T, rng: R) -> Self {
-        Self {
-            clock,
-            rng,
-            _id: PhantomData,
-        }
-    }
-
-    pub fn next_id(&self) -> IdGenStatus<ID> {
-        self.try_next_id().unwrap()
-    }
-
-    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
-        let t = self.clock.current_millis();
-        let r = self.rng.rand();
-        Ok(IdGenStatus::Ready {
-            id: ID::from_components(t, r),
-        })
-    }
-}
-
-impl<ID, T, R> UlidGenerator<ID, T, R> for BasicUlidGenerator<ID, T, R>
-where
-    ID: Ulid,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
-{
-    fn new(clock: T, rng: R) -> Self {
-        Self::new(clock, rng)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {
