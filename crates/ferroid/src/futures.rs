@@ -11,6 +11,18 @@ use core::{
 };
 use pin_project_lite::pin_project;
 
+/// A trait that abstracts over how to sleep for a given [`Duration`] in async
+/// contexts.
+///
+/// This allows the generator to be generic over runtimes like `Tokio` or
+/// `Smol`.
+pub trait SleepProvider {
+    /// We require `Send` so that the future can be safely moved across threads
+    type Sleep: Future<Output = ()> + Send;
+
+    fn sleep_for(dur: Duration) -> Self::Sleep;
+}
+
 /// Extension trait for asynchronously generating Snowflake IDs.
 ///
 /// This trait enables `SnowflakeGenerator` types to yield IDs in a
@@ -49,18 +61,6 @@ where
     {
         SnowflakeGeneratorFuture::<'a, G, ID, T, S>::new(self)
     }
-}
-
-/// A trait that abstracts over how to sleep for a given [`Duration`] in async
-/// contexts.
-///
-/// This allows the generator to be generic over runtimes like `Tokio` or
-/// `Smol`.
-pub trait SleepProvider {
-    /// We require `Send` so that the future can be safely moved across threads
-    type Sleep: Future<Output = ()> + Send;
-
-    fn sleep_for(dur: Duration) -> Self::Sleep;
 }
 
 pin_project! {
@@ -141,13 +141,12 @@ where
     }
 }
 
-/// Extension trait for asynchronously generating Snowflake IDs.
+/// Extension trait for asynchronously generating ULIDs.
 ///
-/// This trait enables `SnowflakeGenerator` types to yield IDs in a
-/// `Future`-based context by awaiting until the generator is ready to produce a
-/// new ID.
+/// This trait enables `UlidGenerator` types to yield IDs in a `Future`-based
+/// context by awaiting until the generator is ready to produce a new ID.
 ///
-/// The default implementation uses [`GeneratorFuture`] and a specified
+/// The default implementation uses [`UlidGeneratorFuture`] and a specified
 /// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait UlidGeneratorAsyncExt<ID, T, R>
 where
@@ -184,8 +183,8 @@ where
 }
 
 pin_project! {
-    /// A future that polls a [`UlidGenerator`] until it is ready to
-    /// produce an ID.
+    /// A future that polls a [`UlidGenerator`] until it is ready to produce an
+    /// ID.
     ///
     /// This future handles `Pending` responses by sleeping for a recommended
     /// amount of time before polling the generator again.
