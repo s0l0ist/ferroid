@@ -3,14 +3,6 @@
 [`ferroid`](https://github.com/s0l0ist/ferroid) is a Rust crate for generating
 and parsing **Snowflake** and **ULID** identifiers.
 
-It provides fast, configurable ID generation for distributed systems, with:
-
-- Pre-built layouts for platforms like Twitter, Discord, Instagram, and Mastodon
-  (Snowflake)
-- ULID support with 128-bit, time-sortable IDs (`ulid` feature)
-- Time-based ordering, lexicographic encoding, and pluggable clock/random
-  sources
-
 ## Features
 
 - 📌 Bit-level compatibility with major Snowflake and ULID formats
@@ -97,7 +89,6 @@ that case, you can spin, yield, or sleep depending on your environment:
     };
 }
 
-
 #[cfg(feature = "ulid")]
 {
     use ferroid::{MonotonicClock, IdGenStatus, TWITTER_EPOCH, ThreadRandom, BasicUlidGenerator, ULID};
@@ -121,14 +112,8 @@ If you're in an async context (e.g., using [Tokio](https://tokio.rs/) or
 [Smol](https://github.com/smol-rs/smol)), you can enable one of the following
 features:
 
-- `async-tokio` - for integration with the Tokio runtime
-- `async-smol` - for integration with the Smol runtime
-
-Then, import the corresponding `SnowflakeGeneratorAsyncTokioExt` or
-`SnowflakeGeneratorAsyncSmolExt` trait to asynchronously request a new ID
-without blocking or spinning.
-
-Tokio Example
+- `async-tokio`
+- `async-smol`
 
 ```rust
 #[cfg(feature = "async-tokio")]
@@ -165,14 +150,10 @@ Tokio Example
         Ok(())
     }
 }
-```
 
-Smol Example
-
-```rust
 #[cfg(feature = "async-smol")]
 {
-    use ferroid::{Result, MonotonicClock, MASTODON_EPOCH};
+    use ferroid::{Result, MonotonicClock, CUSTOM_EPOCH};
 
     fn main() -> Result<()> {
         smol::block_on(async {
@@ -183,7 +164,7 @@ Smol Example
                     SnowflakeGeneratorAsyncSmolExt
                 };
 
-                let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+                let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
                 let generator = AtomicSnowflakeGenerator::new(0, clock);
 
                 let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
@@ -194,7 +175,7 @@ Smol Example
             {
                 use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID};
 
-                let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+                let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
                 let rand = ThreadRandom::default();
                 let generator = BasicUlidGenerator::new(clock, rand);
 
@@ -210,7 +191,7 @@ Smol Example
 
 ### Custom Layouts
 
-To define a custom Snowflake layout, use the `define_snowflake_id` macro:
+To define a custom layouts, use the `define_*` macros:
 
 ```rust
 #[cfg(feature = "snowflake")]
@@ -277,20 +258,25 @@ To define a custom Snowflake layout, use the `define_snowflake_id` macro:
 > ⚠️ Note: All four sections (`reserved`, `timestamp`, `machine_id`, and
 > `sequence`) must be specified in the snowflake macro, even if a section uses 0
 > bits. `reserved` bits are always stored as **zero** and can be used for future
-> expansion. Similarly ulid macro requries (`reserved`, `timestamp`, `random`)
-> fields.
+> expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`,
+> `random`) fields.
 
 ### Behavior
+
+Snowflake:
 
 - If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
 - If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
 - If the clock **goes backward**: return `IdGenStatus::Pending`
 - If the sequence **overflows**: return `IdGenStatus::Pending`
 
+Ulid:
+
+- Always returns → `IdGenStatus::Ready` to have a Compatable API with Snowflake.
+
 ### Serialize as padded string
 
-Use `.to_padded_string()` or `.encode()` (enabled with `base32` feature) for
-sortable representations:
+Use `.to_padded_string()` or `.encode()` for sortable string representations:
 
 ```rust
 #[cfg(feature = "snowflake")]
@@ -316,7 +302,6 @@ sortable representations:
         assert_eq!(id, decoded);
     }
 }
-
 
 #[cfg(feature = "ulid")]
 {
@@ -347,16 +332,13 @@ sortable representations:
 Snowflake ID generation is theoretically capped by:
 
 ```text
-max IDs/sec = 2^sequence_bits × 1000
+max IDs/sec = 2^sequence_bits × 1000ms
 ```
-
-This is because you can generate up to `2^n` IDs per millisecond, and there are
-1000 milliseconds in a second.
 
 For example, Twitter-style IDs (12 sequence bits) allow:
 
 ```text
-4096 IDs/ms × 1000 ms/sec = 4,096,000 IDs/sec
+4096 IDs/ms × 1000 ms/sec = ~$M IDs/sec
 ```
 
 To benchmark this, we generate IDs in **chunks of 4096**, which aligns with the

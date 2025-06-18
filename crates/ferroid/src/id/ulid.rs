@@ -112,7 +112,6 @@ macro_rules! define_ulid {
                 Self { id: t | r }
             }
 
-
             /// Extracts the timestamp from the packed ID.
             pub const fn timestamp(&self) -> $int {
                 (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
@@ -158,13 +157,10 @@ macro_rules! define_ulid {
             }
         }
 
-
         impl $crate::Ulid for $name {
-
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
-
 
             fn random(&self) -> Self::Ty {
                 self.random()
