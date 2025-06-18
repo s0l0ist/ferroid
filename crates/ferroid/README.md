@@ -338,7 +338,7 @@ max IDs/sec = 2^sequence_bits × 1000ms
 For example, Twitter-style IDs (12 sequence bits) allow:
 
 ```text
-4096 IDs/ms × 1000 ms/sec = ~$M IDs/sec
+4096 IDs/ms × 1000 ms/sec = ~4M IDs/sec
 ```
 
 To benchmark this, we generate IDs in **chunks of 4096**, which aligns with the
