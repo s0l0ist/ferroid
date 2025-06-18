@@ -11,7 +11,7 @@ mod futures;
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 mod generator;
 mod id;
-mod mono_clock_native;
+mod mono_clock;
 #[cfg(feature = "ulid")]
 mod rand;
 mod runtime;
@@ -28,7 +28,7 @@ pub use crate::futures::*;
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 pub use crate::generator::*;
 pub use crate::id::*;
-pub use crate::mono_clock_native::*;
+pub use crate::mono_clock::*;
 #[cfg(feature = "ulid")]
 pub use crate::rand::*;
 #[cfg(any(feature = "async-tokio", feature = "async-smol"))]
