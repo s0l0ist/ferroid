@@ -39,10 +39,12 @@ harness = false
 
 [features]
 default = []
+snowflake = []
+ulid = ["dep:rand"]
+
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
 base32 = ["dep:base32"]
-ulid = ["dep:rand"]
 futures = ["dep:futures", "dep:pin-project-lite"]
 async-tokio = ["futures", "dep:tokio"]
 async-smol = ["futures", "dep:smol"]

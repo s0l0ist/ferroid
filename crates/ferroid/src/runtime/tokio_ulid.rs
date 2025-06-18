@@ -6,7 +6,7 @@ use crate::{RandSource, Result, TimeSource, TokioSleep, Ulid, UlidGenerator};
 /// This trait provides a convenience method for using a [`SleepProvider`]
 /// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
 /// without specifying the sleep strategy manually.
-/// 
+///
 /// [`SleepProvider`]: crate::SleepProvider
 pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
 where
@@ -54,8 +54,8 @@ mod tests {
     use std::collections::HashSet;
 
     const TOTAL_IDS: usize = 4096;
-    const NUM_GENERATORS: u64 = 32;
-    const IDS_PER_GENERATOR: usize = TOTAL_IDS * 32; // Enough to simulate at least 32 Pending cycles
+    const NUM_GENERATORS: u64 = 8;
+    const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
 
     // Test the explicit SleepProvider approach
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

@@ -79,8 +79,8 @@ where
 {
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(all(test, feature = "snowflake"))]
+mod snowflake_tests {
     use super::*;
     use crate::{
         Snowflake, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
@@ -237,7 +237,7 @@ mod ulid_tests {
         println!("id (raw decimal): {}", raw);
         println!("id (raw binary):  {:064b}", raw);
         println!("timestamp:  0x{:x}", id.timestamp());
-        println!("randomness id: 0x{:x}", id.randomness());
+        println!("random id: 0x{:x}", id.random());
         println!("encoded:    {}", encoded);
         println!("decoded:    {}", decoded);
 
@@ -246,7 +246,7 @@ mod ulid_tests {
 
     #[test]
     fn ulid_max() {
-        let id = ULID::from_components(ULID::max_timestamp(), ULID::max_randomness());
+        let id = ULID::from_components(ULID::max_timestamp(), ULID::max_random());
         test_encode_decode_ulid(id, "max");
         assert_eq!(id.to_raw(), u128::MAX)
     }

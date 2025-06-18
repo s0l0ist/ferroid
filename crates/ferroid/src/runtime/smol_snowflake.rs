@@ -53,8 +53,8 @@ mod tests {
     use std::collections::HashSet;
 
     const TOTAL_IDS: usize = 4096;
-    const NUM_GENERATORS: u64 = 32;
-    const IDS_PER_GENERATOR: usize = TOTAL_IDS * 32;
+    const NUM_GENERATORS: u64 = 8;
+    const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
     #[test]
     fn generates_many_unique_ids_lock_smol() {

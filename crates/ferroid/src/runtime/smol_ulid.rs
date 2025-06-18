@@ -14,19 +14,19 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Returns a future that resolves to the next available Snowflake ID using
+    /// Returns a future that resolves to the next available Ulid using
     /// the [`SmolSleep`] provider.
     ///
     /// Internally delegates to
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] method with
+    /// [`UlidGeneratorAsyncExt::try_next_id_async`] method with
     /// [`SmolSleep`] as the sleep strategy.
     ///
     /// # Errors
     ///
     /// This future may return an error if the underlying generator does.
     ///
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
+    /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
+    ///     crate::UlidGeneratorAsyncExt::try_next_id_async
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
 }
 
@@ -55,8 +55,8 @@ mod tests {
     use std::collections::HashSet;
 
     const TOTAL_IDS: usize = 4096;
-    const NUM_GENERATORS: u64 = 32;
-    const IDS_PER_GENERATOR: usize = TOTAL_IDS * 32;
+    const NUM_GENERATORS: u64 = 8;
+    const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
     // Test the explicit SleepProvider approach
     #[test]

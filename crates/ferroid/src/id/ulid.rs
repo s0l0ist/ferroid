@@ -3,7 +3,7 @@ use core::{fmt, hash::Hash};
 
 /// Trait for layout-compatible ULID-style identifiers.
 ///
-/// This trait abstracts a `timestamp` and `randomness` partition over a
+/// This trait abstracts a `timestamp` and `random` partition over a
 /// fixed-size integer (e.g., `u128`) used for high-entropy time-sortable ID
 /// generation.
 ///
@@ -17,22 +17,22 @@ pub trait Ulid:
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
-    /// Returns the randomness portion of the ID.
-    fn randomness(&self) -> Self::Ty;
+    /// Returns the random portion of the ID.
+    fn random(&self) -> Self::Ty;
 
     /// Returns the maximum possible value for the timestamp field.
     fn max_timestamp() -> Self::Ty;
 
-    /// Returns the maximum possible value for the randomness field.
-    fn max_randomness() -> Self::Ty;
+    /// Returns the maximum possible value for the random field.
+    fn max_random() -> Self::Ty;
 
     /// Constructs a new Ulid from its components.
-    fn from_components(timestamp: Self::Ty, randomness: Self::Ty) -> Self;
+    fn from_components(timestamp: Self::Ty, random: Self::Ty) -> Self;
 
     fn to_padded_string(&self) -> String;
 }
 
-/// Declares a `Ulid`-compatible type with custom timestamp and randomness bit
+/// Declares a `Ulid`-compatible type with custom timestamp and random bit
 /// layouts.
 ///
 /// This macro defines a packed ID structure using a fixed-width integer (e.g.,
@@ -68,7 +68,7 @@ pub trait Ulid:
 /// This creates a type `MyUlid` with:
 /// - 0 bits reserved
 /// - 48 bits for the timestamp (stored in the upper bits)
-/// - 80 bits of randomness (lower bits)
+/// - 80 bits of random (lower bits)
 #[macro_export]
 macro_rules! define_ulid {
     (
@@ -119,7 +119,7 @@ macro_rules! define_ulid {
             }
 
             /// Extracts the timestamp from the packed ID.
-            pub const fn randomness(&self) -> $int {
+            pub const fn random(&self) -> $int {
                 (self.id >> Self::RANDOM_SHIFT) & Self::RANDOM_MASK
             }
             /// Returns the maximum representable timestamp value based on
@@ -129,7 +129,7 @@ macro_rules! define_ulid {
             }
             /// Returns the maximum representable sequence value based on
             /// Self::RANDOM_BITS.
-            pub const fn max_randomness() -> $int {
+            pub const fn max_random() -> $int {
                 (1 << Self::RANDOM_BITS) - 1
             }
 
@@ -166,20 +166,20 @@ macro_rules! define_ulid {
             }
 
 
-            fn randomness(&self) -> Self::Ty {
-                self.randomness()
+            fn random(&self) -> Self::Ty {
+                self.random()
             }
 
             fn max_timestamp() -> Self::Ty {
                 (1 << $timestamp_bits) - 1
             }
 
-            fn max_randomness() -> Self::Ty {
+            fn max_random() -> Self::Ty {
                 (1 << $random_bits) - 1
             }
 
-            fn from_components(timestamp: $int, randomness: $int) -> Self {
-                Self::from(timestamp, randomness)
+            fn from_components(timestamp: $int, random: $int) -> Self {
+                Self::from(timestamp, random)
             }
 
             fn to_padded_string(&self) -> String {
@@ -217,7 +217,7 @@ macro_rules! define_ulid {
                 }
 
                 dbg.field("timestamp", &format_args!("{:} (0x{:x})", self.timestamp(), self.timestamp()));
-                dbg.field("randomness", &format_args!("{:} (0x{:x})", self.randomness(), self.randomness()));
+                dbg.field("random", &format_args!("{:} (0x{:x})", self.random(), self.random()));
 
                 dbg.finish()
             }
@@ -230,7 +230,7 @@ define_ulid!(
     ///
     /// - 0 bits reserved
     /// - 48 bits timestamp
-    /// - 80 bits randomness
+    /// - 80 bits random
     ///
     /// ```text
     ///  Bit Index:  127            80 79           0
@@ -252,12 +252,12 @@ mod tests {
     #[test]
     fn test_ulid_id_fields_and_bounds() {
         let ts = ULID::max_timestamp();
-        let rand = ULID::max_randomness();
+        let rand = ULID::max_random();
 
         let id = ULID::from(ts, rand);
         println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.randomness(), rand);
+        assert_eq!(id.random(), rand);
         assert_eq!(ULID::from_components(ts, rand), id);
     }
 
@@ -265,10 +265,10 @@ mod tests {
     fn ulid_low_bit_fields() {
         let id = ULID::from_components(0, 0);
         assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.randomness(), 0);
+        assert_eq!(id.random(), 0);
 
         let id = ULID::from_components(1, 1);
         assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.randomness(), 1);
+        assert_eq!(id.random(), 1);
     }
 }

@@ -1,14 +1,17 @@
 #![doc = include_str!("../README.md")]
 
+#[cfg(not(any(feature = "snowflake", feature = "ulid")))]
+compile_error!("You must enable at least one of the following features: 'snowflake' or 'ulid'.");
+
 #[cfg(feature = "base32")]
 mod base32;
 mod error;
 #[cfg(feature = "futures")]
 mod futures;
+#[cfg(any(feature = "snowflake", feature = "ulid"))]
 mod generator;
 mod id;
 mod mono_clock_native;
-
 #[cfg(feature = "ulid")]
 mod rand;
 #[cfg(feature = "ulid")]
@@ -22,6 +25,7 @@ pub use crate::base32::*;
 pub use crate::error::*;
 #[cfg(feature = "futures")]
 pub use crate::futures::*;
+#[cfg(any(feature = "snowflake", feature = "ulid"))]
 pub use crate::generator::*;
 pub use crate::id::*;
 pub use crate::mono_clock_native::*;

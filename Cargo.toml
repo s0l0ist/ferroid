@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.12"
+version = "0.4.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Angelou <angelou.nick@gmail.com>"]
@@ -65,7 +65,7 @@ lto = true                  # reduce size and help opt
 opt-level = 3               # optimize for perf
 panic = "unwind"            # unwind and attempt to cleanup
 split-debuginfo = "packed"  # generates a separate *.dwp/*.dSYM so the binary can get stripped
-strip = "symbols"           # See split-debuginfo - allows us to drop the size by ~65%
+strip = "symbols"           # See split-debuginfo - allows us to drop the size substantially
 incremental = true          # Improves re-compile times
 
 
