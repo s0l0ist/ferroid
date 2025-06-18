@@ -39,7 +39,7 @@ Defines the gRPC protocol and shared types for ID streaming:
 - Shared types used by both client and server
 - Ensures type compatibility across deployments
 
-Note: The server and client should be compiled with the same
+⚠️ Note: The server and client should be compiled with the same
 `ferroid-tonic-core`. If you're overriding the default ID
 (`SnowflakeTwitterId`), please fork this repo to ensure contract stability
 between client and server.
