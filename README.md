@@ -45,7 +45,7 @@ Defines the gRPC protocol and shared types for ID streaming:
 (`SnowflakeTwitterId`), please fork this repo to ensure contract stability
 between client and server.
 
-### `crates/ferroid-tonic-server`](./crates/ferroid-tonic-server)
+### [`crates/ferroid-tonic-server`](./crates/ferroid-tonic-server)
 
 A gRPC server for streaming IDs:
 
