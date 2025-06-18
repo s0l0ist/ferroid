@@ -5,16 +5,17 @@ time-sortable IDs, including **Snowflake-style** IDs and **ULIDs**.
 
 This workspace includes:
 
-- `ferroid`: Core ID logic and generators
-- `ferroid-tonic-core`: gRPC protocol definitions and shared types
-- `ferroid-tonic-server`: A gRPC server that streams binary packed ID chunks
-  over a network
+- [`ferroid`](./crates/ferroid): Core ID types and generators
+- [`ferroid-tonic-core`](./crates/ferroid-tonic-core): gRPC protocol definitions
+  and shared types
+- [`ferroid-tonic-server`](./crates/ferroid-tonic-server): High-performance gRPC
+  server that streams binary-packed ID chunks
 
 ## 📦 Workspace Structure
 
 ### `crates/ferroid`
 
-The core library. Provides:
+The core library provides:
 
 - **ID Types**: Snowflake (`u64`, `u128`), ULID (`u128`)
 - **Custom Layout**: macros to help build your own ID layout
