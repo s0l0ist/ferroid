@@ -1,8 +1,7 @@
 # 🤖 ferroid
 
 **ferroid** is a modular Rust workspace for generating and streaming
-time-sortable IDs - including Snowflake-style IDs and ULIDs - with optional
-high-throughput gRPC support.
+time-sortable IDs, including **Snowflake-style** IDs and **ULIDs**.
 
 This workspace includes:
 
@@ -17,16 +16,18 @@ This workspace includes:
 
 The core library. Provides:
 
-- ✅ **ID Types**: Snowflake (`u64`), ULID (`u128`), or any custom variant.
-- ⚙️ **Generators**:
+- **ID Types**: Snowflake (`u64`, `u128`), ULID (`u128`)
+- **Custom Layout**: macros to help build your own ID layout
+- **Generators**:
 
-  - `BasicSnowflakeGenerator`: single-threaded, lock-free
+  - `BasicSnowflakeGenerator`: single-threaded
   - `LockSnowflakeGenerator`: multi-threaded with locking
   - `AtomicSnowflakeGenerator`: multi-threaded, lock-free
-  - `BasicUlidGenerator`: high-entropy ULID generation
+  - `BasicUlidGenerator`: multi-threaded, high-entropy ULID generation
 
-- 🔁 **Async Integration**: support via `tokio`, `smol`, and sleep traits
-- 🔡 **Encoding Support**: base32 encoding/decoding for sortable string IDs
+- **Async Support**: Integrates with `tokio` and `smol`
+- **Encoding Support**: Crockford base32 encoding/decoding for compact, sortable
+  string IDs
 
 This is the crate you'll typically depend on for ID generation.
 
@@ -34,9 +35,9 @@ This is the crate you'll typically depend on for ID generation.
 
 Defines the gRPC protocol and shared types for ID streaming:
 
-- 📜 `ferroid.proto` for ID stream requests and packed binary responses
-- 📦 Shared types used by both client and server
-- 🤝 Ensures type compatibility across deployments
+- `ferroid.proto` for ID stream requests and packed binary responses
+- Shared types used by both client and server
+- Ensures type compatibility across deployments
 
 Note: The server and client should be compiled with the same
 `ferroid-tonic-core`. If you're overriding the default ID
@@ -47,11 +48,11 @@ between client and server.
 
 A gRPC server for streaming IDs:
 
-- 📶 Supports streaming chunked IDs
-- 🧵 Concurrent worker task pool with backpressure
-- 🛑 Graceful shutdown and stream cancellation
-- 🗂️ Optional compression (`zstd`, `gzip`, `deflate`)
-- 📊 OpenTelemetry metrics and tracing
+- Supports streaming chunked IDs
+- Concurrent worker task pool with backpressure
+- Graceful shutdown and stream cancellation
+- Optional compression (`zstd`, `gzip`, `deflate`)
+- OpenTelemetry metrics and tracing
 
 Run this to expose high-throughput ID generation as a network service.
 
@@ -61,13 +62,13 @@ cargo run -p ferroid-tonic-server --features tracing
 
 ## 🚀 Getting Started
 
-Run tests across all crates
+Run all tests
 
 ```bash
 cargo test --all-features
 ```
 
-Run benchmarks across all crates
+Run all benchmarks
 
 ```bash
 cargo criterion --all-features

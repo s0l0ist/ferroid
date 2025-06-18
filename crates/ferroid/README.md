@@ -13,8 +13,7 @@ It provides fast, configurable ID generation for distributed systems, with:
 
 ## Features
 
-- 📌 Bit-level compatibility with major Snowflake formats
-- 🧬 ULID support with `ulid` feature flag
+- 📌 Bit-level compatibility with major Snowflake and ULID formats
 - 🧩 Pluggable clocks and RNGs via `TimeSource` and `RandSource`
 - 🧵 Lock-free, lock-based, and single-threaded generators
 - 📐 Custom layouts via `define_snowflake_id!` and `define_ulid!` macros
@@ -96,7 +95,7 @@ let id: SnowflakeTwitterId = loop {
 };
 
 
-#[cfg(features = "ulid")]
+#[cfg(feature = "ulid")]
 {
     use ferroid::{ThreadRandom, BasicUlidGenerator, ULID};
 
@@ -129,53 +128,24 @@ without blocking or spinning.
 Tokio Example
 
 ```rust
-use ferroid::{
-    AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SnowflakeGeneratorAsyncTokioExt,
-    SnowflakeMastodonId, TokioSleep,
-};
+#[cfg(feature = "async-tokio")]
+{
+    use ferroid::{
+        AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result,
+        SnowflakeGeneratorAsyncTokioExt, SnowflakeMastodonId
+    };
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-    let generator = AtomicSnowflakeGenerator::new(0, clock);
-
-    let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
-    println!("Generated ID: {}", id);
-
-    #[cfg(features = "ulid")]
-    {
-        use ferroid::{ThreadRandom, UlidGeneratorAsyncTokioExt, BasicUlidGenerator, ULID};
-
-        let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-        let rand = ThreadRandom::default();
-        let generator = BasicUlidGenerator::new(clock, rand);
-
-        let id: ULID = generator.try_next_id_async().await?;
-        println!("Generated ID: {}", id);
-    }
-    Ok(())
-}
-```
-
-Smol Example
-
-```rust
-use ferroid::{
-    AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SmolSleep,
-    SnowflakeGeneratorAsyncSmolExt, SnowflakeMastodonId,
-};
-
-fn main() -> Result<()> {
-    smol::block_on(async {
+    #[tokio::main]
+    async fn main() -> Result<()> {
         let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
         let generator = AtomicSnowflakeGenerator::new(0, clock);
 
         let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
         println!("Generated ID: {}", id);
 
-        #[cfg(features = "ulid")]
+        #[cfg(feature = "ulid")]
         {
-            use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID};
+            use ferroid::{ThreadRandom, UlidGeneratorAsyncTokioExt, BasicUlidGenerator, ULID};
 
             let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
             let rand = ThreadRandom::default();
@@ -184,9 +154,44 @@ fn main() -> Result<()> {
             let id: ULID = generator.try_next_id_async().await?;
             println!("Generated ID: {}", id);
         }
-
         Ok(())
-    })
+    }
+}
+```
+
+Smol Example
+
+```rust
+#[cfg(feature = "async-smol")]
+{
+    use ferroid::{
+        AtomicSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result, SmolSleep,
+        SnowflakeGeneratorAsyncSmolExt, SnowflakeMastodonId,
+    };
+
+    fn main() -> Result<()> {
+        smol::block_on(async {
+            let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+            let generator = AtomicSnowflakeGenerator::new(0, clock);
+
+            let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
+            println!("Generated ID: {}", id);
+
+            #[cfg(feature = "ulid")]
+            {
+                use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID};
+
+                let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+                let rand = ThreadRandom::default();
+                let generator = BasicUlidGenerator::new(clock, rand);
+
+                let id: ULID = generator.try_next_id_async().await?;
+                println!("Generated ID: {}", id);
+            }
+
+            Ok(())
+        })
+    }
 }
 ```
 
@@ -196,8 +201,6 @@ To define a custom Snowflake layout, use the `define_snowflake_id` macro:
 
 ```rust
 use ferroid::{define_snowflake_id};
-#[cfg(feature = "base32")]
-use ferroid::Base32Ext;
 
 // Example: a 64-bit Twitter-like ID layout
 //
@@ -232,27 +235,29 @@ define_snowflake_id!(
 );
 
 
-// Example: a 128-bit ULID using the Ulid layout
-//
-// - 0 bits reserved
-// - 48 bits timestamp
-// - 80 bits randomness
-//
-//  Bit Index:  127            80 79           0
-//              +----------------+-------------+
-//  Field:      | timestamp (48) | random (80) |
-//              +----------------+-------------+
-//              |<-- MSB -- 128 bits -- LSB -->|
 
 #[cfg(feature = "ulid")]
-use ferroid::define_ulid;
+{
+    use ferroid::define_ulid;
 
-define_ulid!(
-    MyULID, u128,
-    reserved: 0,
-    timestamp: 48,
-    random: 80
-);
+    // Example: a 128-bit ULID using the Ulid layout
+    //
+    // - 0 bits reserved
+    // - 48 bits timestamp
+    // - 80 bits randomness
+    //
+    //  Bit Index:  127            80 79           0
+    //              +----------------+-------------+
+    //  Field:      | timestamp (48) | random (80) |
+    //              +----------------+-------------+
+    //              |<-- MSB -- 128 bits -- LSB -->|
+    define_ulid!(
+        MyULID, u128,
+        reserved: 0,
+        timestamp: 48,
+        random: 80
+    );
+}
 ```
 
 > ⚠️ Note: All four sections (`reserved`, `timestamp`, `machine_id`, and
@@ -274,7 +279,7 @@ Use `.to_padded_string()` or `.encode()` (enabled with `base32` feature) for
 sortable representations:
 
 ```rust
-use ferroid::{SnowflakeTwitterId, Snowflake, ULID, Ulid, Base32Ext};
+use ferroid::{Snowflake, SnowflakeTwitterId};
 
 let id = SnowflakeTwitterId::from(123456, 1, 42);
 println!("default: {id}");
@@ -283,26 +288,41 @@ println!("default: {id}");
 println!("padded: {}", id.to_padded_string());
 // > padded: 00000000517811998762
 
-let encoded = id.encode();
-println!("base32: {encoded}");
-// > base32: 00000Y4G0082M
+#[cfg(feature = "base32")]
+{
+    use ferroid::Base32Ext;
 
-let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
-assert_eq!(id, decoded);
+    let encoded = id.encode();
+    println!("base32: {encoded}");
+    // > base32: 00000Y4G0082M
 
-let id = ULID::from(123456, 42);
-println!("default: {id}");
-// > default: 149249145986343659392525664298
+    let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
+    assert_eq!(id, decoded);
+}
 
-println!("padded: {}", id.to_padded_string());
-// > padded: 000000000149249145986343659392525664298
 
-let encoded = id.encode();
-println!("base32: {encoded}");
-// > base32: 000000F2800000000000000058
+#[cfg(feature = "ulid")]
+{
+    use ferroid::{Ulid, ULID};
 
-let decoded = ULID::decode(&encoded).expect("decode should succeed");
-assert_eq!(id, decoded);
+    let id = ULID::from(123456, 42);
+    println!("default: {id}");
+    // > default: 149249145986343659392525664298
+
+    println!("padded: {}", id.to_padded_string());
+    // > padded: 000000000149249145986343659392525664298
+    #[cfg(feature = "base32")]
+    {
+        use ferroid::Base32Ext;
+
+        let encoded = id.encode();
+        println!("base32: {encoded}");
+        // > base32: 000000F2800000000000000058
+
+        let decoded = ULID::decode(&encoded).expect("decode should succeed");
+        assert_eq!(id, decoded);
+    }
+}
 ```
 
 ## 📈 Benchmarks

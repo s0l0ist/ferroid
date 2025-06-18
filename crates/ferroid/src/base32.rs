@@ -84,7 +84,7 @@ mod tests {
     use super::*;
     use crate::{
         Snowflake, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
-        SnowflakeTwitterId, ULID, Ulid,
+        SnowflakeTwitterId,
     };
     use core::{any::type_name, fmt};
 
@@ -105,28 +105,6 @@ mod tests {
         println!("timestamp:  0x{:x}", id.timestamp());
         println!("machine id: 0x{:x}", id.machine_id());
         println!("sequence:   0x{:x}", id.sequence());
-        println!("encoded:    {}", encoded);
-        println!("decoded:    {}", decoded);
-
-        assert_eq!(id, decoded, "{} roundtrip failed for {}", label, type_name);
-    }
-
-    fn test_encode_decode_ulid<T>(id: T, label: &str)
-    where
-        T: Ulid + Base32Ext + PartialEq + fmt::Debug,
-        T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
-    {
-        let raw = id.to_raw();
-        let encoded = id.encode();
-        let decoded = T::decode(&encoded).expect("decode should succeed");
-
-        let type_name = type_name::<T>();
-
-        println!("=== {} {} ===", type_name, label);
-        println!("id (raw decimal): {}", raw);
-        println!("id (raw binary):  {:064b}", raw);
-        println!("timestamp:  0x{:x}", id.timestamp());
-        println!("randomness id: 0x{:x}", id.randomness());
         println!("encoded:    {}", encoded);
         println!("decoded:    {}", decoded);
 
@@ -222,21 +200,6 @@ mod tests {
     }
 
     #[test]
-    fn ulid_max() {
-        let id = ULID::from_components(ULID::max_timestamp(), ULID::max_randomness());
-        test_encode_decode_ulid(id, "max");
-        assert_eq!(id.to_raw(), u128::MAX)
-    }
-
-    #[test]
-    fn ulid_zero() {
-        let id = ULID::from_components(0, 0);
-        println!("id {:#?}", id);
-        test_encode_decode_ulid(id, "zero");
-        assert_eq!(id.to_raw(), 0)
-    }
-
-    #[test]
     fn decode_invalid_character_fails() {
         // Base32 Crockford disallows symbols like `@`
         let invalid = "01234@6789ABCDEF";
@@ -250,5 +213,49 @@ mod tests {
         let too_short = "ABC";
         let result = SnowflakeTwitterId::decode(too_short);
         assert!(matches!(result, Err(Error::DecodeInvalidLen)));
+    }
+}
+
+#[cfg(all(test, feature = "ulid"))]
+mod ulid_tests {
+    use super::*;
+    use crate::{ULID, Ulid};
+    use core::{any::type_name, fmt};
+
+    fn test_encode_decode_ulid<T>(id: T, label: &str)
+    where
+        T: Ulid + Base32Ext + PartialEq + fmt::Debug,
+        T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
+    {
+        let raw = id.to_raw();
+        let encoded = id.encode();
+        let decoded = T::decode(&encoded).expect("decode should succeed");
+
+        let type_name = type_name::<T>();
+
+        println!("=== {} {} ===", type_name, label);
+        println!("id (raw decimal): {}", raw);
+        println!("id (raw binary):  {:064b}", raw);
+        println!("timestamp:  0x{:x}", id.timestamp());
+        println!("randomness id: 0x{:x}", id.randomness());
+        println!("encoded:    {}", encoded);
+        println!("decoded:    {}", decoded);
+
+        assert_eq!(id, decoded, "{} roundtrip failed for {}", label, type_name);
+    }
+
+    #[test]
+    fn ulid_max() {
+        let id = ULID::from_components(ULID::max_timestamp(), ULID::max_randomness());
+        test_encode_decode_ulid(id, "max");
+        assert_eq!(id.to_raw(), u128::MAX)
+    }
+
+    #[test]
+    fn ulid_zero() {
+        let id = ULID::from_components(0, 0);
+        println!("id {:#?}", id);
+        test_encode_decode_ulid(id, "zero");
+        assert_eq!(id.to_raw(), 0)
     }
 }
