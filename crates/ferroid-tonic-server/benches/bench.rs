@@ -1,7 +1,6 @@
 use core::{fmt, hint::black_box};
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid_tonic_core::{
-    ferroid::Snowflake,
     proto::{StreamIdsRequest, id_generator_client::IdGeneratorClient},
     types::{SNOWFLAKE_ID_SIZE, SnowflakeId, SnowflakeIdTy},
 };

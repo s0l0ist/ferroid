@@ -1,4 +1,5 @@
-use crate::{IdGenStatus, Result, SnowflakeGenerator, TimeSource, ToU64, id::Snowflake};
+use super::SleepProvider;
+use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource, ToU64};
 use core::{
     future::Future,
     marker::PhantomData,
@@ -14,7 +15,7 @@ use pin_project_lite::pin_project;
 /// `Future`-based context by awaiting until the generator is ready to produce a
 /// new ID.
 ///
-/// The default implementation uses [`GeneratorFuture`] and a specified
+/// The default implementation uses [`SnowflakeGeneratorFuture`] and a specified
 /// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait SnowflakeGeneratorAsyncExt<ID, T>
 where
@@ -44,20 +45,8 @@ where
     where
         S: SleepProvider,
     {
-        GeneratorFuture::<'a, G, ID, T, S>::new(self)
+        SnowflakeGeneratorFuture::<'a, G, ID, T, S>::new(self)
     }
-}
-
-/// A trait that abstracts over how to sleep for a given [`Duration`] in async
-/// contexts.
-///
-/// This allows the generator to be generic over runtimes like `Tokio` or
-/// `Smol`.
-pub trait SleepProvider {
-    /// We require `Send` so that the future can be safely moved across threads
-    type Sleep: Future<Output = ()> + Send;
-
-    fn sleep_for(dur: Duration) -> Self::Sleep;
 }
 
 pin_project! {
@@ -67,7 +56,7 @@ pin_project! {
     /// This future handles `Pending` responses by sleeping for a recommended
     /// amount of time before polling the generator again.
     #[must_use = "futures do nothing unless you `.await` or poll them"]
-    pub struct GeneratorFuture<'a, G, ID, T, S>
+    pub struct SnowflakeGeneratorFuture<'a, G, ID, T, S>
     where
         G: SnowflakeGenerator<ID, T>,
         ID: Snowflake,
@@ -81,14 +70,14 @@ pin_project! {
     }
 }
 
-impl<'a, G, ID, T, S> GeneratorFuture<'a, G, ID, T, S>
+impl<'a, G, ID, T, S> SnowflakeGeneratorFuture<'a, G, ID, T, S>
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
     S: SleepProvider,
 {
-    /// Constructs a new [`GeneratorFuture`] from a given generator.
+    /// Constructs a new [`SnowflakeGeneratorFuture`] from a given generator.
     ///
     /// This does not immediately begin polling the generator; instead, it will
     /// attempt to produce an ID when `.poll()` is called.
@@ -100,8 +89,7 @@ where
         }
     }
 }
-
-impl<'a, G, ID, T, S> Future for GeneratorFuture<'a, G, ID, T, S>
+impl<'a, G, ID, T, S> Future for SnowflakeGeneratorFuture<'a, G, ID, T, S>
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,

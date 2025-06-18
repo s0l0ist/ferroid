@@ -13,16 +13,16 @@
 //!
 //! ## Type Aliases
 //!
-//! - [`SnowflakeId`] — The default Snowflake ID type (backed by
+//! - [`SnowflakeId`] - The default Snowflake ID type (backed by
 //!   [`SnowflakeTwitterId`])
-//! - [`SnowflakeIdTy`] — The primitive integer backing the ID (typically `u64`)
-//! - [`Clock`] — The system clock used for timestamp embedding
-//! - [`Generator`] — The default ID generator used by worker tasks
+//! - [`SnowflakeIdTy`] - The primitive integer backing the ID (typically `u64`)
+//! - [`Clock`] - The system clock used for timestamp embedding
+//! - [`Generator`] - The default ID generator used by worker tasks
 //!
 //! ## Constants
 //!
-//! - [`SNOWFLAKE_ID_SIZE`] — Size (in bytes) of a serialized ID
-//! - [`EPOCH`] — Epoch offset used for timestamp generation
+//! - [`SNOWFLAKE_ID_SIZE`] - Size (in bytes) of a serialized ID
+//! - [`EPOCH`] - Epoch offset used for timestamp generation
 //!
 //! ## Customization
 //!
@@ -42,18 +42,18 @@
 //! > binary encoding. To change the format, fork or wrap the binary crate and
 //! > inject your own implementation.
 
-use ferroid::{
-    BasicSnowflakeGenerator, CUSTOM_EPOCH, MonotonicClock, Snowflake, SnowflakeTwitterId,
-};
+use ferroid::{BasicSnowflakeGenerator, CUSTOM_EPOCH, Id, MonotonicClock, SnowflakeTwitterId};
 
 /// The canonical Snowflake ID type used across the system.
 ///
 /// Defaults to [`SnowflakeTwitterId`], but can be replaced in custom builds
 /// with any type implementing [`Snowflake`].
+///
+/// [`Snowflake`]: crate::ferroid::Snowflake
 pub type SnowflakeId = SnowflakeTwitterId;
 
 /// The primitive integer type that backs a [`SnowflakeId`] (typically `u64`).
-pub type SnowflakeIdTy = <SnowflakeId as Snowflake>::Ty;
+pub type SnowflakeIdTy = <SnowflakeId as Id>::Ty;
 
 /// The number of bytes required to serialize a single [`SnowflakeId`] in
 /// little-endian format.

@@ -26,7 +26,7 @@ use crate::server::{
 use core::pin::Pin;
 use ferroid_tonic_core::{
     Error,
-    ferroid::Snowflake,
+    ferroid::Id,
     proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
     types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
 };
@@ -119,7 +119,7 @@ impl IdService {
             workers.push(tx);
 
             let generator = Generator::new(
-                (config.shard_offset + worker_id) as <SnowflakeId as Snowflake>::Ty,
+                (config.shard_offset + worker_id) as <SnowflakeId as Id>::Ty,
                 clock.clone(),
             );
 

@@ -99,7 +99,7 @@ where
     /// # Returns
     /// A new generator instance preloaded with the given state.
     ///
-    /// # Note
+    /// # ⚠️ Note
     /// In typical use cases, you should prefer [`Self::new`] to let the
     /// generator initialize itself from the current time.
     pub fn from_components(
@@ -183,7 +183,7 @@ where
     ///     Ok(IdGenStatus::Pending { yield_for }) => {
     ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
-    ///     Err(err) => eprintln!("Generator error: {}", err),
+    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]

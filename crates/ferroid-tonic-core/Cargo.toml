@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-readme.workspace = true
+readme = "README.md"
 description.workspace = true
 repository.workspace = true
 documentation.workspace = true
@@ -12,7 +12,7 @@ keywords.workspace = true
 publish = true
 
 [dependencies]
-ferroid = { version = "0.3.11", path = "../ferroid" }
+ferroid = { version = "0.4.0", path = "../ferroid", features = ["snowflake", "ulid"] }
 prost = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tonic = { workspace = true, features = ["prost", "codegen"] }

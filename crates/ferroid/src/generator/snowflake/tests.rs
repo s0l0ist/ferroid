@@ -1,11 +1,8 @@
 use crate::{
-    IdGenStatus, MonotonicClock, Snowflake, SnowflakeTwitterId, TimeSource, ToU64,
-    generator::{
-        AtomicSnowflakeGenerator, BasicSnowflakeGenerator, LockSnowflakeGenerator,
-        SnowflakeGenerator,
-    },
+    AtomicSnowflakeGenerator, BasicSnowflakeGenerator, Id, IdGenStatus, LockSnowflakeGenerator,
+    MonotonicClock, Snowflake, SnowflakeGenerator, SnowflakeTwitterId, TimeSource, ToU64,
 };
-use core::{cell::Cell, fmt, hash::Hash};
+use core::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -21,10 +18,46 @@ impl TimeSource<u64> for MockTime {
     }
 }
 
+impl TimeSource<u128> for MockTime {
+    fn current_millis(&self) -> u128 {
+        <Self as TimeSource<u64>>::current_millis(self) as u128
+    }
+}
+
+trait IdGenStatusExt<T>
+where
+    T: Id,
+{
+    fn unwrap_ready(self) -> T;
+    #[cfg(feature = "snowflake")]
+    fn unwrap_pending(self) -> T::Ty;
+}
+
+impl<T> IdGenStatusExt<T> for IdGenStatus<T>
+where
+    T: Id,
+{
+    fn unwrap_ready(self) -> T {
+        match self {
+            IdGenStatus::Ready { id } => id,
+            IdGenStatus::Pending { yield_for } => {
+                panic!("unexpected pending (yield for: {})", yield_for)
+            }
+        }
+    }
+
+    fn unwrap_pending(self) -> T::Ty {
+        match self {
+            IdGenStatus::Ready { id } => panic!("unexpected ready ({})", id),
+            IdGenStatus::Pending { yield_for } => yield_for,
+        }
+    }
+}
+
 fn run_id_sequence_increments_within_same_tick<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug + fmt::Display,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     let id1 = generator.next_id().unwrap_ready();
@@ -43,7 +76,7 @@ where
 fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug + fmt::Display,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     let yield_for = generator.next_id().unwrap_pending();
@@ -53,7 +86,7 @@ where
 fn run_generator_handles_rollover<G, ID, T>(generator: G, shared_time: SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug + fmt::Display,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     for i in 0..=ID::max_sequence().to_u64().unwrap() {
@@ -75,7 +108,7 @@ where
 fn run_generator_monotonic<G, ID, T>(generator: G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake + fmt::Debug,
+    ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
     let mut last_timestamp = ID::ZERO;
@@ -110,7 +143,7 @@ where
 fn run_generator_monotonic_threaded<G, ID, T>(make_generator: impl Fn() -> G)
 where
     G: SnowflakeGenerator<ID, T> + Send + Sync,
-    ID: Snowflake + PartialEq + Eq + Hash + Send,
+    ID: Snowflake + Send,
     T: TimeSource<ID::Ty>,
 {
     const THREADS: usize = 8;
@@ -305,35 +338,4 @@ fn atomic_generator_threaded_monotonic() {
     run_generator_monotonic_threaded(move || {
         AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock.clone())
     });
-}
-
-trait IdGenStatusExt<T>
-where
-    T: Snowflake + fmt::Display,
-    T::Ty: fmt::Display,
-{
-    fn unwrap_ready(self) -> T;
-    fn unwrap_pending(self) -> T::Ty;
-}
-
-impl<T> IdGenStatusExt<T> for IdGenStatus<T>
-where
-    T: Snowflake + fmt::Display,
-    T::Ty: fmt::Display,
-{
-    fn unwrap_ready(self) -> T {
-        match self {
-            IdGenStatus::Ready { id } => id,
-            IdGenStatus::Pending { yield_for } => {
-                panic!("unexpected pending (yield for: {})", yield_for)
-            }
-        }
-    }
-
-    fn unwrap_pending(self) -> T::Ty {
-        match self {
-            IdGenStatus::Ready { id } => panic!("unexpected ready ({})", id),
-            IdGenStatus::Pending { yield_for } => yield_for,
-        }
-    }
 }

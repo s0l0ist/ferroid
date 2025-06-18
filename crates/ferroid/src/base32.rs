@@ -1,4 +1,4 @@
-use crate::{Error, Result, Snowflake};
+use crate::{Error, Id, Result};
 use base32::{Alphabet, decode, encode};
 use core::convert::TryInto;
 
@@ -56,7 +56,7 @@ impl BeBytes for u128 {
 
 /// A trait for types that can be encoded to and decoded from base32 (crockford)
 /// strings.
-pub trait SnowflakeBase32Ext: Snowflake
+pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
@@ -72,24 +72,25 @@ where
     }
 }
 
-impl<ID> SnowflakeBase32Ext for ID
+impl<ID> Base32Ext for ID
 where
-    ID: Snowflake,
+    ID: Id,
     ID::Ty: BeBytes,
 {
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(all(test, feature = "snowflake"))]
+mod snowflake_tests {
     use super::*;
     use crate::{
-        SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId, SnowflakeTwitterId,
+        Snowflake, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
+        SnowflakeTwitterId,
     };
     use core::{any::type_name, fmt};
 
-    fn test_encode_decode<T>(id: T, label: &str)
+    fn test_encode_decode_snowflake<T>(id: T, label: &str)
     where
-        T: Snowflake + SnowflakeBase32Ext + PartialEq + fmt::Debug,
+        T: Snowflake + Base32Ext + PartialEq + fmt::Debug,
         T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
     {
         let raw = id.to_raw();
@@ -117,7 +118,7 @@ mod tests {
             SnowflakeTwitterId::max_machine_id(),
             SnowflakeTwitterId::max_sequence(),
         );
-        test_encode_decode(id, "max");
+        test_encode_decode_snowflake(id, "max");
         assert_eq!(id.to_raw(), 9_223_372_036_854_775_807) // 1 bit reserved
     }
 
@@ -128,7 +129,7 @@ mod tests {
             SnowflakeTwitterId::ZERO,
             SnowflakeTwitterId::ZERO,
         );
-        test_encode_decode(id, "zero");
+        test_encode_decode_snowflake(id, "zero");
         assert_eq!(id.to_raw(), 0)
     }
 
@@ -139,7 +140,7 @@ mod tests {
             SnowflakeDiscordId::max_machine_id(),
             SnowflakeDiscordId::max_sequence(),
         );
-        test_encode_decode(id, "max");
+        test_encode_decode_snowflake(id, "max");
         assert_eq!(id.to_raw(), 18_446_744_073_709_551_615)
     }
 
@@ -150,7 +151,7 @@ mod tests {
             SnowflakeDiscordId::ZERO,
             SnowflakeDiscordId::ZERO,
         );
-        test_encode_decode(id, "zero");
+        test_encode_decode_snowflake(id, "zero");
         assert_eq!(id.to_raw(), 0)
     }
 
@@ -161,7 +162,7 @@ mod tests {
             SnowflakeInstagramId::max_machine_id(),
             SnowflakeInstagramId::max_sequence(),
         );
-        test_encode_decode(id, "max");
+        test_encode_decode_snowflake(id, "max");
         assert_eq!(id.to_raw(), 18_446_744_073_709_551_615)
     }
 
@@ -172,7 +173,7 @@ mod tests {
             SnowflakeInstagramId::ZERO,
             SnowflakeInstagramId::ZERO,
         );
-        test_encode_decode(id, "zero");
+        test_encode_decode_snowflake(id, "zero");
         assert_eq!(id.to_raw(), 0)
     }
 
@@ -183,7 +184,7 @@ mod tests {
             SnowflakeMastodonId::max_machine_id(),
             SnowflakeMastodonId::max_sequence(),
         );
-        test_encode_decode(id, "max");
+        test_encode_decode_snowflake(id, "max");
         assert_eq!(id.to_raw(), 18_446_744_073_709_551_615)
     }
 
@@ -194,7 +195,7 @@ mod tests {
             SnowflakeMastodonId::ZERO,
             SnowflakeMastodonId::ZERO,
         );
-        test_encode_decode(id, "zero");
+        test_encode_decode_snowflake(id, "zero");
         assert_eq!(id.to_raw(), 0)
     }
 
@@ -212,5 +213,49 @@ mod tests {
         let too_short = "ABC";
         let result = SnowflakeTwitterId::decode(too_short);
         assert!(matches!(result, Err(Error::DecodeInvalidLen)));
+    }
+}
+
+#[cfg(all(test, feature = "ulid"))]
+mod ulid_tests {
+    use super::*;
+    use crate::{ULID, Ulid};
+    use core::{any::type_name, fmt};
+
+    fn test_encode_decode_ulid<T>(id: T, label: &str)
+    where
+        T: Ulid + Base32Ext + PartialEq + fmt::Debug,
+        T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
+    {
+        let raw = id.to_raw();
+        let encoded = id.encode();
+        let decoded = T::decode(&encoded).expect("decode should succeed");
+
+        let type_name = type_name::<T>();
+
+        println!("=== {} {} ===", type_name, label);
+        println!("id (raw decimal): {}", raw);
+        println!("id (raw binary):  {:064b}", raw);
+        println!("timestamp:  0x{:x}", id.timestamp());
+        println!("random id: 0x{:x}", id.random());
+        println!("encoded:    {}", encoded);
+        println!("decoded:    {}", decoded);
+
+        assert_eq!(id, decoded, "{} roundtrip failed for {}", label, type_name);
+    }
+
+    #[test]
+    fn ulid_max() {
+        let id = ULID::from_components(ULID::max_timestamp(), ULID::max_random());
+        test_encode_decode_ulid(id, "max");
+        assert_eq!(id.to_raw(), u128::MAX)
+    }
+
+    #[test]
+    fn ulid_zero() {
+        let id = ULID::from_components(0, 0);
+        println!("id {:#?}", id);
+        test_encode_decode_ulid(id, "zero");
+        assert_eq!(id.to_raw(), 0)
     }
 }

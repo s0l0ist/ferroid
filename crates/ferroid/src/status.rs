@@ -1,4 +1,4 @@
-use crate::Snowflake;
+use crate::Id;
 
 /// Represents the result of attempting to generate a new Snowflake ID.
 ///
@@ -13,23 +13,26 @@ use crate::Snowflake;
 /// # Example
 ///
 /// ```
-/// use ferroid::{Snowflake, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+/// #[cfg(feature = "snowflake")]
+/// {
+///     use ferroid::{Snowflake, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
 ///
-/// struct FixedTime;
-/// impl ferroid::TimeSource<u64> for FixedTime {
-///     fn current_millis(&self) -> u64 {
-///         1
+///     struct FixedTime;
+///     impl ferroid::TimeSource<u64> for FixedTime {
+///         fn current_millis(&self) -> u64 {
+///             1
+///         }
 ///     }
-/// }
 ///
-/// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
-/// match generator.next_id() {
-///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
-///     IdGenStatus::Pending { yield_for } => println!("Back off until: {yield_for}"),
+///     let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
+///     match generator.next_id() {
+///         IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
+///         IdGenStatus::Pending { yield_for } => println!("Back off until: {yield_for}"),
+///     }
 /// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IdGenStatus<T: Snowflake> {
+pub enum IdGenStatus<T: Id> {
     /// A new Snowflake ID was successfully generated.
     Ready {
         /// The generated Snowflake ID.

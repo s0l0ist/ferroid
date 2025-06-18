@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-readme.workspace = true
+readme = "README.md"
 description.workspace = true
 repository.workspace = true
 documentation.workspace = true
@@ -20,7 +20,7 @@ anyhow = { workspace = true, features = ["std"] }
 bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "env", "color", "error-context", "help", "std", "suggestions", "usage"] }
 dotenvy = { workspace = true }
-ferroid-tonic-core = { version = "0.3.11", path = "../ferroid-tonic-core" }
+ferroid-tonic-core = { version = "0.4.0", path = "../ferroid-tonic-core" }
 futures = { workspace = true }
 mimalloc = { workspace = true }
 opentelemetry = { workspace = true, optional = true }
