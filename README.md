@@ -13,7 +13,7 @@ This workspace includes:
 
 ## 📦 Workspace Structure
 
-### `crates/ferroid`
+### [`crates/ferroid`](./crates/ferroid)
 
 The core library provides:
 
@@ -32,7 +32,7 @@ The core library provides:
 
 This is the crate you'll typically depend on for ID generation.
 
-### `crates/ferroid-tonic-core`
+### [`crates/ferroid-tonic-core`](./crates/ferroid-tonic-core)
 
 Defines the gRPC protocol and shared types for ID streaming:
 
@@ -45,7 +45,7 @@ Defines the gRPC protocol and shared types for ID streaming:
 (`SnowflakeTwitterId`), please fork this repo to ensure contract stability
 between client and server.
 
-### `crates/ferroid-tonic-server`
+### `crates/ferroid-tonic-server`](./crates/ferroid-tonic-server)
 
 A gRPC server for streaming IDs:
 
