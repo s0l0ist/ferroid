@@ -274,24 +274,16 @@ macro_rules! define_snowflake_id {
 
         impl core::fmt::Debug for $name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                use $crate::Snowflake;
+
                 let full = core::any::type_name::<Self>();
                 let name = full.rsplit("::").next().unwrap_or(full);
                 let mut dbg = f.debug_struct(name);
                 dbg.field("id", &format_args!("{:} (0x{:x})", self.to_raw(), self.to_raw()));
-
-                use $crate::Snowflake;
                 dbg.field("padded", &self.to_padded_string());
-
-                #[cfg(feature = "base32")]
-                {
-                    use $crate::Base32Ext;
-                    dbg.field("base32", &self.encode());
-                }
-
                 dbg.field("timestamp", &format_args!("{:} (0x{:x})", self.timestamp(), self.timestamp()));
                 dbg.field("machine_id", &format_args!("{:} (0x{:x})", self.machine_id(), self.machine_id()));
                 dbg.field("sequence", &format_args!("{:} (0x{:x})", self.sequence(), self.sequence()));
-
                 dbg.finish()
             }
         }
