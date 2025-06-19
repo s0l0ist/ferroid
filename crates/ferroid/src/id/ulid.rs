@@ -198,23 +198,15 @@ macro_rules! define_ulid {
 
         impl core::fmt::Debug for $name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                use $crate::Ulid;
+                
                 let full = core::any::type_name::<Self>();
                 let name = full.rsplit("::").next().unwrap_or(full);
                 let mut dbg = f.debug_struct(name);
                 dbg.field("id", &format_args!("{:} (0x{:x})", self.to_raw(), self.to_raw()));
-
-                use $crate::Ulid;
                 dbg.field("padded", &self.to_padded_string());
-
-                #[cfg(feature = "base32")]
-                {
-                    use $crate::Base32Ext;
-                    dbg.field("base32", &self.encode());
-                }
-
                 dbg.field("timestamp", &format_args!("{:} (0x{:x})", self.timestamp(), self.timestamp()));
                 dbg.field("random", &format_args!("{:} (0x{:x})", self.random(), self.random()));
-
                 dbg.finish()
             }
         }
