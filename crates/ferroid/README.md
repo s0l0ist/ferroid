@@ -240,6 +240,7 @@ To define a custom layouts, use the `define_*` macros:
     // - 0 bits reserved
     // - 48 bits timestamp
     // - 80 bits random
+    // - 0 bits sequence
     //
     //  Bit Index:  127            80 79           0
     //              +----------------+-------------+
@@ -250,7 +251,8 @@ To define a custom layouts, use the `define_*` macros:
         MyULID, u128,
         reserved: 0,
         timestamp: 48,
-        random: 80
+        random: 80,
+        sequence: 0
     );
 }
 ```
@@ -259,7 +261,8 @@ To define a custom layouts, use the `define_*` macros:
 > `sequence`) must be specified in the snowflake macro, even if a section uses 0
 > bits. `reserved` bits are always stored as **zero** and can be used for future
 > expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`,
-> `random`) fields.
+> `random`, and `sequence`) fields. If `sequence` bits are greater than zero in
+> `define_ulid!`, then it will leverage them for monotonicity.
 
 ### Behavior
 
@@ -307,7 +310,7 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
 {
     use ferroid::{Ulid, ULID};
 
-    let id = ULID::from(123456, 42);
+    let id = ULID::from(123456, 42, 0);
     println!("default: {id}");
     // > default: 149249145986343659392525664298
 

@@ -1,5 +1,5 @@
 use crate::{IdGenStatus, Result, TimeSource, Ulid, UlidGenerator, rand::RandSource};
-use core::marker::PhantomData;
+use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -45,24 +45,24 @@ use tracing::instrument;
 /// [`ThreadRandom`]: crate::ThreadRandom
 /// [`TimeSource`]: crate::TimeSource
 /// [`RandSource`]: crate::rand::RandSource
-pub struct BasicUlidGenerator<ID, T, R>
+pub struct BasicMonoUlidGenerator<ID, T, R>
 where
     ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    state: Cell<ID>,
     clock: T,
     rng: R,
-    _id: PhantomData<ID>,
 }
 
-impl<ID, T, R> BasicUlidGenerator<ID, T, R>
+impl<ID, T, R> BasicMonoUlidGenerator<ID, T, R>
 where
     ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`BasicUlidGenerator`] with the provided time source and
+    /// Creates a new [`BasicMonoUlidGenerator`] with the provided time source and
     /// RNG.
     ///
     /// # Parameters
@@ -75,9 +75,9 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicUlidGenerator, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{BasicMonoUlidGenerator, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let generator = BasicUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicMonoUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
     /// let id = generator.next_id();
     /// println!("Generated ID: {:?}", id);
     /// ```
@@ -85,10 +85,40 @@ where
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
     pub fn new(clock: T, rng: R) -> Self {
+        Self::from_components(ID::ZERO, ID::ZERO, ID::ZERO, clock, rng)
+    }
+
+    /// Creates a new ID generator from explicit component values.
+    ///
+    /// This constructor is primarily useful for advanced use cases such as
+    /// restoring state from persistent storage or controlling the starting
+    /// point of the generator manually.
+    ///
+    /// # Parameters
+    /// - `timestamp`: The initial timestamp component (usually in milliseconds)
+    /// - `machine_id`: The machine or worker identifier
+    /// - `sequence`: The initial sequence number
+    /// - `clock`: A [`TimeSource`] implementation used to fetch the current
+    ///   time
+    ///
+    /// # Returns
+    /// A new generator instance preloaded with the given state.
+    ///
+    /// # ⚠️ Note
+    /// In typical use cases, you should prefer [`Self::new`] to let the
+    /// generator initialize itself from the current time.
+    pub fn from_components(
+        timestamp: ID::Ty,
+        random: ID::Ty,
+        sequence: ID::Ty,
+        clock: T,
+        rng: R,
+    ) -> Self {
+        let id = ID::from_components(timestamp, random, sequence);
         Self {
+            state: Cell::new(id),
             clock,
             rng,
-            _id: PhantomData,
         }
     }
 
@@ -105,11 +135,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{BasicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
     /// let clock = MonotonicClock::default();
     /// let rand = ThreadRandom::default();
-    /// let generator = BasicUlidGenerator::<ULID, _, _>::new(clock, rand);
+    /// let generator = BasicMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
     /// // Attempt to generate a new ID
     /// match generator.next_id() {
@@ -140,11 +170,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{BasicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
     /// let clock = MonotonicClock::default();
     /// let rand = ThreadRandom::default();
-    /// let generator = BasicUlidGenerator::<ULID, _, _>::new(clock, rand);
+    /// let generator = BasicMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
     /// // Attempt to generate a new ID
     /// match generator.try_next_id() {
@@ -161,15 +191,39 @@ where
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
-        let t = self.clock.current_millis();
-        let r = self.rng.rand();
-        Ok(IdGenStatus::Ready {
-            id: ID::from_components(t, r, ID::ZERO),
-        })
+        let now = self.clock.current_millis();
+        let state = self.state.get();
+        let current_ts = state.timestamp();
+
+        let status = match now.cmp(&current_ts) {
+            Ordering::Less => {
+                let yield_for = current_ts - now;
+                debug_assert!(yield_for >= ID::ZERO);
+                IdGenStatus::Pending { yield_for }
+            }
+            Ordering::Greater => {
+                // Set the new timestamp and random number.
+                let rand = self.rng.rand();
+                let updated = state.rollover_to_timestamp(now, rand);
+                self.state.set(updated);
+                IdGenStatus::Ready { id: updated }
+            }
+            Ordering::Equal => {
+                if state.has_sequence_room() {
+                    let updated = state.increment_sequence();
+                    self.state.set(updated);
+                    IdGenStatus::Ready { id: updated }
+                } else {
+                    IdGenStatus::Pending { yield_for: ID::ONE }
+                }
+            }
+        };
+
+        Ok(status)
     }
 }
 
-impl<ID, T, R> UlidGenerator<ID, T, R> for BasicUlidGenerator<ID, T, R>
+impl<ID, T, R> UlidGenerator<ID, T, R> for BasicMonoUlidGenerator<ID, T, R>
 where
     ID: Ulid,
     T: TimeSource<ID::Ty>,

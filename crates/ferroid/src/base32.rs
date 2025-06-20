@@ -246,14 +246,18 @@ mod ulid_tests {
 
     #[test]
     fn ulid_max() {
-        let id = ULID::from_components(ULID::max_timestamp(), ULID::max_random());
+        let id = ULID::from_components(
+            ULID::max_timestamp(),
+            ULID::max_random(),
+            ULID::max_sequence(),
+        );
         test_encode_decode_ulid(id, "max");
         assert_eq!(id.to_raw(), u128::MAX)
     }
 
     #[test]
     fn ulid_zero() {
-        let id = ULID::from_components(0, 0);
+        let id = ULID::from_components(0, 0, 0);
         println!("id {:#?}", id);
         test_encode_decode_ulid(id, "zero");
         assert_eq!(id.to_raw(), 0)

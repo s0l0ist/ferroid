@@ -238,7 +238,7 @@ fn basic_ulid_generator_components_test() {
     assert_eq!(id.random(), 0xDEF012345678);
 
     // Verify we can reconstruct the ID from its components
-    let reconstructed = ULID::from_components(id.timestamp(), id.random());
+    let reconstructed = ULID::from_components(id.timestamp(), id.random(), id.sequence());
     assert_eq!(id, reconstructed);
 }
 

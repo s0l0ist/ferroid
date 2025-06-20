@@ -10,15 +10,24 @@ use core::{fmt, hash::Hash};
 /// Types implementing `Ulid` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
 ///
-/// Unlike `Snowflake`, this trait does not assume a sequence or machine ID.
+/// Unlike `Snowflake`, this trait does not assume a machine ID.
 pub trait Ulid:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
+    /// Zero value (used for resetting the sequence)
+    const ZERO: Self::Ty;
+
+    /// One value (used for incrementing the sequence)
+    const ONE: Self::Ty;
+
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
     /// Returns the random portion of the ID.
     fn random(&self) -> Self::Ty;
+
+    /// Returns the sequence portion of the ID.
+    fn sequence(&self) -> Self::Ty;
 
     /// Returns the maximum possible value for the timestamp field.
     fn max_timestamp() -> Self::Ty;
@@ -26,8 +35,31 @@ pub trait Ulid:
     /// Returns the maximum possible value for the random field.
     fn max_random() -> Self::Ty;
 
-    /// Constructs a new Ulid from its components.
-    fn from_components(timestamp: Self::Ty, random: Self::Ty) -> Self;
+    /// Returns the maximum possible value for the sequence field.
+    fn max_sequence() -> Self::Ty;
+
+    /// Constructs a new ULID from its components.
+    fn from_components(timestamp: Self::Ty, random: Self::Ty, sequence: Self::Ty) -> Self;
+
+    /// Returns true if the current sequence value can be incremented.
+    fn has_sequence_room(&self) -> bool {
+        self.sequence() < Self::max_sequence()
+    }
+
+    /// Returns the next sequence value.
+    fn next_sequence(&self) -> Self::Ty {
+        self.sequence() + Self::ONE
+    }
+
+    /// Returns a new ID with the sequence incremented.
+    fn increment_sequence(&self) -> Self {
+        Self::from_components(self.timestamp(), self.random(), self.next_sequence())
+    }
+
+    /// Returns a new ID for a newer timestamp with sequence reset to zero.
+    fn rollover_to_timestamp(&self, ts: Self::Ty, rand: Self::Ty) -> Self {
+        Self::from_components(ts, rand, Self::ZERO)
+    }
 
     fn to_padded_string(&self) -> String;
 }
@@ -61,7 +93,8 @@ pub trait Ulid:
 ///     MyUlid, u128,
 ///     reserved: 0,
 ///     timestamp: 48,
-///     random: 80
+///     random: 80,
+///     sequence: 0
 /// );
 /// ```
 ///
@@ -76,7 +109,8 @@ macro_rules! define_ulid {
         $name:ident, $int:ty,
         reserved: $reserved_bits:expr,
         timestamp: $timestamp_bits:expr,
-        random: $random_bits:expr
+        random: $random_bits:expr,
+        sequence: $sequence_bits:expr
     ) => {
         $(#[$meta])*
         #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -88,48 +122,61 @@ macro_rules! define_ulid {
             // Compile-time check: total bit width _must_ equal the backing
             // type. This is to avoid aliasing surprises.
             assert!(
-                $reserved_bits + $timestamp_bits + $random_bits == <$int>::BITS,
-                "Ulid layout overflows the underlying integer type"
+                $reserved_bits + $timestamp_bits + $random_bits + $sequence_bits == <$int>::BITS,
+                "Snowflake layout overflows the underlying integer type"
             );
         };
+
 
         impl $name {
             pub const RESERVED_BITS: $int = $reserved_bits;
             pub const TIMESTAMP_BITS: $int = $timestamp_bits;
             pub const RANDOM_BITS: $int = $random_bits;
+            pub const SEQUENCE_BITS: $int = $sequence_bits;
 
-            pub const RANDOM_SHIFT: $int = 0;
+            pub const SEQUENCE_SHIFT: $int = 0;
+            pub const RANDOM_SHIFT: $int = Self::SEQUENCE_SHIFT + Self::SEQUENCE_BITS;
             pub const TIMESTAMP_SHIFT: $int = Self::RANDOM_SHIFT + Self::RANDOM_BITS;
             pub const RESERVED_SHIFT: $int = Self::TIMESTAMP_SHIFT + Self::TIMESTAMP_BITS;
 
             pub const RESERVED_MASK: $int = ((1 << Self::RESERVED_BITS) - 1);
             pub const TIMESTAMP_MASK: $int = ((1 << Self::TIMESTAMP_BITS) - 1);
             pub const RANDOM_MASK: $int = ((1 << Self::RANDOM_BITS) - 1);
+            pub const SEQUENCE_MASK: $int = ((1 << Self::SEQUENCE_BITS) - 1);
 
-            pub const fn from(timestamp: $int, random: $int) -> Self {
+            pub const fn from(timestamp: $int, random: $int, sequence: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let r = (random & Self::RANDOM_MASK) << Self::RANDOM_SHIFT;
-                Self { id: t | r }
+                let s = (sequence & Self::SEQUENCE_MASK) << Self::SEQUENCE_SHIFT;
+                Self { id: t | r | s }
             }
 
             /// Extracts the timestamp from the packed ID.
             pub const fn timestamp(&self) -> $int {
                 (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
             }
-
-            /// Extracts the timestamp from the packed ID.
+            /// Extracts the random number from the packed ID.
             pub const fn random(&self) -> $int {
                 (self.id >> Self::RANDOM_SHIFT) & Self::RANDOM_MASK
+            }
+            /// Extracts the sequence number from the packed ID.
+            pub const fn sequence(&self) -> $int {
+                (self.id >> Self::SEQUENCE_SHIFT) & Self::SEQUENCE_MASK
             }
             /// Returns the maximum representable timestamp value based on
             /// Self::TIMESTAMP_BITS.
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
-            /// Returns the maximum representable sequence value based on
+            /// Returns the maximum representable randome value based on
             /// Self::RANDOM_BITS.
             pub const fn max_random() -> $int {
                 (1 << Self::RANDOM_BITS) - 1
+            }
+            /// Returns the maximum representable sequence value based on
+            /// Self::SEQUENCE_BITS.
+            pub const fn max_sequence() -> $int {
+                (1 << Self::SEQUENCE_BITS) - 1
             }
 
             /// Converts this type into its raw type representation
@@ -158,12 +205,19 @@ macro_rules! define_ulid {
         }
 
         impl $crate::Ulid for $name {
+            const ZERO: $int = 0;
+            const ONE: $int = 1;
+
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
 
             fn random(&self) -> Self::Ty {
                 self.random()
+            }
+
+            fn sequence(&self) -> Self::Ty {
+                self.sequence()
             }
 
             fn max_timestamp() -> Self::Ty {
@@ -174,8 +228,16 @@ macro_rules! define_ulid {
                 (1 << $random_bits) - 1
             }
 
-            fn from_components(timestamp: $int, random: $int) -> Self {
-                Self::from(timestamp, random)
+            fn max_sequence() -> Self::Ty {
+                (1 << $sequence_bits) - 1
+            }
+
+            fn from_components(timestamp: $int, random: $int, sequence: $int) -> Self {
+                debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
+                // Random bits cannot overflow as they're masked.
+                // debug_assert!(random <= Self::RANDOM_MASK, "random overflow");
+                debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
+                Self::from(timestamp, random, sequence)
             }
 
             fn to_padded_string(&self) -> String {
@@ -199,7 +261,7 @@ macro_rules! define_ulid {
         impl core::fmt::Debug for $name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 use $crate::Ulid;
-                
+
                 let full = core::any::type_name::<Self>();
                 let name = full.rsplit("::").next().unwrap_or(full);
                 let mut dbg = f.debug_struct(name);
@@ -207,6 +269,7 @@ macro_rules! define_ulid {
                 dbg.field("padded", &self.to_padded_string());
                 dbg.field("timestamp", &format_args!("{:} (0x{:x})", self.timestamp(), self.timestamp()));
                 dbg.field("random", &format_args!("{:} (0x{:x})", self.random(), self.random()));
+                dbg.field("sequence", &format_args!("{:} (0x{:x})", self.sequence(), self.sequence()));
                 dbg.finish()
             }
         }
@@ -230,7 +293,31 @@ define_ulid!(
     ULID, u128,
     reserved: 0,
     timestamp: 48,
-    random: 80
+    random: 80,
+    sequence: 0
+);
+
+define_ulid!(
+    /// A 128-bit monotonic Ulid using the ULID layout
+    ///
+    /// - 0 bits reserved
+    /// - 48 bits timestamp
+    /// - 64 bits random
+    /// - 16 bits random
+    ///
+    /// ```text
+    ///  Bit Index:  127            80 79         16 15             0
+    ///              +----------------+-------------+---------------+
+    ///  Field:      | timestamp (48) | random (64) | sequence (16) |
+    ///              +----------------+-------------+---------------+
+    ///              |<----- MSB ------- 128 bits ------- LSB ----->|
+    /// ```
+    #[allow(non_camel_case_types)]
+    ULID_MONO, u128,
+    reserved: 0,
+    timestamp: 48,
+    random: 64,
+    sequence: 16
 );
 
 #[cfg(test)]
@@ -241,22 +328,54 @@ mod tests {
     fn test_ulid_id_fields_and_bounds() {
         let ts = ULID::max_timestamp();
         let rand = ULID::max_random();
+        let seq = ULID::max_sequence();
+        assert_eq!(seq, 0); // non-monotonic always has a sequence of 0
 
-        let id = ULID::from(ts, rand);
+        let id = ULID::from(ts, rand, seq);
         println!("ID: {:#?}", id);
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.random(), rand);
-        assert_eq!(ULID::from_components(ts, rand), id);
+        assert_eq!(id.sequence(), 0); // non-monotonic always has a sequence of 0
+        assert_eq!(ULID::from_components(ts, rand, seq), id);
     }
 
     #[test]
     fn ulid_low_bit_fields() {
-        let id = ULID::from_components(0, 0);
+        let id = ULID::from_components(0, 0, 0);
         assert_eq!(id.timestamp(), 0);
         assert_eq!(id.random(), 0);
+        assert_eq!(id.sequence(), 0);
 
-        let id = ULID::from_components(1, 1);
+        let id = ULID::from_components(1, 1, 0);
         assert_eq!(id.timestamp(), 1);
         assert_eq!(id.random(), 1);
+        assert_eq!(id.sequence(), 0);
+    }
+
+    #[test]
+    fn test_mono_ulid_id_fields_and_bounds() {
+        let ts = ULID_MONO::max_timestamp();
+        let rand = ULID_MONO::max_random();
+        let seq = ULID_MONO::max_sequence();
+
+        let id = ULID_MONO::from(ts, rand, seq);
+        println!("ID: {:#?}", id);
+        assert_eq!(id.timestamp(), ts);
+        assert_eq!(id.random(), rand);
+        assert_eq!(id.sequence(), seq);
+        assert_eq!(ULID_MONO::from_components(ts, rand, seq), id);
+    }
+
+    #[test]
+    fn mono_ulid_low_bit_fields() {
+        let id = ULID_MONO::from_components(0, 0, 0);
+        assert_eq!(id.timestamp(), 0);
+        assert_eq!(id.random(), 0);
+        assert_eq!(id.sequence(), 0);
+
+        let id = ULID_MONO::from_components(1, 1, 1);
+        assert_eq!(id.timestamp(), 1);
+        assert_eq!(id.random(), 1);
+        assert_eq!(id.sequence(), 1);
     }
 }
