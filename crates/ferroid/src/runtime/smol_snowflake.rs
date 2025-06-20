@@ -59,21 +59,21 @@ mod tests {
     #[test]
     fn generates_many_unique_ids_lock_smol() {
         smol::block_on(async {
-            test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolSleep>(
+            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolSleep>(
                 LockSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
             .await
             .unwrap();
 
-            test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolYield>(
+            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolYield>(
                 LockSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
             .await
             .unwrap();
 
-            test_many_snow_unique_ids_convenience::<_, SnowflakeTwitterId, MonotonicClock>(
+            test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
                 LockSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
@@ -85,21 +85,21 @@ mod tests {
     #[test]
     fn generates_many_unique_ids_atomic_smol() {
         smol::block_on(async {
-            test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolSleep>(
+            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolSleep>(
                 AtomicSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
             .await
             .unwrap();
 
-            test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, MonotonicClock, SmolYield>(
+            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolYield>(
                 AtomicSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
             .await
             .unwrap();
 
-            test_many_snow_unique_ids_convenience::<_, SnowflakeTwitterId, MonotonicClock>(
+            test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
                 AtomicSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
@@ -109,7 +109,7 @@ mod tests {
     }
 
     // Helper function for explicit SleepProvider testing
-    async fn test_many_snow_unique_ids_explicit<G, ID, T, S>(
+    async fn test_many_snow_unique_ids_explicit<ID, G, T, S>(
         generator_fn: impl Fn(u64, T) -> G,
         clock_factory: impl Fn() -> T,
     ) -> Result<()>
@@ -144,7 +144,7 @@ mod tests {
     }
 
     // Helper function for convenience extension trait testing
-    async fn test_many_snow_unique_ids_convenience<G, ID, T>(
+    async fn test_many_snow_unique_ids_convenience<ID, G, T>(
         generator_fn: impl Fn(u64, T) -> G,
         clock_factory: impl Fn() -> T,
     ) -> Result<()>

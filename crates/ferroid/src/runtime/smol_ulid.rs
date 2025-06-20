@@ -46,15 +46,15 @@ where
 mod tests {
     use super::*;
     use crate::{
-        BasicUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
-        ThreadRandom, TimeSource, ULID, Ulid, UlidGenerator,
+        LockUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
+        ThreadRandom, TimeSource, ULID_MONO, Ulid, UlidGenerator,
     };
     use core::fmt;
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
 
-    const TOTAL_IDS: usize = 4096;
+    const TOTAL_IDS: usize = 2 << 16;
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
@@ -62,24 +62,24 @@ mod tests {
     #[test]
     fn generates_many_unique_ids_basic_smol() {
         smol::block_on(async {
-            test_many_ulid_unique_ids_explicit::<_, ULID, _, _, SmolSleep>(
-                BasicUlidGenerator::new,
+            test_many_ulid_unique_ids_explicit::<ULID_MONO, _, _, _, SmolSleep>(
+                LockUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
             .await
             .unwrap();
 
-            test_many_ulid_unique_ids_explicit::<_, ULID, _, _, SmolYield>(
-                BasicUlidGenerator::new,
+            test_many_ulid_unique_ids_explicit::<ULID_MONO, _, _, _, SmolYield>(
+                LockUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
             .await
             .unwrap();
 
-            test_many_ulid_unique_ids_convenience::<_, ULID, _, _>(
-                BasicUlidGenerator::new,
+            test_many_ulid_unique_ids_convenience::<ULID_MONO, _, _, _>(
+                LockUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
@@ -89,7 +89,7 @@ mod tests {
     }
 
     // Helper function for explicit SleepProvider testing
-    async fn test_many_ulid_unique_ids_explicit<G, ID, T, R, S>(
+    async fn test_many_ulid_unique_ids_explicit<ID, G, T, R, S>(
         generator_fn: impl Fn(T, R) -> G,
         clock_factory: impl Fn() -> T,
         rand_factory: impl Fn() -> R,
@@ -126,7 +126,7 @@ mod tests {
     }
 
     // Helper function for convenience extension trait testing
-    async fn test_many_ulid_unique_ids_convenience<G, ID, T, R>(
+    async fn test_many_ulid_unique_ids_convenience<ID, G, T, R>(
         generator_fn: impl Fn(T, R) -> G,
         clock_factory: impl Fn() -> T,
         rand_factory: impl Fn() -> R,

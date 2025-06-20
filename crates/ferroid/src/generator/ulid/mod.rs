@@ -1,9 +1,9 @@
 mod basic;
 mod interface;
+mod lock;
 #[cfg(test)]
 mod tests;
-mod basic_mono;
 
 pub use basic::*;
 pub use interface::*;
-pub use basic_mono::*;
+pub use lock::*;

@@ -3,14 +3,12 @@ use core::{fmt, hash::Hash};
 
 /// Trait for layout-compatible ULID-style identifiers.
 ///
-/// This trait abstracts a `timestamp` and `random` partition over a
-/// fixed-size integer (e.g., `u128`) used for high-entropy time-sortable ID
-/// generation.
+/// This trait abstracts a `timestamp`, `random` , and `sequence` partitions
+/// over a fixed-size integer (e.g., `u128`) used for high-entropy time-sortable
+/// ID generation.
 ///
 /// Types implementing `Ulid` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
-///
-/// Unlike `Snowflake`, this trait does not assume a machine ID.
 pub trait Ulid:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
@@ -64,33 +62,36 @@ pub trait Ulid:
     fn to_padded_string(&self) -> String;
 }
 
-/// Declares a `Ulid`-compatible type with custom timestamp and random bit
-/// layouts.
+/// # Field Ordering Semantics
 ///
-/// This macro defines a packed ID structure using a fixed-width integer (e.g.,
-/// `u128`) and generates field masks and accessors to extract each component.
+/// The `define_ulid!` macro defines a bit layout for a custom Ulid using four
+/// required components: `reserved`, `timestamp`, `random`, and `sequence`.
 ///
-/// All bits must be fully accounted for; otherwise, a compile-time assertion
-/// will fail.
+/// These components are always laid out from **most significant bit (MSB)** to
+/// **least significant bit (LSB)** - in that exact order.
 ///
-/// ## Bit layout
-///
-/// The ID is packed from **MSB to LSB**:
+/// - The first field (`reserved`) occupies the highest bits.
+/// - The last field (`sequence`) occupies the lowest bits.
+/// - The total number of bits **must exactly equal** the size of the backing
+///   integer type (`u64`, `u128`, etc.). If it doesn't, the macro will trigger
+///   a compile-time assertion failure.
 ///
 /// ```text
-///  Bit Index:  127            M M - 1       0
-///              +---------------+------------+
-///  Field:      | timestamp (N) | random (M) |
-///              +---------------+------------+
-///              |<-- MSB - 128 bits - LSB -->|
-/// ```
-///
-/// ## Example
-///
-/// ```
-/// use ferroid::define_ulid;
 /// define_ulid!(
-///     MyUlid, u128,
+///     <TypeName>, <IntegerType>,
+///     reserved: <bits>,
+///     timestamp: <bits>,
+///     random: <bits>,
+///     sequence: <bits>
+/// );
+///```
+///
+/// ## Example: A non-monotonic ULID layout
+/// ```rust
+/// use ferroid::define_ulid;
+///
+/// define_ulid!(
+///     MyCustomId, u128,
 ///     reserved: 0,
 ///     timestamp: 48,
 ///     random: 80,
@@ -98,10 +99,15 @@ pub trait Ulid:
 /// );
 /// ```
 ///
-/// This creates a type `MyUlid` with:
-/// - 0 bits reserved
-/// - 48 bits for the timestamp (stored in the upper bits)
-/// - 80 bits of random (lower bits)
+/// Which expands to the following bit layout:
+///
+/// ```text
+///  Bit Index:  127            80 79           0
+///              +----------------+-------------+
+///  Field:      | timestamp (48) | random (80) |
+///              +----------------+-------------+
+///              |<-- MSB -- 128 bits -- LSB -->|
+/// ```
 #[macro_export]
 macro_rules! define_ulid {
     (
@@ -233,9 +239,11 @@ macro_rules! define_ulid {
             }
 
             fn from_components(timestamp: $int, random: $int, sequence: $int) -> Self {
+                // Random bits can frequencly overflow, but this is okay since
+                // they're masked. We don't need a debug assertion here because
+                // this is expected behavior. However, the timestamp and
+                // sequence parts should never overflow.
                 debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
-                // Random bits cannot overflow as they're masked.
-                // debug_assert!(random <= Self::RANDOM_MASK, "random overflow");
                 debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
                 Self::from(timestamp, random, sequence)
             }
@@ -282,6 +290,7 @@ define_ulid!(
     /// - 0 bits reserved
     /// - 48 bits timestamp
     /// - 80 bits random
+    /// - 0 bits sequence (not monotonic)
     ///
     /// ```text
     ///  Bit Index:  127            80 79           0
@@ -303,7 +312,7 @@ define_ulid!(
     /// - 0 bits reserved
     /// - 48 bits timestamp
     /// - 64 bits random
-    /// - 16 bits random
+    /// - 16 bit sequence (monotonic)
     ///
     /// ```text
     ///  Bit Index:  127            80 79         16 15             0

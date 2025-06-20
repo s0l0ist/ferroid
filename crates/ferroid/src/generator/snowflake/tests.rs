@@ -29,7 +29,6 @@ where
     T: Id,
 {
     fn unwrap_ready(self) -> T;
-    #[cfg(feature = "snowflake")]
     fn unwrap_pending(self) -> T::Ty;
 }
 

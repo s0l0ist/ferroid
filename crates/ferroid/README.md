@@ -99,6 +99,7 @@ that case, you can spin, yield, or sleep depending on your environment:
 
     let id: ULID = match generator.next_id() {
         IdGenStatus::Ready { id } => id,
+        // Ulids with zero-sequence bits (e.g. the built-in `ULID`) will never yield pending
         IdGenStatus::Pending { .. } =>  unreachable!()
     };
 
@@ -254,6 +255,26 @@ To define a custom layouts, use the `define_*` macros:
         random: 80,
         sequence: 0
     );
+
+    // Example: a 128-bit *monotonic* ULID using the Ulid layout
+    //
+    // - 0 bits reserved
+    // - 48 bits timestamp
+    // - 64 bits random
+    // - 16 bits sequence
+    //
+    //  Bit Index:  127            80 79         16 15             0
+    //              +----------------+-------------+---------------+
+    //  Field:      | timestamp (48) | random (64) | sequence (16) |
+    //              +----------------+-------------+---------------+
+    //              |<----- MSB ------- 128 bits ------- LSB ----->|
+    define_ulid!(
+        MyMonotonicULID, u128,
+        reserved: 0,
+        timestamp: 48,
+        random: 64,
+        sequence: 16
+    );
 }
 ```
 
@@ -262,7 +283,7 @@ To define a custom layouts, use the `define_*` macros:
 > bits. `reserved` bits are always stored as **zero** and can be used for future
 > expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`,
 > `random`, and `sequence`) fields. If `sequence` bits are greater than zero in
-> `define_ulid!`, then it will leverage them for monotonicity.
+> `define_ulid!`, they can be used in the monotonic generators.
 
 ### Behavior
 
@@ -273,9 +294,16 @@ Snowflake:
 - If the clock **goes backward**: return `IdGenStatus::Pending`
 - If the sequence **overflows**: return `IdGenStatus::Pending`
 
-Ulid:
+Ulid (non monotonic):
+- Non-monotonic always returns → `IdGenStatus::Ready` to have a Compatable API with Snowflake.
 
-- Always returns → `IdGenStatus::Ready` to have a Compatable API with Snowflake.
+Ulid (monotonic):
+- If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
+- If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
+- If the clock **goes backward**: return `IdGenStatus::Pending`
+- If the sequence **overflows**: return `IdGenStatus::Pending`
+
+Monotonic always returns → `IdGenStatus::Ready` to have a Compatable API with Snowflake.
 
 ### Serialize as padded string
 

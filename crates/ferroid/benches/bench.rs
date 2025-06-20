@@ -4,9 +4,9 @@ use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
     AtomicSnowflakeGenerator, BasicSnowflakeGenerator, BasicUlidGenerator, Error, IdGenStatus,
-    LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
-    SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource, TokioSleep, ULID,
-    Ulid, UlidGenerator, UlidGeneratorAsyncExt,
+    LockSnowflakeGenerator, LockUlidGenerator, MonotonicClock, RandSource, SmolSleep, Snowflake,
+    SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource,
+    TokioSleep, ULID, ULID_MONO, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
 };
 use futures::future::try_join_all;
 use std::{
@@ -35,7 +35,7 @@ impl TimeSource<u128> for FixedMockTime {
 
 // Number of IDs generated per benchmark iteration (per-thread for
 // multi-threaded).
-const TOTAL_IDS: usize = 4096;
+const TOTAL_IDS: usize = 4096; // 2^12 bits for sequence ID 
 
 /// Benchmarks a hot-path generator (never pending) by always creating a new
 /// generator instance which resets the sequence
@@ -330,8 +330,17 @@ fn bench_generator_ulid_contended<ID, G, T, R>(
                                     barrier.wait();
 
                                     for _ in 0..ids_per_thread {
-                                        let id = generator.next_id();
-                                        black_box(id);
+                                        loop {
+                                            match generator.next_id() {
+                                                IdGenStatus::Ready { id } => {
+                                                    black_box(id);
+                                                    break;
+                                                }
+                                                IdGenStatus::Pending { .. } => {
+                                                    core::hint::spin_loop();
+                                                }
+                                            }
+                                        }
                                     }
 
                                     done.wait();
@@ -610,38 +619,53 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
 }
 
 // --- Ulid ---
-/// Single-threaded benchmark for `BasicUlidGenerator` with a monotonic clock.
-fn benchmark_mono_sequential_ulid(c: &mut Criterion) {
-    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid", || {
+
+// Mocks
+fn benchmark_mock_sequential_ulid_basic(c: &mut Criterion) {
+    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/basic", || {
+        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+    });
+}
+fn benchmark_mock_sequential_ulid_lock(c: &mut Criterion) {
+    bench_generator_ulid::<ULID_MONO, _, _, _>(c, "mock/sequential/ulid/lock", || {
+        LockUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+    });
+}
+
+// Mono clocks
+fn benchmark_mono_sequential_ulid_basic(c: &mut Criterion) {
+    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic", || {
         BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
     });
 }
 
-fn benchmark_mono_contended_ulid(c: &mut Criterion) {
-    bench_generator_ulid_contended::<ULID, _, _, _>(c, "mono/contended/ulid", || {
-        BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
+fn benchmark_mono_sequential_ulid_lock(c: &mut Criterion) {
+    bench_generator_ulid::<ULID_MONO, _, _, _>(c, "mono/sequential/ulid/lock", || {
+        LockUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
     });
 }
 
-/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across tokio
-/// tasks.
-fn benchmark_mono_tokio_ulid(c: &mut Criterion) {
-    bench_ulid_generator_async_tokio::<ULID, _, _, _>(
+fn benchmark_mono_contended_ulid_lock(c: &mut Criterion) {
+    bench_generator_ulid_contended::<ULID_MONO, _, _, _>(c, "mono/contended/ulid/lock", || {
+        LockUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
+    });
+}
+
+// Ulid Async
+fn benchmark_tokio_ulid_lock(c: &mut Criterion) {
+    bench_ulid_generator_async_tokio::<ULID_MONO, _, _, _>(
         c,
-        "mono/multi/async/tokio/ulid",
-        BasicUlidGenerator::new,
+        "mono/async/tokio/ulid/lock",
+        LockUlidGenerator::new,
         MonotonicClock::default,
         ThreadRandom::default,
     );
 }
-
-/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across smol
-/// tasks.
-fn benchmark_mono_smol_ulid(c: &mut Criterion) {
-    bench_ulid_generator_async_smol::<ULID, _, _, _>(
+fn benchmark_smol_ulid_lock(c: &mut Criterion) {
+    bench_ulid_generator_async_smol::<ULID_MONO, _, _, _>(
         c,
-        "mono/multi/async/smol/ulid",
-        BasicUlidGenerator::new,
+        "mono/async/smol/ulid/lock",
+        LockUlidGenerator::new,
         MonotonicClock::default,
         ThreadRandom::default,
     );
@@ -667,15 +691,14 @@ criterion_group!(
     // --- Ulid ---
     //
     // Mock clock
-    //
-    // (Ulid doesn't have these because the benchmark is
-    // completely dominated by the RandomSource.
-    //
+    benchmark_mock_sequential_ulid_basic,
+    benchmark_mock_sequential_ulid_lock,
     // Monotonic clocks
-    benchmark_mono_sequential_ulid,
-    benchmark_mono_contended_ulid,
+    benchmark_mono_sequential_ulid_basic,
+    benchmark_mono_sequential_ulid_lock,
+    benchmark_mono_contended_ulid_lock,
     // Async multi worker, multi generator
-    benchmark_mono_tokio_ulid,
-    benchmark_mono_smol_ulid,
+    benchmark_tokio_ulid_lock,
+    benchmark_smol_ulid_lock,
 );
 criterion_main!(benches);

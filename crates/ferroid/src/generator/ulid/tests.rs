@@ -26,6 +26,7 @@ where
     T: Id,
 {
     fn unwrap_ready(self) -> T;
+    fn unwrap_pending(self) -> T::Ty;
 }
 
 impl<T> IdGenStatusExt<T> for IdGenStatus<T>
@@ -38,6 +39,13 @@ where
             IdGenStatus::Pending { yield_for } => {
                 panic!("unexpected pending (yield for: {})", yield_for)
             }
+        }
+    }
+
+    fn unwrap_pending(self) -> T::Ty {
+        match self {
+            IdGenStatus::Ready { id } => panic!("unexpected ready ({})", id),
+            IdGenStatus::Pending { yield_for } => yield_for,
         }
     }
 }
@@ -196,8 +204,8 @@ fn basic_ulid_generator_random_component_test() {
 
 #[test]
 fn basic_ulid_generator_try_next_id_test() {
-    let mock_time = MockTime { millis: 42 };
-    let mock_rng = MockRng { value: 123 };
+    let mock_time = MockTime { millis: 1234567890 };
+    let mock_rng = MockRng { value: 42 };
     let generator: BasicUlidGenerator<ULID, _, _> = BasicUlidGenerator::new(mock_time, mock_rng);
 
     run_ulid_try_next_id_never_fails(generator);

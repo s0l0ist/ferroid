@@ -57,19 +57,19 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_lock() -> Result<()> {
-        test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, _, TokioSleep>(
+        test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioSleep>(
             LockSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
 
-        test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, _, TokioYield>(
+        test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioYield>(
             LockSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
 
-        test_many_snow_unique_ids_convenience::<_, SnowflakeTwitterId, MonotonicClock>(
+        test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
             LockSnowflakeGenerator::new,
             MonotonicClock::default,
         )
@@ -80,19 +80,19 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic() -> Result<()> {
-        test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, _, TokioSleep>(
+        test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioSleep>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
 
-        test_many_snow_unique_ids_explicit::<_, SnowflakeTwitterId, _, TokioYield>(
+        test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioYield>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
 
-        test_many_snow_unique_ids_convenience::<_, SnowflakeTwitterId, _>(
+        test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
         )
@@ -101,7 +101,7 @@ mod tests {
     }
 
     // Helper function for explicit SleepProvider testing
-    async fn test_many_snow_unique_ids_explicit<G, ID, T, S>(
+    async fn test_many_snow_unique_ids_explicit<ID, G, T, S>(
         generator_fn: impl Fn(u64, T) -> G,
         clock_factory: impl Fn() -> T,
     ) -> Result<()>
@@ -136,7 +136,7 @@ mod tests {
     }
 
     // Helper function for convenience extension trait testing
-    async fn test_many_snow_unique_ids_convenience<G, ID, T>(
+    async fn test_many_snow_unique_ids_convenience<ID, G, T>(
         generator_fn: impl Fn(u64, T) -> G,
         clock_factory: impl Fn() -> T,
     ) -> Result<()>

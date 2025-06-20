@@ -1,59 +1,40 @@
 use crate::{IdGenStatus, Result, TimeSource, Ulid, UlidGenerator, rand::RandSource};
-use core::marker::PhantomData;
+use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
-/// A ULID-style ID generator suitable for single- or multi-threaded
+/// A *monotonic* ULID-style ID generator suitable for single-threaded
 /// environments.
 ///
-/// This generator is lightweight and fast. Thread safety depends entirely on
-/// the [`TimeSource`] and [`RandSource`] used. The provided defaults
-/// (`MonotonicClock` and [`ThreadRandom`]) are thread-safe and allow safe
-/// concurrent use.
-///
-/// Unlike Snowflake generators, this type avoids sequence coordination entirely
-/// by combining a timestamp with random bits to produce probabilistically
-/// unique, time-sortable IDs. However, this implementation doesn't allow
-/// monotonicity with IDs generated in the same millisecond.
+/// This generator is lightweight and fast, but is not thread-safe.
 ///
 /// ## Features
 ///
+/// - ❌ Not thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
-/// - ✅ Time-ordered (millisecond precision)
-/// - ✅ Suitable for distributed systems
-/// - ✅ No sequence exhaustion or clock rollback issues
+/// - ✅ Time-ordered (monotonically increasing per millisecond)
 ///
 /// ## Recommended When
-/// - You want high-performance, distributed-safe IDs
-/// - You need time-ordering but can tolerate approximate monotonicity
-/// - You want to avoid shared state, locking, or sequence contention
 ///
-/// ## Trade-offs
+/// - You're in a single-threaded environment (no shared access)
+/// - You need require monotonically increasing IDs (ID generated within the
+///   same millisecond increment a sequence counter)
 ///
-/// - **Uniqueness**: Probabilistic (collision risk ≈ 1 in 2^random_bits)
-/// - **Performance**: Extremely fast (no locking, no sequencing)
-/// - **Ordering**: Time-ordered but not strictly monotonic
-/// - **Coordination**: None required between generators
+/// ## See Also
+/// - [`BasicUlidGenerator`]
+/// - [`LockMonoUlidGenerator`]
 ///
-/// ## Thread Safety
-///
-/// This generator is **only as thread-safe as its `TimeSource` and
-/// `RandSource`**. The default [`ThreadRandom`] implementation uses
-/// `thread_rng()` internally, making it safe for concurrent use across threads
-/// without contention.
-///
-/// [`ThreadRandom`]: crate::ThreadRandom
-/// [`TimeSource`]: crate::TimeSource
-/// [`RandSource`]: crate::rand::RandSource
+/// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
+/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
 pub struct BasicUlidGenerator<ID, T, R>
 where
     ID: Ulid,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    state: Cell<ID>,
     clock: T,
     rng: R,
-    _id: PhantomData<ID>,
 }
 
 impl<ID, T, R> BasicUlidGenerator<ID, T, R>
@@ -85,10 +66,40 @@ where
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
     pub fn new(clock: T, rng: R) -> Self {
+        Self::from_components(ID::ZERO, ID::ZERO, ID::ZERO, clock, rng)
+    }
+
+    /// Creates a new ID generator from explicit component values.
+    ///
+    /// This constructor is primarily useful for advanced use cases such as
+    /// restoring state from persistent storage or controlling the starting
+    /// point of the generator manually.
+    ///
+    /// # Parameters
+    /// - `timestamp`: The initial timestamp component (usually in milliseconds)
+    /// - `machine_id`: The machine or worker identifier
+    /// - `sequence`: The initial sequence number
+    /// - `clock`: A [`TimeSource`] implementation used to fetch the current
+    ///   time
+    ///
+    /// # Returns
+    /// A new generator instance preloaded with the given state.
+    ///
+    /// # ⚠️ Note
+    /// In typical use cases, you should prefer [`Self::new`] to let the
+    /// generator initialize itself from the current time.
+    pub fn from_components(
+        timestamp: ID::Ty,
+        random: ID::Ty,
+        sequence: ID::Ty,
+        clock: T,
+        rng: R,
+    ) -> Self {
+        let id = ID::from_components(timestamp, random, sequence);
         Self {
+            state: Cell::new(id),
             clock,
             rng,
-            _id: PhantomData,
         }
     }
 
@@ -161,11 +172,35 @@ where
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
-        let t = self.clock.current_millis();
-        let r = self.rng.rand();
-        Ok(IdGenStatus::Ready {
-            id: ID::from_components(t, r, ID::ZERO),
-        })
+        let now = self.clock.current_millis();
+        let state = self.state.get();
+        let current_ts = state.timestamp();
+
+        let status = match now.cmp(&current_ts) {
+            Ordering::Less => {
+                let yield_for = current_ts - now;
+                debug_assert!(yield_for >= ID::ZERO);
+                IdGenStatus::Pending { yield_for }
+            }
+            Ordering::Greater => {
+                // Set the new timestamp and random number.
+                let rand = self.rng.rand();
+                let updated = state.rollover_to_timestamp(now, rand);
+                self.state.set(updated);
+                IdGenStatus::Ready { id: updated }
+            }
+            Ordering::Equal => {
+                if state.has_sequence_room() {
+                    let updated = state.increment_sequence();
+                    self.state.set(updated);
+                    IdGenStatus::Ready { id: updated }
+                } else {
+                    IdGenStatus::Pending { yield_for: ID::ONE }
+                }
+            }
+        };
+
+        Ok(status)
     }
 }
 
