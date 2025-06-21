@@ -45,7 +45,7 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source
+    /// Creates a new [`LockUlidGenerator`] with the provided time source
     /// and RNG.
     ///
     /// # Parameters
@@ -58,9 +58,9 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{LockUlidGenerator, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let generator = LockMonoUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = LockUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
     /// let id = generator.next_id();
     /// println!("Generated ID: {:?}", id);
     /// ```
@@ -118,11 +118,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
     /// let clock = MonotonicClock::default();
     /// let rand = ThreadRandom::default();
-    /// let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
+    /// let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
     /// // Attempt to generate a new ID
     /// match generator.next_id() {
@@ -153,11 +153,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
     /// let clock = MonotonicClock::default();
     /// let rand = ThreadRandom::default();
-    /// let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
+    /// let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
     /// // Attempt to generate a new ID
     /// match generator.try_next_id() {

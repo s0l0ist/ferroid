@@ -22,10 +22,10 @@ use tracing::instrument;
 ///
 /// ## See Also
 /// - [`BasicUlidGenerator`]
-/// - [`LockMonoUlidGenerator`]
+/// - [`LockUlidGenerator`]
 ///
 /// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
-/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
+/// [`LockUlidGenerator`]: crate::LockUlidGenerator
 pub struct BasicUlidGenerator<ID, T, R>
 where
     ID: Ulid,

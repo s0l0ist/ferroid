@@ -24,6 +24,28 @@ impl TimeSource<u128> for MockTime {
     }
 }
 
+#[derive(Clone)]
+struct SharedMockStepTime {
+    clock: Rc<MockStepTime>,
+}
+
+impl TimeSource<u64> for SharedMockStepTime {
+    fn current_millis(&self) -> u64 {
+        self.clock.values[self.clock.index.get()]
+    }
+}
+struct MockStepTime {
+    values: Vec<u64>,
+    index: Cell<usize>,
+}
+
+struct FixedTime;
+impl TimeSource<u64> for FixedTime {
+    fn current_millis(&self) -> u64 {
+        0
+    }
+}
+
 trait IdGenStatusExt<T>
 where
     T: Id,
@@ -176,28 +198,6 @@ where
 
     let final_count = seen_ids.lock().unwrap().len();
     assert_eq!(final_count, TOTAL_IDS, "Expected {} unique IDs", TOTAL_IDS);
-}
-
-#[derive(Clone)]
-struct SharedMockStepTime {
-    clock: Rc<MockStepTime>,
-}
-
-impl TimeSource<u64> for SharedMockStepTime {
-    fn current_millis(&self) -> u64 {
-        self.clock.values[self.clock.index.get()]
-    }
-}
-struct MockStepTime {
-    values: Vec<u64>,
-    index: Cell<usize>,
-}
-
-struct FixedTime;
-impl TimeSource<u64> for FixedTime {
-    fn current_millis(&self) -> u64 {
-        0
-    }
 }
 
 #[test]
