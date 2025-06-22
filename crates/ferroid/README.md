@@ -360,37 +360,48 @@ For example, Twitter-style IDs (12 sequence bits) allow:
 To benchmark this, we generate IDs in **chunks of 4096**, which aligns with the
 sequence limit per millisecond.
 
-- **Sync Snowflake**: Benchmarks the hot path without yielding to the clock.
-- **Async Snowflake**: Also uses 4096-ID batches, but may yield (sequence
-  exhaustion/CAS failure) or await due to task scheduling, reducing throughput.
-- **ULID**: Benchmarks the hot path without yielding to the clock.
+### Snowflake:
 
-Tests were ran on an M1 Macbook Pro 14", 32GB, 10 cores (8 perf, 2 efficiency).
+- **Sync**: Benchmarks the hot path without yielding to the clock.
+- **Async**: Also uses 4096-ID batches, but may yield (sequence exhaustion/CAS
+  failure) or await due to task scheduling, reducing throughput.
+
+### ULID:
+
+- **Sync & Async**: Uses the same 4096-ID batches, but because of random number
+  generation, the monotonic increment could overflow randomly, reflecting
+  real-world behavior.
+
+Tests were ran on an M1 Macbook Pro 14", 32GB, 10 cores (8 performance, 2
+efficiency).
 
 #### Synchronous Generators
 
-| Generator                | Time per IDs | Throughput    |
-| ------------------------ | ------------ | ------------- |
-| BasicSnowflakeGenerator  | **~2.8 ns**  | ~353M IDs/sec |
-| LockSnowflakeGenerator   | **~8.9 ns**  | ~111M IDs/sec |
-| AtomicSnowflakeGenerator | **~3.1 ns**  | ~320M IDs/sec |
-| BasicUlidGenerator       | **~22.9 ns** | ~43M IDs/sec  |
+| Generator                | Time per ID | Throughput    |
+| ------------------------ | ----------- | ------------- |
+| BasicSnowflakeGenerator  | **~2.8 ns** | ~353M IDs/sec |
+| LockSnowflakeGenerator   | **~8.9 ns** | ~111M IDs/sec |
+| AtomicSnowflakeGenerator | **~3.1 ns** | ~320M IDs/sec |
+| BasicUlidGenerator       | **~3.4 ns** | ~288M IDs/sec |
+| LockUlidGenerator        | **~9.2 ns** | ~109M IDs/sec |
 
-#### Async (Tokio Runtime)
+#### Async (Tokio Runtime) - Peak throughput
 
 | Generator                | Generators | Time per 4M IDs | Throughput     |
 | ------------------------ | ---------- | --------------- | -------------- |
 | LockSnowflakeGenerator   | 1024       | ~6.95 ms        | ~604M IDs/sec  |
 | AtomicSnowflakeGenerator | 1024       | ~3.82 ms        | ~1.09B IDs/sec |
-| BasicUlidGenerator       | 128        | ~17.3 ms        | ~242M IDs/sec  |
+| LockUlidGenerator        | 1024       | ~7.46 ms        | ~562M IDs/sec  |
 
-#### Async (Smol Runtime)
+#### Async (Smol Runtime) - Peak throughput
 
 | Generator                | Generators | Time per 4M IDs | Throughput    |
 | ------------------------ | ---------- | --------------- | ------------- |
 | LockSnowflakeGenerator   | 1024       | ~8.10 ms        | ~517M IDs/sec |
-| AtomicSnowflakeGenerator | 512        | ~4.31 ms        | ~973M IDs/sec |
-| BasicUlidGenerator       | 128        | ~14.3 ms        | ~294M IDs/sec |
+| AtomicSnowflakeGenerator | 512\*      | ~4.31 ms        | ~973M IDs/sec |
+| LockUlidGenerator        | 512\*      | ~7.70 ms        | ~545M IDs/sec |
+
+\* = Higher number of generators resulted in lower throughput
 
 To run all benchmarks:
 

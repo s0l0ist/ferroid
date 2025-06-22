@@ -282,8 +282,15 @@ fn bench_generator_ulid<ID, G, T, R>(
 
             for _ in 0..iters {
                 for _ in 0..TOTAL_IDS {
-                    let id = generator.next_id();
-                    black_box(id);
+                    loop {
+                        match generator.next_id() {
+                            IdGenStatus::Ready { id } => {
+                                black_box(id);
+                                break;
+                            }
+                            IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+                        }
+                    }
                 }
             }
 
