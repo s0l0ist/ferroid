@@ -40,9 +40,6 @@ and parsing **Snowflake** and **ULID** identifiers.
 | -------- | -------------- | ----------- | ----------------------- |
 | ULID     | 48             | 80          | 1970-01-01 00:00:00.000 |
 
-ULIDs offer high-entropy, time-sortable IDs without coordination, but are not
-strictly monotonic.
-
 ## 🔧 Generator Comparison
 
 | Snowflake Generator        | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
