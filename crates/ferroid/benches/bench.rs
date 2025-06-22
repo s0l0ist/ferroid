@@ -630,24 +630,30 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
 // --- Ulid ---
 // Mocks
 fn benchmark_mock_sequential_ulid_basic(c: &mut Criterion) {
+    let rand = ThreadRandom::default();
     bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/basic", || {
-        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
     });
 }
 fn benchmark_mock_sequential_ulid_lock(c: &mut Criterion) {
+    let rand = ThreadRandom::default();
     bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/lock", || {
-        LockUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
+        LockUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
     });
 }
 // Mono clocks
 fn benchmark_mono_sequential_ulid_basic(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom::default();
     bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic", || {
-        BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
+        BasicUlidGenerator::new(clock.clone(), rand.clone())
     });
 }
 fn benchmark_mono_sequential_ulid_lock(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom::default();
     bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/lock", || {
-        LockUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
+        LockUlidGenerator::new(clock.clone(), rand.clone())
     });
 }
 fn benchmark_mono_threaded_ulid_basic(c: &mut Criterion) {
@@ -710,7 +716,7 @@ criterion_group!(
     benchmark_mono_smol_lock,
     benchmark_mono_smol_atomic,
     // --- Ulid ---
-    //
+
     // Mock clock
     benchmark_mock_sequential_ulid_basic,
     benchmark_mock_sequential_ulid_lock,
