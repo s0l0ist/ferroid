@@ -382,7 +382,7 @@ representative throughput numbers.
 
 - **Sync & Async**: Uses the same 4096-ID batches. Due to random number
   generation, monotonic increments may overflow randomly, reflecting real-world
-  behavior.
+  behavior. In general, it is rare for ULIDs to overflow.
 
 Tests were ran on an M1 Macbook Pro 14", 32GB, 10 cores (8 performance, 2
 efficiency).
@@ -401,19 +401,17 @@ efficiency).
 
 | Generator                | Generators | Time per ID  | Throughput     |
 | ------------------------ | ---------- | ------------ | -------------- |
-| LockSnowflakeGenerator   | 1024       | **~1.66 ns** | ~604M IDs/sec  |
-| AtomicSnowflakeGenerator | 1024       | **~0.91 ns** | ~1.09B IDs/sec |
-| LockUlidGenerator        | 1024       | **~1.78 ns** | ~562M IDs/sec  |
+| LockSnowflakeGenerator   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
+| AtomicSnowflakeGenerator | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
+| LockUlidGenerator        | 1024       | **~1.57 ns** | ~635M IDs/sec  |
 
 #### Async (Smol Runtime) - Peak throughput
 
-| Generator                | Generators | Time per ID  | Throughput    |
-| ------------------------ | ---------- | ------------ | ------------- |
-| LockSnowflakeGenerator   | 1024       | **~1.93 ns** | ~517M IDs/sec |
-| AtomicSnowflakeGenerator | 512\*      | **~1.03 ns** | ~973M IDs/sec |
-| LockUlidGenerator        | 512\*      | **~1.83 ns** | ~545M IDs/sec |
-
-\* = A higher number of generators resulted in lower throughput
+| Generator                | Generators | Time per ID  | Throughput     |
+| ------------------------ | ---------- | ------------ | -------------- |
+| LockSnowflakeGenerator   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
+| AtomicSnowflakeGenerator | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
+| LockUlidGenerator        | 1024       | **~1.32 ns** | ~756M IDs/sec  |
 
 To run all benchmarks:
 
