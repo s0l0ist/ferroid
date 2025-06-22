@@ -21,10 +21,8 @@ use tracing::instrument;
 ///   same millisecond increment a sequence counter)
 ///
 /// ## See Also
-/// - [`BasicUlidGenerator`]
 /// - [`LockUlidGenerator`]
 ///
-/// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
 /// [`LockUlidGenerator`]: crate::LockUlidGenerator
 pub struct BasicUlidGenerator<ID, T, R>
 where
@@ -122,8 +120,6 @@ where
     ///         println!("ID: {}", id);
     ///     }
     ///     IdGenStatus::Pending { yield_for } => {
-    ///         // In practice, Ulid generators will never return `Pending`, but
-    ///         // it is kept to have a consistent API.
     ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     /// }
@@ -157,9 +153,7 @@ where
     ///         println!("ID: {}", id);
     ///     }
     ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         // In practice, Ulid generators will never return `Pending`, but
-    ///         // it is kept to have a consistent API.
-    ///         println!("Exhausted for: {}ms", yield_for);
+    ///         println!("Exhausted; wait for: {}ms", yield_for);
     ///     }
     ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
