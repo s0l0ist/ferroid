@@ -176,10 +176,11 @@ fn bench_generator_async_tokio<ID, G, T>(
                         TokioBarrier::wait(&barrier).await;
                         TokioBarrier::wait(&done).await;
                     }
+                    let end = start.elapsed();
 
                     try_join_all(tasks).await.unwrap();
 
-                    start.elapsed()
+                    end
                 });
             },
         );
@@ -250,10 +251,11 @@ pub fn bench_generator_async_smol<ID, G, T>(
                         SmolBarrier::wait(&barrier).await;
                         SmolBarrier::wait(&done).await;
                     }
+                    let end = start.elapsed();
 
                     try_join_all(tasks).await.unwrap();
 
-                    start.elapsed()
+                    end
                 });
             },
         );
@@ -278,9 +280,9 @@ fn bench_generator_ulid<ID, G, T, R>(
     group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
-            let generator = generator_factory();
 
             for _ in 0..iters {
+                let generator = generator_factory();
                 for _ in 0..TOTAL_IDS {
                     loop {
                         match generator.next_id() {
@@ -344,7 +346,7 @@ fn bench_generator_ulid_contended<ID, G, T, R>(
                                                     break;
                                                 }
                                                 IdGenStatus::Pending { .. } => {
-                                                    core::hint::spin_loop();
+                                                    std::thread::yield_now();
                                                 }
                                             }
                                         }
@@ -437,10 +439,11 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
                         TokioBarrier::wait(&barrier).await;
                         TokioBarrier::wait(&done).await;
                     }
+                    let end = start.elapsed();
 
                     try_join_all(tasks).await.unwrap();
 
-                    start.elapsed()
+                    end
                 });
             },
         );
@@ -514,10 +517,11 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
                         SmolBarrier::wait(&barrier).await;
                         SmolBarrier::wait(&done).await;
                     }
+                    let end = start.elapsed();
 
                     try_join_all(tasks).await.unwrap();
 
-                    start.elapsed()
+                    end
                 });
             },
         );

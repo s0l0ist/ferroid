@@ -224,12 +224,12 @@ To define a custom layouts, use the `define_*` macros:
 
     // Example: a 128-bit extended ID layout
     //
-    //  Bit Index:  127                88 87            40 39             20 19             0
-    //              +--------------------+----------------+-----------------+---------------+
-    //  Field:      | reserved (40 bits) | timestamp (48) | machine ID (20) | sequence (20) |
-    //              +--------------------+----------------+-----------------+---------------+
-    //              |<------- HI 64 bits ------->|<--------------- LO 64 bits ------------->|
-    //              |<----- MSB ------ LSB ----->|<----- MSB ------ 64 bits ----- LSB ----->|
+    //  Bit Index:  127           88 87            40 39             20 19             0
+    //              +---------------+----------------+-----------------+---------------+
+    //  Field:      | reserved (40) | timestamp (48) | machine ID (20) | sequence (20) |
+    //              +---------------+----------------+-----------------+---------------+
+    //              |<----- HI 64 bits ----->|<-------------- LO 64 bits ------------->|
+    //              |<--- MSB ------ LSB --->|<----- MSB ----- 64 bits ----- LSB ----->|
     define_snowflake_id!(
         MyCustomLongId, u128,
         reserved: 40,
@@ -266,10 +266,8 @@ To define a custom layouts, use the `define_*` macros:
 > ⚠️ Note: All four sections (`reserved`, `timestamp`, `machine_id`, and
 > `sequence`) must be specified in the snowflake macro, even if a section uses 0
 > bits. `reserved` bits are always stored as **zero** and can be used for future
-> expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`,
-> `random`, and `sequence`) fields. If `sequence` bits are greater than zero in
-> `define_ulid!`, they will be used for monotinicity within the same
-> millisecond.
+> expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`, and
+> `random`) fields.
 
 ### Behavior
 
@@ -358,7 +356,21 @@ For example, Twitter-style IDs (12 sequence bits) allow:
 ```
 
 To benchmark this, we generate IDs in **chunks of 4096**, which aligns with the
-sequence limit per millisecond.
+sequence limit per millisecond in Snowflake layouts. For ULIDs, we use the same
+chunk size for consistency, but this number does not represent a hard throughput
+cap - ULID generation is probabilistic: monotonicity within the same millisecond
+increments the random bit value. Chunking here primarily serves to keep the
+benchmark code consistent.
+
+Async benchmarks are tricky because a single generator's performance is affected
+by task scheduling, which is not predictable and whose scheduler typically has a
+resolution of 1 millisecond. By the time a task is scheduled to execute (i.e.,
+generate an ID), a millisecond may have already passed, potentially resetting
+any sequence counter or monotonic increment - thus, never truly testing the hot
+path. To mitigate this, async tests measure maximum throughput: each task
+generates a batch of IDs and may await on any of them. This approach offsets
+idle time on one generator with active work on another, yielding more
+representative throughput numbers.
 
 ### Snowflake:
 
@@ -368,9 +380,9 @@ sequence limit per millisecond.
 
 ### ULID:
 
-- **Sync & Async**: Uses the same 4096-ID batches, but because of random number
-  generation, the monotonic increment could overflow randomly, reflecting
-  real-world behavior.
+- **Sync & Async**: Uses the same 4096-ID batches. Due to random number
+  generation, monotonic increments may overflow randomly, reflecting real-world
+  behavior.
 
 Tests were ran on an M1 Macbook Pro 14", 32GB, 10 cores (8 performance, 2
 efficiency).
@@ -387,21 +399,21 @@ efficiency).
 
 #### Async (Tokio Runtime) - Peak throughput
 
-| Generator                | Generators | Time per 4M IDs | Throughput     |
-| ------------------------ | ---------- | --------------- | -------------- |
-| LockSnowflakeGenerator   | 1024       | ~6.95 ms        | ~604M IDs/sec  |
-| AtomicSnowflakeGenerator | 1024       | ~3.82 ms        | ~1.09B IDs/sec |
-| LockUlidGenerator        | 1024       | ~7.46 ms        | ~562M IDs/sec  |
+| Generator                | Generators | Time per ID  | Throughput     |
+| ------------------------ | ---------- | ------------ | -------------- |
+| LockSnowflakeGenerator   | 1024       | **~1.66 ns** | ~604M IDs/sec  |
+| AtomicSnowflakeGenerator | 1024       | **~0.91 ns** | ~1.09B IDs/sec |
+| LockUlidGenerator        | 1024       | **~1.78 ns** | ~562M IDs/sec  |
 
 #### Async (Smol Runtime) - Peak throughput
 
-| Generator                | Generators | Time per 4M IDs | Throughput    |
-| ------------------------ | ---------- | --------------- | ------------- |
-| LockSnowflakeGenerator   | 1024       | ~8.10 ms        | ~517M IDs/sec |
-| AtomicSnowflakeGenerator | 512\*      | ~4.31 ms        | ~973M IDs/sec |
-| LockUlidGenerator        | 512\*      | ~7.70 ms        | ~545M IDs/sec |
+| Generator                | Generators | Time per ID  | Throughput    |
+| ------------------------ | ---------- | ------------ | ------------- |
+| LockSnowflakeGenerator   | 1024       | **~1.93 ns** | ~517M IDs/sec |
+| AtomicSnowflakeGenerator | 512\*      | **~1.03 ns** | ~973M IDs/sec |
+| LockUlidGenerator        | 512\*      | **~1.83 ns** | ~545M IDs/sec |
 
-\* = Higher number of generators resulted in lower throughput
+\* = A higher number of generators resulted in lower throughput
 
 To run all benchmarks:
 

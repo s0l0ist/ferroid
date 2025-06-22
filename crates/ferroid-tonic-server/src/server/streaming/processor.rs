@@ -10,7 +10,7 @@ use tonic::Status;
 /// Handles a single ID generation task within a worker.
 ///
 /// This function generates a fixed number of Snowflake-style IDs (`chunk_size`)
-/// using the worker’s [`Generator`]. IDs are written into a reusable byte
+/// using the worker's [`Generator`]. IDs are written into a reusable byte
 /// buffer and streamed back to the client as serialized [`IdChunk`] messages.
 ///
 /// Chunks are emitted once the buffer is full, and any remaining IDs are
