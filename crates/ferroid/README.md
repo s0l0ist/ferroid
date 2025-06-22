@@ -45,18 +45,16 @@ strictly monotonic.
 
 ## 🔧 Generator Comparison
 
-| Generator                  | Thread-Safe | Lock-Free | Throughput | Use Case                                    |
-| -------------------------- | ----------- | --------- | ---------- | ------------------------------------------- |
-| `BasicSnowflakeGenerator`  | ❌          | ❌        | Highest    | Sharded / single-threaded                   |
-| `LockSnowflakeGenerator`   | ✅          | ❌        | Medium     | Fair multithreaded access                   |
-| `AtomicSnowflakeGenerator` | ✅          | ✅        | High       | Fast concurrent generation (less fair)      |
-| `BasicUlidGenerator`       | ✅          | ⚠️        | Lower      | Scalable, zero-coordination ULID generation |
+| Snowflake Generator        | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
+| -------------------------- | --------- | ----------- | --------- | ---------- | --------------------------------------- |
+| `BasicSnowflakeGenerator`  | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
+| `LockSnowflakeGenerator`   | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
+| `AtomicSnowflakeGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation (less fair)  |
 
-[⚠️]: Uses thread-local RNG with no global locks, but not strictly lock-free in
-the atomic/CAS sense.
-
-Snowflake IDs are always unique and strictly ordered. ULIDs are globally
-sortable but only monotonic per timestamp interval.
+| Ulid Generator       | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
+| -------------------- | --------- | ----------- | --------- | ---------- | --------------------------------------- |
+| `BasicUlidGenerator` | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
+| `LockUlidGenerator`  | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
 
 ## 🚀 Usage
 
@@ -80,10 +78,11 @@ that case, you can spin, yield, or sleep depending on your environment:
             IdGenStatus::Ready { id } => break id,
             IdGenStatus::Pending { yield_for } => {
                 println!("Exhausted; wait for: {}ms", yield_for);
-                core::hint::spin_loop();
-                // Use `core::hint::spin_loop()` for single-threaded or per-thread generators.
-                // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
-                // Use `std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())` to sleep.
+                core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
+                // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
+                // std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())); // Lowest CPU use, but imprecise and may oversleep.
+                //
+                // For non-blocking ID generation, use the async API (see below).
             }
         }
     };
@@ -102,10 +101,11 @@ that case, you can spin, yield, or sleep depending on your environment:
             IdGenStatus::Ready { id } => break id,
             IdGenStatus::Pending { yield_for } => {
                 println!("Exhausted; wait for: {}ms", yield_for);
-                core::hint::spin_loop();
-                // Use `core::hint::spin_loop()` for single-threaded or per-thread generators.
-                // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
-                // Use `std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())` to sleep.
+                core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
+                // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
+                // std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())); // Lowest CPU use, but imprecise and may oversleep.
+                //
+                // For non-blocking ID generation, use the async API (see below).
             }
         }
     };
@@ -157,6 +157,7 @@ features:
         }
         Ok(())
     }
+    main().expect("failed to run")
 }
 
 #[cfg(feature = "async-smol")]
@@ -194,6 +195,7 @@ features:
             Ok(())
         })
     }
+    main().expect("failed to run")
 }
 ```
 
@@ -271,22 +273,60 @@ To define a custom layouts, use the `define_*` macros:
 
 ### Behavior
 
-Snowflake:
+#### Snowflake
 
 - If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
 - If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
 - If the clock **goes backward**: return `IdGenStatus::Pending`
 - If the sequence increment **overflows**: return `IdGenStatus::Pending`
 
-Ulid:
+#### Ulid
 
-This implementation respects monotonicity within the same millisecond for a
-single generator by using the increment method.
+This implementation respects monotonicity within the same millisecond in a
+single generator by incrementing the random portion of the ID and guarding
+against overflow.
 
 - If the clock **advances**: generate new random → `IdGenStatus::Ready`
 - If the clock is **unchanged**: increment random → `IdGenStatus::Ready`
 - If the clock **goes backward**: return `IdGenStatus::Pending`
 - If the random increment **overflows**: return `IdGenStatus::Pending`
+
+### Probability of ID Collisions
+
+When generating time-sortable IDs that use random bits, it's important to
+estimate the probability of collisions (i.e., two IDs being the same within the
+same millisecond), given your ID layout and system throughput.
+
+#### Monotonic IDs with Multiple ULID Generators
+
+If you have $g$ generators (e.g., distributed nodes), and each generator
+produces $k$ **sequential** (monotonic) IDs per millisecond by incrementing from
+a random starting point, the probability that any two generators produce
+overlapping IDs in the same millisecond is approximately:
+
+$$P_\text{collision} \approx \frac{g(g-1)(2k-1)}{2 \cdot 2^r}$$
+
+Where:
+
+- $g$ = number of generators
+- $k$ = number of monotonic IDs per generator per millisecond
+- $r$ = number of random bits per ID
+- $P_\text{collision}$ = probability of at least one collision
+
+> Note:
+> The formula above uses the approximate (birthday bound) model, which assumes that:
+>
+> - $k \ll 2^r$ and $g \ll 2^r$
+> - Each generator's range of $k$ IDs starts at a uniformly random position within the $r$-bit space
+
+| Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| 1                | 1                              | $0$ (single generator; no collision possible)                                                           |
+| 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           |
+| 2                | 1                              | $\displaystyle \frac{2 \times 1 \times 1}{2 \cdot 2^{80}} \approx 8.27 \times 10^{-25}$                 |
+| 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         |
+| 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999 \times 1}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$         |
+| 1,000            | 65,536                         | $\displaystyle \frac{1{,}000 \times 999 \times 131{,}071}{2 \cdot 2^{80}} \approx 5.42 \times 10^{-14}$ |
 
 ### Serialize as padded string
 
@@ -298,19 +338,15 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
     use ferroid::{Snowflake, SnowflakeTwitterId};
 
     let id = SnowflakeTwitterId::from(123456, 1, 42);
-    println!("default: {id}");
-    // > default: 517811998762
-
-    println!("padded: {}", id.to_padded_string());
-    // > padded: 00000000517811998762
+    assert_eq!(format!("default: {id}"), "default: 517811998762");
+    assert_eq!(format!("padded: {}", id.to_padded_string()), "padded: 00000000517811998762");
 
     #[cfg(feature = "base32")]
     {
         use ferroid::Base32Ext;
 
         let encoded = id.encode();
-        println!("base32: {encoded}");
-        // > base32: 00000Y4G0082M
+        assert_eq!(format!("base32: {encoded}"), "base32: 00000Y4G0082M");
 
         let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
         assert_eq!(id, decoded);
@@ -322,18 +358,15 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
     use ferroid::{Ulid, ULID};
 
     let id = ULID::from(123456, 42);
-    println!("default: {id}");
-    // > default: 149249145986343659392525664298
+    assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");
+    assert_eq!(format!("padded: {}", id.to_padded_string()), "padded: 000000000149249145986343659392525664298");
 
-    println!("padded: {}", id.to_padded_string());
-    // > padded: 000000000149249145986343659392525664298
     #[cfg(feature = "base32")]
     {
         use ferroid::Base32Ext;
 
         let encoded = id.encode();
-        println!("base32: {encoded}");
-        // > base32: 000000F2800000000000000058
+        assert_eq!(format!("base32: {encoded}"), "base32: 000000F2800000000000000058");
 
         let decoded = ULID::decode(&encoded).expect("decode should succeed");
         assert_eq!(id, decoded);
