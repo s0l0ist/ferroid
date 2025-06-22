@@ -237,7 +237,7 @@ mod ulid_tests {
         println!("id (raw decimal): {}", raw);
         println!("id (raw binary):  {:064b}", raw);
         println!("timestamp:  0x{:x}", id.timestamp());
-        println!("random id: 0x{:x}", id.random());
+        println!("random: 0x{:x}", id.random());
         println!("encoded:    {}", encoded);
         println!("decoded:    {}", decoded);
 
@@ -246,18 +246,14 @@ mod ulid_tests {
 
     #[test]
     fn ulid_max() {
-        let id = ULID::from_components(
-            ULID::max_timestamp(),
-            ULID::max_random(),
-            ULID::max_sequence(),
-        );
+        let id = ULID::from_components(ULID::max_timestamp(), ULID::max_random());
         test_encode_decode_ulid(id, "max");
         assert_eq!(id.to_raw(), u128::MAX)
     }
 
     #[test]
     fn ulid_zero() {
-        let id = ULID::from_components(0, 0, 0);
+        let id = ULID::from_components(0, 0);
         println!("id {:#?}", id);
         test_encode_decode_ulid(id, "zero");
         assert_eq!(id.to_raw(), 0)

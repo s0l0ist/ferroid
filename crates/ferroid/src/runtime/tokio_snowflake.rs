@@ -56,42 +56,53 @@ mod tests {
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    async fn generates_many_unique_ids_lock() -> Result<()> {
+    async fn generates_many_unique_ids_lock_sleep() -> Result<()> {
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioSleep>(
             LockSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
-
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn generates_many_unique_ids_lock_yield() -> Result<()> {
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioYield>(
             LockSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
-
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn generates_many_unique_ids_lock_convenience() -> Result<()> {
         test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
             LockSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
-
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    async fn generates_many_unique_ids_atomic() -> Result<()> {
+    async fn generates_many_unique_ids_atomic_sleep() -> Result<()> {
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioSleep>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
-
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn generates_many_unique_ids_atomic_yield() -> Result<()> {
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioYield>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
         )
         .await?;
-
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn generates_many_unique_ids_atomic_convenience() -> Result<()> {
         test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,

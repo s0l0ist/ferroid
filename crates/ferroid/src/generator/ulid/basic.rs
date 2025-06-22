@@ -66,7 +66,7 @@ where
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
     pub fn new(clock: T, rng: R) -> Self {
-        Self::from_components(ID::ZERO, ID::ZERO, ID::ZERO, clock, rng)
+        Self::from_components(ID::ZERO, ID::ZERO, clock, rng)
     }
 
     /// Creates a new ID generator from explicit component values.
@@ -88,14 +88,8 @@ where
     /// # ⚠️ Note
     /// In typical use cases, you should prefer [`Self::new`] to let the
     /// generator initialize itself from the current time.
-    pub fn from_components(
-        timestamp: ID::Ty,
-        random: ID::Ty,
-        sequence: ID::Ty,
-        clock: T,
-        rng: R,
-    ) -> Self {
-        let id = ID::from_components(timestamp, random, sequence);
+    pub fn from_components(timestamp: ID::Ty, random: ID::Ty, clock: T, rng: R) -> Self {
+        let id = ID::from_components(timestamp, random);
         Self {
             state: Cell::new(id),
             clock,
@@ -190,8 +184,8 @@ where
                 IdGenStatus::Ready { id: updated }
             }
             Ordering::Equal => {
-                if state.has_sequence_room() {
-                    let updated = state.increment_sequence();
+                if state.has_random_room() {
+                    let updated = state.increment_random();
                     self.state.set(updated);
                     IdGenStatus::Ready { id: updated }
                 } else {

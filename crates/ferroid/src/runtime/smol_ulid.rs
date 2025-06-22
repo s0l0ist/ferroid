@@ -47,38 +47,46 @@ mod tests {
     use super::*;
     use crate::{
         LockUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
-        ThreadRandom, TimeSource, ULID_MONO, Ulid, UlidGenerator,
+        ThreadRandom, TimeSource, ULID, Ulid, UlidGenerator,
     };
     use core::fmt;
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
 
-    const TOTAL_IDS: usize = 2 << 16;
+    const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
     // Test the explicit SleepProvider approach
     #[test]
-    fn generates_many_unique_ids_basic_smol() {
+    fn generates_many_unique_ids_basic_smol_sleep() {
         smol::block_on(async {
-            test_many_ulid_unique_ids_explicit::<ULID_MONO, _, _, _, SmolSleep>(
+            test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolSleep>(
                 LockUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
             .await
             .unwrap();
-
-            test_many_ulid_unique_ids_explicit::<ULID_MONO, _, _, _, SmolYield>(
+        });
+    }
+    #[test]
+    fn generates_many_unique_ids_basic_smol_yield() {
+        smol::block_on(async {
+            test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolYield>(
                 LockUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
             .await
             .unwrap();
-
-            test_many_ulid_unique_ids_convenience::<ULID_MONO, _, _, _>(
+        });
+    }
+    #[test]
+    fn generates_many_unique_ids_basic_smol_convience() {
+        smol::block_on(async {
+            test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
                 LockUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,

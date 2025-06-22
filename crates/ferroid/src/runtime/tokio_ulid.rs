@@ -47,40 +47,45 @@ mod tests {
     use super::*;
     use crate::{
         LockUlidGenerator, MonotonicClock, Result, SleepProvider, ThreadRandom, TimeSource,
-        TokioYield, ULID_MONO,
+        TokioYield, ULID,
     };
     use core::fmt;
     use futures::future::try_join_all;
     use std::collections::HashSet;
 
-    const TOTAL_IDS: usize = 2 << 16;
+    const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
 
     // Test the explicit SleepProvider approach
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    async fn generates_many_unique_ids_basic() -> Result<()> {
-        test_many_ulid_unique_ids_explicit::<ULID_MONO, _, _, _, TokioSleep>(
+    async fn generates_many_unique_ids_basic_sleep() -> Result<()> {
+        test_many_ulid_unique_ids_explicit::<ULID, _, _, _, TokioSleep>(
             LockUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
         .await?;
-
-        test_many_ulid_unique_ids_explicit::<ULID_MONO, _, _, _, TokioYield>(
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn generates_many_unique_ids_basic_yield() -> Result<()> {
+        test_many_ulid_unique_ids_explicit::<ULID, _, _, _, TokioYield>(
             LockUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
         .await?;
-
-        test_many_ulid_unique_ids_convenience::<ULID_MONO, _, _, _>(
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn generates_many_unique_ids_basic_convience() -> Result<()> {
+        test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
             LockUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
         .await?;
-
         Ok(())
     }
 

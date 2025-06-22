@@ -6,7 +6,7 @@ use ferroid::{
     AtomicSnowflakeGenerator, BasicSnowflakeGenerator, BasicUlidGenerator, Error, IdGenStatus,
     LockSnowflakeGenerator, LockUlidGenerator, MonotonicClock, RandSource, SmolSleep, Snowflake,
     SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource,
-    TokioSleep, ULID, ULID_MONO, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
+    TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
 };
 use futures::future::try_join_all;
 use std::{
@@ -619,7 +619,6 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
 }
 
 // --- Ulid ---
-
 // Mocks
 fn benchmark_mock_sequential_ulid_basic(c: &mut Criterion) {
     bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/basic", || {
@@ -627,33 +626,29 @@ fn benchmark_mock_sequential_ulid_basic(c: &mut Criterion) {
     });
 }
 fn benchmark_mock_sequential_ulid_lock(c: &mut Criterion) {
-    bench_generator_ulid::<ULID_MONO, _, _, _>(c, "mock/sequential/ulid/lock", || {
+    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/lock", || {
         LockUlidGenerator::new(FixedMockTime { millis: 1 }, ThreadRandom::default())
     });
 }
-
 // Mono clocks
 fn benchmark_mono_sequential_ulid_basic(c: &mut Criterion) {
     bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic", || {
         BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
     });
 }
-
 fn benchmark_mono_sequential_ulid_lock(c: &mut Criterion) {
-    bench_generator_ulid::<ULID_MONO, _, _, _>(c, "mono/sequential/ulid/lock", || {
+    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/lock", || {
         LockUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
     });
 }
-
 fn benchmark_mono_contended_ulid_lock(c: &mut Criterion) {
-    bench_generator_ulid_contended::<ULID_MONO, _, _, _>(c, "mono/contended/ulid/lock", || {
+    bench_generator_ulid_contended::<ULID, _, _, _>(c, "mono/contended/ulid/lock", || {
         LockUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
     });
 }
-
 // Ulid Async
 fn benchmark_tokio_ulid_lock(c: &mut Criterion) {
-    bench_ulid_generator_async_tokio::<ULID_MONO, _, _, _>(
+    bench_ulid_generator_async_tokio::<ULID, _, _, _>(
         c,
         "mono/async/tokio/ulid/lock",
         LockUlidGenerator::new,
@@ -662,7 +657,7 @@ fn benchmark_tokio_ulid_lock(c: &mut Criterion) {
     );
 }
 fn benchmark_smol_ulid_lock(c: &mut Criterion) {
-    bench_ulid_generator_async_smol::<ULID_MONO, _, _, _>(
+    bench_ulid_generator_async_smol::<ULID, _, _, _>(
         c,
         "mono/async/smol/ulid/lock",
         LockUlidGenerator::new,

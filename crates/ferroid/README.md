@@ -97,10 +97,17 @@ that case, you can spin, yield, or sleep depending on your environment:
     let rand = ThreadRandom::default();
     let generator = BasicUlidGenerator::new(clock, rand);
 
-    let id: ULID = match generator.next_id() {
-        IdGenStatus::Ready { id } => id,
-        // Ulids with zero-sequence bits (e.g. the built-in `ULID`) will never yield pending
-        IdGenStatus::Pending { .. } =>  unreachable!()
+    let id: ULID = loop {
+        match generator.next_id() {
+            IdGenStatus::Ready { id } => break id,
+            IdGenStatus::Pending { yield_for } => {
+                println!("Exhausted; wait for: {}ms", yield_for);
+                core::hint::spin_loop();
+                // Use `core::hint::spin_loop()` for single-threaded or per-thread generators.
+                // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
+                // Use `std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())` to sleep.
+            }
+        }
     };
 
     println!("Generated ID: {}", id);
@@ -241,7 +248,6 @@ To define a custom layouts, use the `define_*` macros:
     // - 0 bits reserved
     // - 48 bits timestamp
     // - 80 bits random
-    // - 0 bits sequence
     //
     //  Bit Index:  127            80 79           0
     //              +----------------+-------------+
@@ -252,28 +258,7 @@ To define a custom layouts, use the `define_*` macros:
         MyULID, u128,
         reserved: 0,
         timestamp: 48,
-        random: 80,
-        sequence: 0
-    );
-
-    // Example: a 128-bit *monotonic* ULID using the Ulid layout
-    //
-    // - 0 bits reserved
-    // - 48 bits timestamp
-    // - 64 bits random
-    // - 16 bits sequence
-    //
-    //  Bit Index:  127            80 79         16 15             0
-    //              +----------------+-------------+---------------+
-    //  Field:      | timestamp (48) | random (64) | sequence (16) |
-    //              +----------------+-------------+---------------+
-    //              |<----- MSB ------- 128 bits ------- LSB ----->|
-    define_ulid!(
-        MyMonotonicULID, u128,
-        reserved: 0,
-        timestamp: 48,
-        random: 64,
-        sequence: 16
+        random: 80
     );
 }
 ```
@@ -283,7 +268,8 @@ To define a custom layouts, use the `define_*` macros:
 > bits. `reserved` bits are always stored as **zero** and can be used for future
 > expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`,
 > `random`, and `sequence`) fields. If `sequence` bits are greater than zero in
-> `define_ulid!`, they can be used in the monotonic generators.
+> `define_ulid!`, they will be used for monotinicity within the same
+> millisecond.
 
 ### Behavior
 
@@ -292,18 +278,17 @@ Snowflake:
 - If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
 - If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
 - If the clock **goes backward**: return `IdGenStatus::Pending`
-- If the sequence **overflows**: return `IdGenStatus::Pending`
+- If the sequence increment **overflows**: return `IdGenStatus::Pending`
 
-Ulid (non monotonic):
-- Non-monotonic always returns → `IdGenStatus::Ready` to have a Compatable API with Snowflake.
+Ulid:
 
-Ulid (monotonic):
-- If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
-- If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
+This implementation respects monotonicity within the same millisecond for a
+single generator by using the increment method.
+
+- If the clock **advances**: generate new random → `IdGenStatus::Ready`
+- If the clock is **unchanged**: increment random → `IdGenStatus::Ready`
 - If the clock **goes backward**: return `IdGenStatus::Pending`
-- If the sequence **overflows**: return `IdGenStatus::Pending`
-
-Monotonic always returns → `IdGenStatus::Ready` to have a Compatable API with Snowflake.
+- If the random increment **overflows**: return `IdGenStatus::Pending`
 
 ### Serialize as padded string
 
@@ -338,7 +323,7 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
 {
     use ferroid::{Ulid, ULID};
 
-    let id = ULID::from(123456, 42, 0);
+    let id = ULID::from(123456, 42);
     println!("default: {id}");
     // > default: 149249145986343659392525664298
 
@@ -378,8 +363,7 @@ sequence limit per millisecond.
 - **Sync Snowflake**: Benchmarks the hot path without yielding to the clock.
 - **Async Snowflake**: Also uses 4096-ID batches, but may yield (sequence
   exhaustion/CAS failure) or await due to task scheduling, reducing throughput.
-- **ULID**: Benchmarked using the same chunk size, but performance is primarily
-  limited by random number generation, not sequence or clock behavior.
+- **ULID**: Benchmarks the hot path without yielding to the clock.
 
 Tests were ran on an M1 Macbook Pro 14", 32GB, 10 cores (8 perf, 2 efficiency).
 

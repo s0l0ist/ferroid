@@ -57,7 +57,7 @@ mod tests {
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
     #[test]
-    fn generates_many_unique_ids_lock_smol() {
+    fn generates_many_unique_ids_lock_smol_sleep() {
         smol::block_on(async {
             test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolSleep>(
                 LockSnowflakeGenerator::new,
@@ -65,14 +65,22 @@ mod tests {
             )
             .await
             .unwrap();
-
+        });
+    }
+    #[test]
+    fn generates_many_unique_ids_lock_smol_yield() {
+        smol::block_on(async {
             test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolYield>(
                 LockSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
             .await
             .unwrap();
-
+        });
+    }
+    #[test]
+    fn generates_many_unique_ids_lock_smol_convenience() {
+        smol::block_on(async {
             test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
                 LockSnowflakeGenerator::new,
                 MonotonicClock::default,
@@ -83,7 +91,7 @@ mod tests {
     }
 
     #[test]
-    fn generates_many_unique_ids_atomic_smol() {
+    fn generates_many_unique_ids_atomic_smol_sleep() {
         smol::block_on(async {
             test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolSleep>(
                 AtomicSnowflakeGenerator::new,
@@ -91,14 +99,22 @@ mod tests {
             )
             .await
             .unwrap();
-
+        });
+    }
+    #[test]
+    fn generates_many_unique_ids_atomic_smol_yield() {
+        smol::block_on(async {
             test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolYield>(
                 AtomicSnowflakeGenerator::new,
                 MonotonicClock::default,
             )
             .await
             .unwrap();
-
+        });
+    }
+    #[test]
+    fn generates_many_unique_ids_atomic_smol_convenience() {
+        smol::block_on(async {
             test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
                 AtomicSnowflakeGenerator::new,
                 MonotonicClock::default,
