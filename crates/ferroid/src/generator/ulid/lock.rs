@@ -43,8 +43,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`LockUlidGenerator`] with the provided time source
-    /// and RNG.
+    /// Creates a new [`LockUlidGenerator`] with the provided time source and
+    /// RNG.
     ///
     /// # Parameters
     /// - `clock`: A [`TimeSource`] used to retrieve the current timestamp
@@ -104,9 +104,8 @@ where
     /// explicit control over error handling.
     ///
     /// # Panics
-    /// This method currently has no fallible code paths, but may panic if an
-    /// internal error occurs in future implementations. For explicitly fallible
-    /// behavior, use [`Self::try_next_id`] instead.
+    /// Panics if the lock is poisoned. For explicitly fallible behavior, use
+    /// [`Self::try_next_id`] instead.
     ///
     /// # Example
     /// ```
