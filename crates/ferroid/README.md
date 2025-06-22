@@ -40,9 +40,6 @@ and parsing **Snowflake** and **ULID** identifiers.
 | -------- | -------------- | ----------- | ----------------------- |
 | ULID     | 48             | 80          | 1970-01-01 00:00:00.000 |
 
-ULIDs offer high-entropy, time-sortable IDs without coordination, but are not
-strictly monotonic.
-
 ## 🔧 Generator Comparison
 
 | Generator                  | Thread-Safe | Lock-Free | Throughput | Use Case                                    |
@@ -56,7 +53,7 @@ strictly monotonic.
 the atomic/CAS sense.
 
 Snowflake IDs are always unique and strictly ordered. ULIDs are globally
-sortable but only monotonic per timestamp interval.
+sortable and also monotonic per timestamp interval without coordination.
 
 ## 🚀 Usage
 
