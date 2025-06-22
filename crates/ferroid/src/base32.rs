@@ -237,7 +237,7 @@ mod ulid_tests {
         println!("id (raw decimal): {}", raw);
         println!("id (raw binary):  {:064b}", raw);
         println!("timestamp:  0x{:x}", id.timestamp());
-        println!("random id: 0x{:x}", id.random());
+        println!("random: 0x{:x}", id.random());
         println!("encoded:    {}", encoded);
         println!("decoded:    {}", decoded);
 

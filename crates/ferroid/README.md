@@ -97,9 +97,17 @@ that case, you can spin, yield, or sleep depending on your environment:
     let rand = ThreadRandom::default();
     let generator = BasicUlidGenerator::new(clock, rand);
 
-    let id: ULID = match generator.next_id() {
-        IdGenStatus::Ready { id } => id,
-        IdGenStatus::Pending { .. } =>  unreachable!()
+    let id: ULID = loop {
+        match generator.next_id() {
+            IdGenStatus::Ready { id } => break id,
+            IdGenStatus::Pending { yield_for } => {
+                println!("Exhausted; wait for: {}ms", yield_for);
+                core::hint::spin_loop();
+                // Use `core::hint::spin_loop()` for single-threaded or per-thread generators.
+                // Use `std::thread::yield_now()` when sharing a generator across multiple threads.
+                // Use `std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())` to sleep.
+            }
+        }
     };
 
     println!("Generated ID: {}", id);
@@ -216,12 +224,12 @@ To define a custom layouts, use the `define_*` macros:
 
     // Example: a 128-bit extended ID layout
     //
-    //  Bit Index:  127                88 87            40 39             20 19             0
-    //              +--------------------+----------------+-----------------+---------------+
-    //  Field:      | reserved (40 bits) | timestamp (48) | machine ID (20) | sequence (20) |
-    //              +--------------------+----------------+-----------------+---------------+
-    //              |<------- HI 64 bits ------->|<--------------- LO 64 bits ------------->|
-    //              |<----- MSB ------ LSB ----->|<----- MSB ------ 64 bits ----- LSB ----->|
+    //  Bit Index:  127           88 87            40 39             20 19             0
+    //              +---------------+----------------+-----------------+---------------+
+    //  Field:      | reserved (40) | timestamp (48) | machine ID (20) | sequence (20) |
+    //              +---------------+----------------+-----------------+---------------+
+    //              |<----- HI 64 bits ----->|<-------------- LO 64 bits ------------->|
+    //              |<--- MSB ------ LSB --->|<----- MSB ----- 64 bits ----- LSB ----->|
     define_snowflake_id!(
         MyCustomLongId, u128,
         reserved: 40,
@@ -258,7 +266,7 @@ To define a custom layouts, use the `define_*` macros:
 > ⚠️ Note: All four sections (`reserved`, `timestamp`, `machine_id`, and
 > `sequence`) must be specified in the snowflake macro, even if a section uses 0
 > bits. `reserved` bits are always stored as **zero** and can be used for future
-> expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`,
+> expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`, and
 > `random`) fields.
 
 ### Behavior
@@ -268,11 +276,17 @@ Snowflake:
 - If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
 - If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
 - If the clock **goes backward**: return `IdGenStatus::Pending`
-- If the sequence **overflows**: return `IdGenStatus::Pending`
+- If the sequence increment **overflows**: return `IdGenStatus::Pending`
 
 Ulid:
 
-- Always returns → `IdGenStatus::Ready` to have a Compatable API with Snowflake.
+This implementation respects monotonicity within the same millisecond for a
+single generator by using the increment method.
+
+- If the clock **advances**: generate new random → `IdGenStatus::Ready`
+- If the clock is **unchanged**: increment random → `IdGenStatus::Ready`
+- If the clock **goes backward**: return `IdGenStatus::Pending`
+- If the random increment **overflows**: return `IdGenStatus::Pending`
 
 ### Serialize as padded string
 
@@ -342,40 +356,62 @@ For example, Twitter-style IDs (12 sequence bits) allow:
 ```
 
 To benchmark this, we generate IDs in **chunks of 4096**, which aligns with the
-sequence limit per millisecond.
+sequence limit per millisecond in Snowflake layouts. For ULIDs, we use the same
+chunk size for consistency, but this number does not represent a hard throughput
+cap - ULID generation is probabilistic: monotonicity within the same millisecond
+increments the random bit value. Chunking here primarily serves to keep the
+benchmark code consistent.
 
-- **Sync Snowflake**: Benchmarks the hot path without yielding to the clock.
-- **Async Snowflake**: Also uses 4096-ID batches, but may yield (sequence
-  exhaustion/CAS failure) or await due to task scheduling, reducing throughput.
-- **ULID**: Benchmarked using the same chunk size, but performance is primarily
-  limited by random number generation, not sequence or clock behavior.
+Async benchmarks are tricky because a single generator's performance is affected
+by task scheduling, which is not predictable and whose scheduler typically has a
+resolution of 1 millisecond. By the time a task is scheduled to execute (i.e.,
+generate an ID), a millisecond may have already passed, potentially resetting
+any sequence counter or monotonic increment - thus, never truly testing the hot
+path. To mitigate this, async tests measure maximum throughput: each task
+generates a batch of IDs and may await on any of them. This approach offsets
+idle time on one generator with active work on another, yielding more
+representative throughput numbers.
 
-Tests were ran on an M1 Macbook Pro 14", 32GB, 10 cores (8 perf, 2 efficiency).
+### Snowflake:
+
+- **Sync**: Benchmarks the hot path without yielding to the clock.
+- **Async**: Also uses 4096-ID batches, but may yield (sequence exhaustion/CAS
+  failure) or await due to task scheduling, reducing throughput.
+
+### ULID:
+
+- **Sync & Async**: Uses the same 4096-ID batches. Due to random number
+  generation, monotonic increments may overflow randomly, reflecting real-world
+  behavior. In general, it is rare for ULIDs to overflow.
+
+Tests were ran on an M1 Macbook Pro 14", 32GB, 10 cores (8 performance, 2
+efficiency).
 
 #### Synchronous Generators
 
-| Generator                | Time per IDs | Throughput    |
-| ------------------------ | ------------ | ------------- |
-| BasicSnowflakeGenerator  | **~2.8 ns**  | ~353M IDs/sec |
-| LockSnowflakeGenerator   | **~8.9 ns**  | ~111M IDs/sec |
-| AtomicSnowflakeGenerator | **~3.1 ns**  | ~320M IDs/sec |
-| BasicUlidGenerator       | **~22.9 ns** | ~43M IDs/sec  |
+| Generator                | Time per ID | Throughput    |
+| ------------------------ | ----------- | ------------- |
+| BasicSnowflakeGenerator  | **~2.8 ns** | ~353M IDs/sec |
+| LockSnowflakeGenerator   | **~8.9 ns** | ~111M IDs/sec |
+| AtomicSnowflakeGenerator | **~3.1 ns** | ~320M IDs/sec |
+| BasicUlidGenerator       | **~3.4 ns** | ~288M IDs/sec |
+| LockUlidGenerator        | **~9.2 ns** | ~109M IDs/sec |
 
-#### Async (Tokio Runtime)
+#### Async (Tokio Runtime) - Peak throughput
 
-| Generator                | Generators | Time per 4M IDs | Throughput     |
-| ------------------------ | ---------- | --------------- | -------------- |
-| LockSnowflakeGenerator   | 1024       | ~6.95 ms        | ~604M IDs/sec  |
-| AtomicSnowflakeGenerator | 1024       | ~3.82 ms        | ~1.09B IDs/sec |
-| BasicUlidGenerator       | 128        | ~17.3 ms        | ~242M IDs/sec  |
+| Generator                | Generators | Time per ID  | Throughput     |
+| ------------------------ | ---------- | ------------ | -------------- |
+| LockSnowflakeGenerator   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
+| AtomicSnowflakeGenerator | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
+| LockUlidGenerator        | 1024       | **~1.57 ns** | ~635M IDs/sec  |
 
-#### Async (Smol Runtime)
+#### Async (Smol Runtime) - Peak throughput
 
-| Generator                | Generators | Time per 4M IDs | Throughput    |
-| ------------------------ | ---------- | --------------- | ------------- |
-| LockSnowflakeGenerator   | 1024       | ~8.10 ms        | ~517M IDs/sec |
-| AtomicSnowflakeGenerator | 512        | ~4.31 ms        | ~973M IDs/sec |
-| BasicUlidGenerator       | 128        | ~14.3 ms        | ~294M IDs/sec |
+| Generator                | Generators | Time per ID  | Throughput     |
+| ------------------------ | ---------- | ------------ | -------------- |
+| LockSnowflakeGenerator   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
+| AtomicSnowflakeGenerator | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
+| LockUlidGenerator        | 1024       | **~1.32 ns** | ~756M IDs/sec  |
 
 To run all benchmarks:
 

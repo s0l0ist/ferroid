@@ -3,17 +3,21 @@ use core::{fmt, hash::Hash};
 
 /// Trait for layout-compatible ULID-style identifiers.
 ///
-/// This trait abstracts a `timestamp` and `random` partition over a
-/// fixed-size integer (e.g., `u128`) used for high-entropy time-sortable ID
-/// generation.
+/// This trait abstracts a `timestamp`, `random` , and `sequence` partitions
+/// over a fixed-size integer (e.g., `u128`) used for high-entropy time-sortable
+/// ID generation.
 ///
 /// Types implementing `Ulid` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
-///
-/// Unlike `Snowflake`, this trait does not assume a sequence or machine ID.
 pub trait Ulid:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
+    /// Zero value (used for resetting the sequence)
+    const ZERO: Self::Ty;
+
+    /// One value (used for incrementing the sequence)
+    const ONE: Self::Ty;
+
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -26,49 +30,77 @@ pub trait Ulid:
     /// Returns the maximum possible value for the random field.
     fn max_random() -> Self::Ty;
 
-    /// Constructs a new Ulid from its components.
+    /// Constructs a new ULID from its components.
     fn from_components(timestamp: Self::Ty, random: Self::Ty) -> Self;
+
+    /// Returns true if the current sequence value can be incremented.
+    fn has_random_room(&self) -> bool {
+        self.random() < Self::max_random()
+    }
+
+    /// Returns the next sequence value.
+    fn next_random(&self) -> Self::Ty {
+        self.random() + Self::ONE
+    }
+
+    /// Returns a new ID with the random portion incremented.
+    fn increment_random(&self) -> Self {
+        Self::from_components(self.timestamp(), self.next_random())
+    }
+
+    /// Returns a new ID for a newer timestamp with sequence reset to zero.
+    fn rollover_to_timestamp(&self, ts: Self::Ty, rand: Self::Ty) -> Self {
+        Self::from_components(ts, rand)
+    }
 
     fn to_padded_string(&self) -> String;
 }
 
-/// Declares a `Ulid`-compatible type with custom timestamp and random bit
-/// layouts.
+/// # Field Ordering Semantics
 ///
-/// This macro defines a packed ID structure using a fixed-width integer (e.g.,
-/// `u128`) and generates field masks and accessors to extract each component.
+/// The `define_ulid!` macro defines a bit layout for a custom Ulid using four
+/// required components: `reserved`, `timestamp`, `random`, and `sequence`.
 ///
-/// All bits must be fully accounted for; otherwise, a compile-time assertion
-/// will fail.
+/// These components are always laid out from **most significant bit (MSB)** to
+/// **least significant bit (LSB)** - in that exact order.
 ///
-/// ## Bit layout
-///
-/// The ID is packed from **MSB to LSB**:
+/// - The first field (`reserved`) occupies the highest bits.
+/// - The last field (`sequence`) occupies the lowest bits.
+/// - The total number of bits **must exactly equal** the size of the backing
+///   integer type (`u64`, `u128`, etc.). If it doesn't, the macro will trigger
+///   a compile-time assertion failure.
 ///
 /// ```text
-///  Bit Index:  127            M M - 1       0
-///              +---------------+------------+
-///  Field:      | timestamp (N) | random (M) |
-///              +---------------+------------+
-///              |<-- MSB - 128 bits - LSB -->|
-/// ```
-///
-/// ## Example
-///
-/// ```
-/// use ferroid::define_ulid;
 /// define_ulid!(
-///     MyUlid, u128,
+///     <TypeName>, <IntegerType>,
+///     reserved: <bits>,
+///     timestamp: <bits>,
+///     sequence: <bits>,
+///     random: <bits>
+/// );
+///```
+///
+/// ## Example: A non-monotonic ULID layout
+/// ```rust
+/// use ferroid::define_ulid;
+///
+/// define_ulid!(
+///     MyCustomId, u128,
 ///     reserved: 0,
 ///     timestamp: 48,
 ///     random: 80
 /// );
 /// ```
 ///
-/// This creates a type `MyUlid` with:
-/// - 0 bits reserved
-/// - 48 bits for the timestamp (stored in the upper bits)
-/// - 80 bits of random (lower bits)
+/// Which expands to the following bit layout:
+///
+/// ```text
+///  Bit Index:  127            80 79           0
+///              +----------------+-------------+
+///  Field:      | timestamp (48) | random (80) |
+///              +----------------+-------------+
+///              |<-- MSB -- 128 bits -- LSB -->|
+/// ```
 #[macro_export]
 macro_rules! define_ulid {
     (
@@ -89,9 +121,10 @@ macro_rules! define_ulid {
             // type. This is to avoid aliasing surprises.
             assert!(
                 $reserved_bits + $timestamp_bits + $random_bits == <$int>::BITS,
-                "Ulid layout overflows the underlying integer type"
+                "Snowflake layout overflows the underlying integer type"
             );
         };
+
 
         impl $name {
             pub const RESERVED_BITS: $int = $reserved_bits;
@@ -116,8 +149,7 @@ macro_rules! define_ulid {
             pub const fn timestamp(&self) -> $int {
                 (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
             }
-
-            /// Extracts the timestamp from the packed ID.
+            /// Extracts the random number from the packed ID.
             pub const fn random(&self) -> $int {
                 (self.id >> Self::RANDOM_SHIFT) & Self::RANDOM_MASK
             }
@@ -126,7 +158,7 @@ macro_rules! define_ulid {
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
-            /// Returns the maximum representable sequence value based on
+            /// Returns the maximum representable randome value based on
             /// Self::RANDOM_BITS.
             pub const fn max_random() -> $int {
                 (1 << Self::RANDOM_BITS) - 1
@@ -158,6 +190,9 @@ macro_rules! define_ulid {
         }
 
         impl $crate::Ulid for $name {
+            const ZERO: $int = 0;
+            const ONE: $int = 1;
+
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
@@ -175,6 +210,11 @@ macro_rules! define_ulid {
             }
 
             fn from_components(timestamp: $int, random: $int) -> Self {
+                // Random bits can frequencly overflow, but this is okay since
+                // they're masked. We don't need a debug assertion here because
+                // this is expected behavior. However, the timestamp and
+                // part should never overflow.
+                debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
                 Self::from(timestamp, random)
             }
 
@@ -199,7 +239,7 @@ macro_rules! define_ulid {
         impl core::fmt::Debug for $name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 use $crate::Ulid;
-                
+
                 let full = core::any::type_name::<Self>();
                 let name = full.rsplit("::").next().unwrap_or(full);
                 let mut dbg = f.debug_struct(name);

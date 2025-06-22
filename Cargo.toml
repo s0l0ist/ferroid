@@ -7,12 +7,12 @@ members = [
 ]
 
 [workspace.package]
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Angelou <angelou.nick@gmail.com>"]
 readme = "README.md"
-description = "A flexible ID generator for producing unique, monotonic, and lexicographically sortable Snowflake-style IDs."
+description = "A flexible ID generator for producing unique, monotonic, and lexicographically sortable IDs."
 repository = "https://github.com/s0l0ist/ferroid"
 documentation = "https://docs.rs/ferroid"
 keywords = ["id", "snowflake", "ulid", "uuid", "monotonic"]

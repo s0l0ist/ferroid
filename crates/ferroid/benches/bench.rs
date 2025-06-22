@@ -1,21 +1,15 @@
-use async_lock::Barrier as SmolBarrier;
 use core::hint::black_box;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
     AtomicSnowflakeGenerator, BasicSnowflakeGenerator, BasicUlidGenerator, Error, IdGenStatus,
-    LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
-    SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource, TokioSleep, ULID,
-    Ulid, UlidGenerator, UlidGeneratorAsyncExt,
+    LockSnowflakeGenerator, LockUlidGenerator, MonotonicClock, RandSource, SmolSleep, Snowflake,
+    SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource,
+    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
 };
 use futures::future::try_join_all;
-use std::{
-    sync::{Arc, Barrier},
-    thread::scope,
-    time::Instant,
-};
+use std::{thread::scope, time::Instant};
 use tokio::runtime::Builder;
-use tokio::sync::Barrier as TokioBarrier;
 
 struct FixedMockTime {
     millis: u64,
@@ -35,7 +29,7 @@ impl TimeSource<u128> for FixedMockTime {
 
 // Number of IDs generated per benchmark iteration (per-thread for
 // multi-threaded).
-const TOTAL_IDS: usize = 4096;
+const TOTAL_IDS: usize = 4096; // 2^12 bits for sequence ID 
 
 /// Benchmarks a hot-path generator (never pending) by always creating a new
 /// generator instance which resets the sequence
@@ -114,12 +108,74 @@ fn bench_generator_hot_yield<ID, G, T>(
     group.finish();
 }
 
+/// Benchmarks a generator per thread, with little to no yielding by aligning
+/// the sequence value with each task
+fn bench_generator_threaded<ID, G, T>(
+    c: &mut Criterion,
+    group_name: &str,
+    generator_fn: impl Fn(ID::Ty, T) -> G + Copy + Send + 'static,
+    clock_factory: impl Fn() -> T + Copy + Send + 'static,
+) where
+    ID: Snowflake,
+    ID::Ty: From<u64>,
+    G: SnowflakeGenerator<ID, T>,
+    T: TimeSource<ID::Ty> + Clone + Send + 'static,
+{
+    let mut group = c.benchmark_group(group_name);
+    for thread_count in [1, 2, 4, 8, 16] {
+        let total_ids = TOTAL_IDS * thread_count;
+        group.throughput(Throughput::Elements(total_ids as u64));
+        group.bench_function(
+            format!("elems/{}/threads/{}", total_ids, thread_count),
+            |b| {
+                b.iter_custom(|iters| {
+                    let clock = clock_factory();
+
+                    let start = Instant::now();
+                    for _ in 0..iters {
+                        scope(|s| {
+                            for i in 0..thread_count {
+                                let clock = clock.clone();
+                                s.spawn(move || {
+                                    // generator per thread
+                                    let generator = generator_fn(ID::Ty::from(i as u64), clock);
+                                    for _ in 0..TOTAL_IDS {
+                                        loop {
+                                            match generator.next_id() {
+                                                IdGenStatus::Ready { id } => {
+                                                    black_box(id);
+                                                    break;
+                                                }
+                                                IdGenStatus::Pending { yield_for } => {
+                                                    std::thread::sleep(
+                                                        std::time::Duration::from_millis(
+                                                            yield_for.to_u64()?,
+                                                        ),
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Ok::<(), Error>(())
+                                });
+                            }
+                        })
+                    }
+                    start.elapsed()
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
 /// Benchmarks many async generators in parallel, each running in a separate
 /// task.
 fn bench_generator_async_tokio<ID, G, T>(
     c: &mut Criterion,
     group_name: &str,
-    generator_fn: impl Fn(u64, T) -> G + Copy,
+    generator_fn: impl Fn(u64, T) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
 ) where
     ID: Snowflake + Send + Sync + 'static,
@@ -130,10 +186,8 @@ fn bench_generator_async_tokio<ID, G, T>(
     group.sample_size(10);
     group.sampling_mode(criterion::SamplingMode::Flat);
 
-    let total_ids = TOTAL_IDS * 1024;
-
     for num_generators in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
-        let ids_per_task = total_ids / num_generators;
+        let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
         group.bench_function(
@@ -143,42 +197,23 @@ fn bench_generator_async_tokio<ID, G, T>(
 
                 b.to_async(&rt).iter_custom(move |iters| async move {
                     let clock = clock_factory();
-                    let barrier = Arc::new(TokioBarrier::new(num_generators + 1));
-                    let done = Arc::new(TokioBarrier::new(num_generators + 1));
-
-                    let tasks: Vec<_> = (0..num_generators)
-                        .map(|i| {
-                            let generator = generator_fn(i as u64, clock.clone());
-                            let barrier = Arc::clone(&barrier);
-                            let done = Arc::clone(&done);
-
-                            tokio::spawn(async move {
-                                for _ in 0..iters {
-                                    // Wait for start signal
-                                    barrier.wait().await;
-
-                                    for _ in 0..ids_per_task {
-                                        let id =
-                                            generator.try_next_id_async::<TokioSleep>().await?;
-                                        black_box(id);
-                                    }
-
-                                    // Signal completion
-                                    done.wait().await;
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        })
-                        .collect();
 
                     let start = Instant::now();
                     for _ in 0..iters {
-                        TokioBarrier::wait(&barrier).await;
-                        TokioBarrier::wait(&done).await;
+                        let tasks = (0..num_generators).map(|i| {
+                            let clock = clock.clone();
+                            tokio::spawn(async move {
+                                // generator per task
+                                let generator = generator_fn(i as u64, clock.clone());
+                                for _ in 0..TOTAL_IDS {
+                                    let id = generator.try_next_id_async::<TokioSleep>().await?;
+                                    black_box(id);
+                                }
+                                Ok::<(), Error>(())
+                            })
+                        });
+                        try_join_all(tasks).await.unwrap();
                     }
-
-                    try_join_all(tasks).await.unwrap();
-
                     start.elapsed()
                 });
             },
@@ -193,12 +228,12 @@ fn bench_generator_async_tokio<ID, G, T>(
 pub fn bench_generator_async_smol<ID, G, T>(
     c: &mut Criterion,
     group_name: &str,
-    generator_fn: impl Fn(u64, T) -> G + Copy,
+    generator_fn: impl Fn(u64, T) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
 ) where
-    ID: Snowflake + Send,
+    ID: Snowflake + Send + Sync + 'static,
     G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-    T: TimeSource<ID::Ty> + Clone + Send,
+    T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
     // Use all CPUs
     unsafe { std::env::set_var("SMOL_THREADS", num_cpus::get().to_string()) };
@@ -207,10 +242,8 @@ pub fn bench_generator_async_smol<ID, G, T>(
     group.sample_size(10);
     group.sampling_mode(criterion::SamplingMode::Flat);
 
-    let total_ids = TOTAL_IDS * 1024;
-
     for num_generators in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
-        let ids_per_task = total_ids / num_generators;
+        let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
         group.bench_function(
@@ -218,41 +251,23 @@ pub fn bench_generator_async_smol<ID, G, T>(
             |b| {
                 b.to_async(SmolExecutor).iter_custom(|iters| async move {
                     let clock = clock_factory();
-                    let barrier = Arc::new(SmolBarrier::new(num_generators + 1));
-                    let done = Arc::new(SmolBarrier::new(num_generators + 1));
-
-                    let tasks: Vec<_> = (0..num_generators)
-                        .map(|i| {
-                            let generator = generator_fn(i as u64, clock.clone());
-                            let barrier = Arc::clone(&barrier);
-                            let done = Arc::clone(&done);
-
-                            smol::spawn(async move {
-                                for _ in 0..iters {
-                                    // Wait for start signal
-                                    barrier.wait().await;
-
-                                    for _ in 0..ids_per_task {
-                                        let id = generator.try_next_id_async::<SmolSleep>().await?;
-                                        black_box(id);
-                                    }
-
-                                    // Signal completion
-                                    done.wait().await;
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        })
-                        .collect();
 
                     let start = Instant::now();
                     for _ in 0..iters {
-                        SmolBarrier::wait(&barrier).await;
-                        SmolBarrier::wait(&done).await;
+                        let tasks = (0..num_generators).map(|i| {
+                            let clock = clock.clone();
+                            smol::spawn(async move {
+                                // generator per task
+                                let generator = generator_fn(i as u64, clock.clone());
+                                for _ in 0..TOTAL_IDS {
+                                    let id = generator.try_next_id_async::<SmolSleep>().await?;
+                                    black_box(id);
+                                }
+                                Ok::<(), Error>(())
+                            })
+                        });
+                        try_join_all(tasks).await.unwrap();
                     }
-
-                    try_join_all(tasks).await.unwrap();
-
                     start.elapsed()
                 });
             },
@@ -278,12 +293,19 @@ fn bench_generator_ulid<ID, G, T, R>(
     group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
-            let generator = generator_factory();
 
             for _ in 0..iters {
+                let generator = generator_factory();
                 for _ in 0..TOTAL_IDS {
-                    let id = generator.next_id();
-                    black_box(id);
+                    loop {
+                        match generator.next_id() {
+                            IdGenStatus::Ready { id } => {
+                                black_box(id);
+                                break;
+                            }
+                            IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+                        }
+                    }
                 }
             }
 
@@ -294,60 +316,64 @@ fn bench_generator_ulid<ID, G, T, R>(
     group.finish();
 }
 
-/// Benchmarks shared generator across threads, with no yielding (fixed clock).
-fn bench_generator_ulid_contended<ID, G, T, R>(
+/// Benchmarks shared generator across threads, with yielding
+fn bench_generator_ulid_threaded<ID, G, T, R>(
     c: &mut Criterion,
     group_name: &str,
-    generator_fn: impl Fn() -> G,
+    generator_fn: impl Fn(T, R) -> G + Copy + Send + 'static,
+    clock_factory: impl Fn() -> T + Copy + Send + 'static,
+    rand_factory: impl Fn() -> R + Copy + Send + 'static,
 ) where
     ID: Ulid,
-    G: UlidGenerator<ID, T, R> + Send + Sync,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
+    G: UlidGenerator<ID, T, R>,
+    T: TimeSource<ID::Ty> + Clone + Send + 'static,
+    R: RandSource<ID::Ty> + Clone + Send + 'static,
 {
     let mut group = c.benchmark_group(group_name);
 
     for thread_count in [1, 2, 4, 8, 16] {
-        let ids_per_thread = TOTAL_IDS / thread_count;
-
-        group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+        let total_ids = TOTAL_IDS * thread_count;
+        // let ids_per_thread = total_ids / thread_count;
+        group.throughput(Throughput::Elements(total_ids as u64));
         group.bench_function(
-            format!("elems/{}/threads/{}", TOTAL_IDS, thread_count),
+            format!("elems/{}/threads/{}", total_ids, thread_count),
             |b| {
                 b.iter_custom(|iters| {
-                    let generator = Arc::new(generator_fn());
-                    let barrier = Arc::new(Barrier::new(thread_count + 1));
-                    let done = Arc::new(Barrier::new(thread_count + 1));
+                    let clock = clock_factory();
+                    let rand = rand_factory();
 
-                    scope(|s| {
-                        for _ in 0..thread_count {
-                            let generator = Arc::clone(&generator);
-                            let barrier = Arc::clone(&barrier);
-                            let done = Arc::clone(&done);
-
-                            s.spawn(move || {
-                                for _ in 0..iters {
-                                    barrier.wait();
-
-                                    for _ in 0..ids_per_thread {
-                                        let id = generator.next_id();
-                                        black_box(id);
+                    let start = Instant::now();
+                    for _ in 0..iters {
+                        scope(|s| {
+                            for _ in 0..thread_count {
+                                let clock = clock.clone();
+                                let rand = rand.clone();
+                                s.spawn(move || {
+                                    // generator per thread
+                                    let generator = generator_fn(clock, rand);
+                                    for _ in 0..TOTAL_IDS {
+                                        loop {
+                                            match generator.next_id() {
+                                                IdGenStatus::Ready { id } => {
+                                                    black_box(id);
+                                                    break;
+                                                }
+                                                IdGenStatus::Pending { yield_for } => {
+                                                    std::thread::sleep(
+                                                        std::time::Duration::from_millis(
+                                                            yield_for.to_u64()?,
+                                                        ),
+                                                    );
+                                                }
+                                            }
+                                        }
                                     }
-
-                                    done.wait();
-                                }
-                            });
-                        }
-
-                        let start = Instant::now();
-
-                        for _ in 0..iters {
-                            barrier.wait();
-                            done.wait();
-                        }
-
-                        start.elapsed()
-                    })
+                                    Ok::<(), Error>(())
+                                });
+                            }
+                        })
+                    }
+                    start.elapsed()
                 });
             },
         );
@@ -361,7 +387,7 @@ fn bench_generator_ulid_contended<ID, G, T, R>(
 fn bench_ulid_generator_async_tokio<ID, G, T, R>(
     c: &mut Criterion,
     group_name: &str,
-    generator_fn: impl Fn(T, R) -> G + Copy,
+    generator_fn: impl Fn(T, R) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
     rand_factory: impl Fn() -> R + Copy,
 ) where
@@ -374,10 +400,8 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
     group.sample_size(10);
     group.sampling_mode(criterion::SamplingMode::Flat);
 
-    let total_ids = TOTAL_IDS * 1024;
-
     for num_generators in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
-        let ids_per_task = total_ids / num_generators;
+        let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
         group.bench_function(
@@ -388,42 +412,24 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
                 b.to_async(&rt).iter_custom(move |iters| async move {
                     let clock = clock_factory();
                     let rand = rand_factory();
-                    let barrier = Arc::new(TokioBarrier::new(num_generators + 1));
-                    let done = Arc::new(TokioBarrier::new(num_generators + 1));
-
-                    let tasks: Vec<_> = (0..num_generators)
-                        .map(|_| {
-                            let generator = generator_fn(clock.clone(), rand.clone());
-                            let barrier = Arc::clone(&barrier);
-                            let done = Arc::clone(&done);
-
-                            tokio::spawn(async move {
-                                for _ in 0..iters {
-                                    // Wait for start signal
-                                    barrier.wait().await;
-
-                                    for _ in 0..ids_per_task {
-                                        let id =
-                                            generator.try_next_id_async::<TokioSleep>().await?;
-                                        black_box(id);
-                                    }
-
-                                    // Signal completion
-                                    done.wait().await;
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        })
-                        .collect();
 
                     let start = Instant::now();
                     for _ in 0..iters {
-                        TokioBarrier::wait(&barrier).await;
-                        TokioBarrier::wait(&done).await;
+                        let tasks = (0..num_generators).map(|_| {
+                            let clock = clock.clone();
+                            let rand = rand.clone();
+                            tokio::spawn(async move {
+                                // generator per task
+                                let generator = generator_fn(clock.clone(), rand.clone());
+                                for _ in 0..TOTAL_IDS {
+                                    let id = generator.try_next_id_async::<TokioSleep>().await?;
+                                    black_box(id);
+                                }
+                                Ok::<(), Error>(())
+                            })
+                        });
+                        try_join_all(tasks).await.unwrap();
                     }
-
-                    try_join_all(tasks).await.unwrap();
-
                     start.elapsed()
                 });
             },
@@ -438,7 +444,7 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
 fn bench_ulid_generator_async_smol<ID, G, T, R>(
     c: &mut Criterion,
     group_name: &str,
-    generator_fn: impl Fn(T, R) -> G + Copy,
+    generator_fn: impl Fn(T, R) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
     rand_factory: impl Fn() -> R + Copy,
 ) where
@@ -454,10 +460,8 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
     group.sample_size(10);
     group.sampling_mode(criterion::SamplingMode::Flat);
 
-    let total_ids = TOTAL_IDS * 1024;
-
     for num_generators in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024] {
-        let ids_per_task = total_ids / num_generators;
+        let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
         group.bench_function(
@@ -466,41 +470,24 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
                 b.to_async(SmolExecutor).iter_custom(|iters| async move {
                     let clock = clock_factory();
                     let rand = rand_factory();
-                    let barrier = Arc::new(SmolBarrier::new(num_generators + 1));
-                    let done = Arc::new(SmolBarrier::new(num_generators + 1));
-
-                    let tasks: Vec<_> = (0..num_generators)
-                        .map(|_| {
-                            let generator = generator_fn(clock.clone(), rand.clone());
-                            let barrier = Arc::clone(&barrier);
-                            let done = Arc::clone(&done);
-
-                            smol::spawn(async move {
-                                for _ in 0..iters {
-                                    // Wait for start signal
-                                    barrier.wait().await;
-
-                                    for _ in 0..ids_per_task {
-                                        let id = generator.try_next_id_async::<SmolSleep>().await?;
-                                        black_box(id);
-                                    }
-
-                                    // Signal completion
-                                    done.wait().await;
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        })
-                        .collect();
 
                     let start = Instant::now();
                     for _ in 0..iters {
-                        SmolBarrier::wait(&barrier).await;
-                        SmolBarrier::wait(&done).await;
+                        let tasks = (0..num_generators).map(|_| {
+                            let clock = clock.clone();
+                            let rand = rand.clone();
+                            smol::spawn(async move {
+                                // generator per task
+                                let generator = generator_fn(clock.clone(), rand.clone());
+                                for _ in 0..TOTAL_IDS {
+                                    let id = generator.try_next_id_async::<SmolSleep>().await?;
+                                    black_box(id);
+                                }
+                                Ok::<(), Error>(())
+                            })
+                        });
+                        try_join_all(tasks).await.unwrap();
                     }
-
-                    try_join_all(tasks).await.unwrap();
-
                     start.elapsed()
                 });
             },
@@ -563,6 +550,37 @@ fn benchmark_mono_sequential_atomic(c: &mut Criterion) {
     });
 }
 
+/// Multi-threaded benchmark for `BasicSnowflakeGenerator` with
+/// `MonotonicClock`.
+fn bench_generator_threaded_basic(c: &mut Criterion) {
+    bench_generator_threaded::<SnowflakeTwitterId, _, _>(
+        c,
+        "mono/threaded/basic",
+        BasicSnowflakeGenerator::new,
+        MonotonicClock::default,
+    )
+}
+/// Multi-threaded benchmark for `LockSnowflakeGenerator` with
+/// `MonotonicClock`.
+fn bench_generator_threaded_lock(c: &mut Criterion) {
+    bench_generator_threaded::<SnowflakeTwitterId, _, _>(
+        c,
+        "mono/threaded/lock",
+        LockSnowflakeGenerator::new,
+        MonotonicClock::default,
+    )
+}
+/// Multi-threaded benchmark for `AtomicSnowflakeGenerator` with
+/// `MonotonicClock`.
+fn bench_generator_threaded_atomic(c: &mut Criterion) {
+    bench_generator_threaded::<SnowflakeTwitterId, _, _>(
+        c,
+        "mono/threaded/atomic",
+        AtomicSnowflakeGenerator::new,
+        MonotonicClock::default,
+    )
+}
+
 // --- ASYNC ---
 
 /// Async benchmark for a pool of `LockSnowflakeGenerator`s distributed across
@@ -610,38 +628,67 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
 }
 
 // --- Ulid ---
-/// Single-threaded benchmark for `BasicUlidGenerator` with a monotonic clock.
-fn benchmark_mono_sequential_ulid(c: &mut Criterion) {
-    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid", || {
-        BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
+// Mocks
+fn benchmark_mock_sequential_ulid_basic(c: &mut Criterion) {
+    let rand = ThreadRandom::default();
+    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/basic", || {
+        BasicUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
     });
 }
-
-fn benchmark_mono_contended_ulid(c: &mut Criterion) {
-    bench_generator_ulid_contended::<ULID, _, _, _>(c, "mono/contended/ulid", || {
-        BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default())
+fn benchmark_mock_sequential_ulid_lock(c: &mut Criterion) {
+    let rand = ThreadRandom::default();
+    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/lock", || {
+        LockUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
     });
 }
-
-/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across tokio
-/// tasks.
-fn benchmark_mono_tokio_ulid(c: &mut Criterion) {
-    bench_ulid_generator_async_tokio::<ULID, _, _, _>(
+// Mono clocks
+fn benchmark_mono_sequential_ulid_basic(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom::default();
+    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic", || {
+        BasicUlidGenerator::new(clock.clone(), rand.clone())
+    });
+}
+fn benchmark_mono_sequential_ulid_lock(c: &mut Criterion) {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom::default();
+    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/lock", || {
+        LockUlidGenerator::new(clock.clone(), rand.clone())
+    });
+}
+fn benchmark_mono_threaded_ulid_basic(c: &mut Criterion) {
+    bench_generator_ulid_threaded::<ULID, _, _, _>(
         c,
-        "mono/multi/async/tokio/ulid",
+        "mono/threaded/ulid/basic",
         BasicUlidGenerator::new,
         MonotonicClock::default,
         ThreadRandom::default,
     );
 }
-
-/// Async benchmark for a pool of `BasicUlidGenerator`s distributed across smol
-/// tasks.
-fn benchmark_mono_smol_ulid(c: &mut Criterion) {
+fn benchmark_mono_threaded_ulid_lock(c: &mut Criterion) {
+    bench_generator_ulid_threaded::<ULID, _, _, _>(
+        c,
+        "mono/threaded/ulid/lock",
+        LockUlidGenerator::new,
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
+}
+// Ulid Async
+fn benchmark_mono_tokio_ulid_lock(c: &mut Criterion) {
+    bench_ulid_generator_async_tokio::<ULID, _, _, _>(
+        c,
+        "mono/async/tokio/ulid/lock",
+        LockUlidGenerator::new,
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
+}
+fn benchmark_mono_smol_ulid_lock(c: &mut Criterion) {
     bench_ulid_generator_async_smol::<ULID, _, _, _>(
         c,
-        "mono/multi/async/smol/ulid",
-        BasicUlidGenerator::new,
+        "mono/async/smol/ulid/lock",
+        LockUlidGenerator::new,
         MonotonicClock::default,
         ThreadRandom::default,
     );
@@ -659,23 +706,28 @@ criterion_group!(
     benchmark_mono_sequential_basic,
     benchmark_mono_sequential_lock,
     benchmark_mono_sequential_atomic,
+    // Multithreaded (generator per thread)
+    bench_generator_threaded_basic,
+    bench_generator_threaded_lock,
+    bench_generator_threaded_atomic,
     // Async multi worker, multi generator
     benchmark_mono_tokio_lock,
     benchmark_mono_tokio_atomic,
     benchmark_mono_smol_lock,
     benchmark_mono_smol_atomic,
     // --- Ulid ---
-    //
+
     // Mock clock
-    //
-    // (Ulid doesn't have these because the benchmark is
-    // completely dominated by the RandomSource.
-    //
+    benchmark_mock_sequential_ulid_basic,
+    benchmark_mock_sequential_ulid_lock,
     // Monotonic clocks
-    benchmark_mono_sequential_ulid,
-    benchmark_mono_contended_ulid,
+    benchmark_mono_sequential_ulid_basic,
+    benchmark_mono_sequential_ulid_lock,
+    // Multithreaded (generator per thread)
+    benchmark_mono_threaded_ulid_basic,
+    benchmark_mono_threaded_ulid_lock,
     // Async multi worker, multi generator
-    benchmark_mono_tokio_ulid,
-    benchmark_mono_smol_ulid,
+    benchmark_mono_tokio_ulid_lock,
+    benchmark_mono_smol_ulid_lock,
 );
 criterion_main!(benches);
