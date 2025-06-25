@@ -1,6 +1,6 @@
 use crate::{Error, Id, Result};
-use base32::{Alphabet, decode, encode};
 use core::convert::TryInto;
+use core::fmt;
 
 const U32_SIZE: usize = core::mem::size_of::<u32>();
 const U64_SIZE: usize = core::mem::size_of::<u64>();
@@ -8,7 +8,7 @@ const U128_SIZE: usize = core::mem::size_of::<u128>();
 
 /// A trait for types that can be encoded to and decoded from big-endian bytes.
 pub trait BeBytes: Sized {
-    type ByteArray: AsRef<[u8]>;
+    type ByteArray: AsRef<[u8]> + AsMut<[u8]> + Default;
 
     fn to_be_bytes(self) -> Self::ByteArray;
 
@@ -60,14 +60,14 @@ pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
+    #[inline]
     fn encode(&self) -> String {
-        let bytes = self.to_raw().to_be_bytes();
-        encode(Alphabet::Crockford, bytes.as_ref())
+        encode_base32_crockford(self.to_raw())
     }
 
+    #[inline]
     fn decode(s: &str) -> Result<Self> {
-        let bytes = decode(Alphabet::Crockford, s).ok_or(Error::DecodeNonAsciiValue)?;
-        let raw = Self::Ty::from_be_bytes(&bytes).ok_or(Error::DecodeInvalidLen)?;
+        let raw = decode_base32_crockford(s)?;
         Ok(Self::from_raw(raw))
     }
 }
@@ -76,7 +76,124 @@ impl<ID> Base32Ext for ID
 where
     ID: Id,
     ID::Ty: BeBytes,
+    <ID::Ty as BeBytes>::ByteArray: Default + AsMut<[u8]>,
 {
+}
+
+#[derive(Clone, Debug)]
+pub enum Base32Error {
+    DecodeInvalidLen,
+    DecodeInvalidAscii,
+}
+impl fmt::Display for Base32Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Base32Error::DecodeInvalidAscii => write!(f, "invlaid ascii char"),
+            Base32Error::DecodeInvalidLen => write!(f, "invlaid length"),
+        }
+    }
+}
+impl core::error::Error for Base32Error {}
+impl From<Base32Error> for Error {
+    fn from(err: Base32Error) -> Self {
+        Error::Base32Error(err)
+    }
+}
+
+const INVALID: u8 = 0xFF;
+const ENCODE_ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const fn decode_lut() -> [u8; 256] {
+    let mut lut = [INVALID; 256];
+    let mut i = 0;
+    // '0'-'9'
+    while i < 10 {
+        lut[b'0' as usize + i] = i as u8;
+        i += 1;
+    }
+    // Aliases
+    lut[b'O' as usize] = 0;
+    lut[b'o' as usize] = 0;
+    lut[b'I' as usize] = 1;
+    lut[b'i' as usize] = 1;
+    lut[b'L' as usize] = 1;
+    lut[b'l' as usize] = 1;
+
+    // Crockford letters (skipping 'O', 'U')
+    let alpha = b"ABCDEFGHJKMNPQRSTVWXYZ";
+    let mut j = 0;
+    while j < alpha.len() {
+        let up = alpha[j];
+        let low = up + 32; // ASCII lower
+        lut[up as usize] = (j + 10) as u8;
+        lut[low as usize] = (j + 10) as u8;
+        j += 1;
+    }
+    lut
+}
+const DECODE_LUT: [u8; 256] = decode_lut();
+
+/// Encodes any BeBytes type into a Crockford base32 string.
+pub fn encode_base32_crockford<T: BeBytes>(value: T) -> String {
+    let bytes = value.to_be_bytes();
+    let bits = bytes.as_ref().len() * 8;
+    let len: usize = (bits + 4) / 5;
+    let mut out = vec![0_u8; len];
+    let mut acc: usize = 0;
+    let mut acc_bits = 0;
+    let mut i = 0;
+
+    for &b in bytes.as_ref() {
+        acc = (acc << 8) | (b as usize);
+        acc_bits += 8;
+
+        while acc_bits >= 5 {
+            acc_bits -= 5;
+            let index = (acc >> acc_bits) & 0x1F;
+            out[i] = ENCODE_ALPHABET[index];
+            i += 1;
+        }
+    }
+
+    if acc_bits > 0 {
+        out[i] = ENCODE_ALPHABET[(acc << (5 - acc_bits)) & 0x1F];
+    }
+
+    // SAFETY: ALPHABET is valid ASCII
+    unsafe { String::from_utf8_unchecked(out) }
+}
+
+/// Decodes a Crockford base32 string to raw bytes.
+pub fn decode_base32_crockford<T: BeBytes>(s: &str) -> Result<T> {
+    let mut acc = 0usize;
+    let mut acc_bits = 0;
+    let mut bytes: T::ByteArray = Default::default();
+    let mut out_i = 0;
+
+    for byte in s.bytes() {
+        let v = DECODE_LUT[byte as usize];
+        if v == INVALID {
+            return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii));
+        }
+
+        acc = (acc << 5) | (v as usize);
+        acc_bits += 5;
+
+        while acc_bits >= 8 {
+            if out_i >= bytes.as_ref().len() {
+                return Err(Error::Base32Error(Base32Error::DecodeInvalidLen));
+            }
+            acc_bits -= 8;
+            bytes.as_mut()[out_i] = (acc >> acc_bits) as u8;
+            acc &= (1 << acc_bits) - 1;
+            out_i += 1;
+        }
+    }
+
+    if out_i != bytes.as_ref().len() {
+        return Err(Error::Base32Error(Base32Error::DecodeInvalidLen));
+    }
+
+    T::from_be_bytes(bytes.as_ref()).ok_or(Error::Base32Error(Base32Error::DecodeInvalidLen))
 }
 
 #[cfg(all(test, feature = "snowflake"))]
@@ -204,7 +321,10 @@ mod snowflake_tests {
         // Base32 Crockford disallows symbols like `@`
         let invalid = "01234@6789ABCDEF";
         let result = SnowflakeTwitterId::decode(invalid);
-        assert!(matches!(result, Err(Error::DecodeNonAsciiValue)));
+        assert!(matches!(
+            result,
+            Err(Error::Base32Error(Base32Error::DecodeInvalidAscii))
+        ));
     }
 
     #[test]
@@ -212,7 +332,10 @@ mod snowflake_tests {
         // Shorter than 13-byte base32 for u64 (decoded slice won't be 8 bytes)
         let too_short = "ABC";
         let result = SnowflakeTwitterId::decode(too_short);
-        assert!(matches!(result, Err(Error::DecodeInvalidLen)));
+        assert!(matches!(
+            result,
+            Err(Error::Base32Error(Base32Error::DecodeInvalidLen))
+        ));
     }
 }
 
