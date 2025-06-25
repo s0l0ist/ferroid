@@ -203,7 +203,4 @@ async fn shutdown_signal(
             eprintln!("Error shutting down meter: {:#?}", err);
         }
     }
-
-    // manually drop the provider(s) before invoking shutdown.
-    drop(providers);
 }

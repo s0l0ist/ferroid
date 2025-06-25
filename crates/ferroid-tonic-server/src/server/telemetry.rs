@@ -179,12 +179,22 @@ pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
 }
 
 #[cfg(feature = "honeycomb")]
-fn get_metadata() -> anyhow::Result<MetadataMap> {
+fn get_honeycomb_metadata() -> anyhow::Result<(MetadataMap, String, Compression)> {
     use anyhow::Context;
+
+    let endpoint = std::env::var("HONEYCOMB_ENDPOINT").context("missing `HONEYCOMB_ENDPOINT`")?;
+    let compression = {
+        use std::str::FromStr;
+        let raw = std::env::var("HONEYCOMB_COMPRESSION")
+            .context("missing `HONEYCOMB_COMPRESSION`")?
+            .to_ascii_lowercase();
+        Compression::from_str(&raw)?
+    };
 
     let mut map = MetadataMap::new();
     let api_key = std::env::var("HONEYCOMB_API_KEY").context("missing `HONEYCOMB_API_KEY`")?;
     let dataset = std::env::var("HONEYCOMB_DATASET").context("missing `HONEYCOMB_DATASET`")?;
+
     map.insert(
         "x-honeycomb-team",
         api_key.parse().context("invalid API key")?,
@@ -193,7 +203,8 @@ fn get_metadata() -> anyhow::Result<MetadataMap> {
         "x-honeycomb-dataset",
         dataset.parse().context("invalid dataset")?,
     );
-    Ok(map)
+
+    Ok((map, endpoint, compression))
 }
 
 #[cfg(any(feature = "metrics", feature = "tracing"))]
@@ -229,16 +240,7 @@ fn init_metrics() -> anyhow::Result<sdkmetrics::SdkMeterProvider> {
     let builder = {
         use anyhow::Context;
 
-        let metadata = get_metadata()?;
-        let endpoint =
-            std::env::var("HONEYCOMB_ENDPOINT").context("missing `HONEYCOMB_API_KEY`")?;
-        let compression = {
-            use std::str::FromStr;
-            let raw = std::env::var("HONEYCOMB_COMPRESSION")
-                .context("missing `HONEYCOMB_API_KEY`")?
-                .to_ascii_lowercase();
-            Compression::from_str(&raw)?
-        };
+        let (metadata, endpoint, compression) = get_honeycomb_metadata()?;
         let exporter = opentelemetry_otlp::MetricExporter::builder()
             .with_tonic()
             .with_tls_config(ClientTlsConfig::new().with_native_roots())
@@ -280,16 +282,7 @@ fn init_tracer() -> anyhow::Result<sdktrace::SdkTracerProvider> {
     let builder = {
         use anyhow::Context;
 
-        let metadata = get_metadata()?;
-        let endpoint =
-            std::env::var("HONEYCOMB_ENDPOINT").context("missing `HONEYCOMB_API_KEY`")?;
-        let compression = {
-            use std::str::FromStr;
-            let raw = std::env::var("HONEYCOMB_COMPRESSION")
-                .context("missing `HONEYCOMB_API_KEY`")?
-                .to_ascii_lowercase();
-            Compression::from_str(&raw)?
-        };
+        let (metadata, endpoint, compression) = get_honeycomb_metadata()?;
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
             .with_tls_config(ClientTlsConfig::new().with_native_roots())
