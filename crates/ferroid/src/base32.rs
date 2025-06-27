@@ -141,7 +141,7 @@ const LOOKUP: [u8; 256] = {
 
 pub fn encode_base32<T: BeBytes>(value: T, buf: &mut T::Base32Array) {
     let mut bits = 0usize;
-    let mut acc = 0u16;
+    let mut acc = 0_u16;
 
     let raw = value.to_be_bytes();
     let bytes = raw.as_ref();
@@ -179,8 +179,8 @@ fn decode_base32<T: BeBytes>(s: &str) -> Result<T> {
     let out_bytes = out.as_mut();
 
     // Reverse the encoding process - accumulate bits and write to bytes
-    let mut bits = 0usize;
-    let mut acc = 0u16;
+    let mut bits = 0_usize;
+    let mut acc = 0_u16;
     let mut byte_idx = 0;
 
     for &b in bytes {
@@ -198,13 +198,6 @@ fn decode_base32<T: BeBytes>(s: &str) -> Result<T> {
             out_bytes[byte_idx] = (acc >> bits) as u8;
             byte_idx += 1;
         }
-    }
-
-    // Handle any remaining bits in the last partial byte
-    if bits > 0 && byte_idx < out_bytes.len() {
-        // Shift remaining bits to the left to fill the byte
-        let remaining_bits = 8 - bits;
-        out_bytes[byte_idx] = (acc << remaining_bits) as u8;
     }
 
     T::from_be_bytes(out_bytes)
