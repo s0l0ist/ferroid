@@ -1,4 +1,5 @@
 use crate::{Error, Id, Result};
+use core::array::TryFromSliceError;
 use core::convert::TryInto;
 use core::fmt;
 
@@ -28,9 +29,7 @@ impl BeBytes for u32 {
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
-        let arr: [u8; Self::SIZE] = bytes
-            .try_into()
-            .map_err(|e| Base32Error::TryFromSliceError(e))?;
+        let arr: [u8; Self::SIZE] = bytes.try_into().map_err(Base32Error::from)?;
         Ok(Self::from_be_bytes(arr))
     }
 }
@@ -46,9 +45,7 @@ impl BeBytes for u64 {
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
-        let arr: [u8; Self::SIZE] = bytes
-            .try_into()
-            .map_err(|e| Base32Error::TryFromSliceError(e))?;
+        let arr: [u8; Self::SIZE] = bytes.try_into().map_err(Base32Error::from)?;
         Ok(Self::from_be_bytes(arr))
     }
 }
@@ -64,9 +61,7 @@ impl BeBytes for u128 {
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
-        let arr: [u8; Self::SIZE] = bytes
-            .try_into()
-            .map_err(|e| Base32Error::TryFromSliceError(e))?;
+        let arr: [u8; Self::SIZE] = bytes.try_into().map_err(Base32Error::from)?;
         Ok(Self::from_be_bytes(arr))
     }
 }
@@ -102,7 +97,7 @@ where
 pub enum Base32Error {
     DecodeInvalidLen,
     DecodeInvalidAscii,
-    TryFromSliceError(std::array::TryFromSliceError),
+    TryFromSliceError(core::array::TryFromSliceError),
 }
 impl fmt::Display for Base32Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -117,6 +112,12 @@ impl core::error::Error for Base32Error {}
 impl From<Base32Error> for Error {
     fn from(err: Base32Error) -> Self {
         Error::Base32Error(err)
+    }
+}
+
+impl From<TryFromSliceError> for Base32Error {
+    fn from(err: TryFromSliceError) -> Self {
+        Base32Error::TryFromSliceError(err)
     }
 }
 
