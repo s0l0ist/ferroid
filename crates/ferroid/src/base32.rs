@@ -89,7 +89,6 @@ impl<ID> Base32Ext for ID
 where
     ID: Id,
     ID::Ty: BeBytes,
-    <ID::Ty as BeBytes>::ByteArray: Default + AsMut<[u8]>,
 {
 }
 
