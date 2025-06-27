@@ -12,12 +12,6 @@ use core::{fmt, hash::Hash};
 pub trait Ulid:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
-    /// Zero value (used for resetting the sequence)
-    const ZERO: Self::Ty;
-
-    /// One value (used for incrementing the sequence)
-    const ONE: Self::Ty;
-
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -59,13 +53,13 @@ pub trait Ulid:
 /// # Field Ordering Semantics
 ///
 /// The `define_ulid!` macro defines a bit layout for a custom Ulid using four
-/// required components: `reserved`, `timestamp`, `random`, and `sequence`.
+/// required components: `reserved`, `timestamp`, and `random`.
 ///
 /// These components are always laid out from **most significant bit (MSB)** to
 /// **least significant bit (LSB)** - in that exact order.
 ///
 /// - The first field (`reserved`) occupies the highest bits.
-/// - The last field (`sequence`) occupies the lowest bits.
+/// - The last field (`random`) occupies the lowest bits.
 /// - The total number of bits **must exactly equal** the size of the backing
 ///   integer type (`u64`, `u128`, etc.). If it doesn't, the macro will trigger
 ///   a compile-time assertion failure.
@@ -75,7 +69,6 @@ pub trait Ulid:
 ///     <TypeName>, <IntegerType>,
 ///     reserved: <bits>,
 ///     timestamp: <bits>,
-///     sequence: <bits>,
 ///     random: <bits>
 /// );
 ///```
@@ -177,6 +170,8 @@ macro_rules! define_ulid {
 
         impl $crate::Id for $name {
             type Ty = $int;
+            const ZERO: $int = 0;
+            const ONE: $int = 1;
 
             /// Converts this type into its raw type representation
             fn to_raw(&self) -> Self::Ty {
@@ -190,9 +185,6 @@ macro_rules! define_ulid {
         }
 
         impl $crate::Ulid for $name {
-            const ZERO: $int = 0;
-            const ONE: $int = 1;
-
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }

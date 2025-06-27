@@ -21,12 +21,6 @@ use core::{fmt, hash::Hash};
 pub trait Snowflake:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
-    /// Zero value (used for resetting the sequence)
-    const ZERO: Self::Ty;
-
-    /// One value (used for incrementing the sequence)
-    const ONE: Self::Ty;
-
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -207,6 +201,8 @@ macro_rules! define_snowflake_id {
 
         impl $crate::Id for $name {
             type Ty = $int;
+            const ZERO: $int = 0;
+            const ONE: $int = 1;
 
             /// Converts this type into its raw type representation
             fn to_raw(&self) -> Self::Ty {
@@ -220,9 +216,6 @@ macro_rules! define_snowflake_id {
         }
 
         impl $crate::Snowflake for $name {
-            const ZERO: $int = 0;
-            const ONE: $int = 1;
-
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }

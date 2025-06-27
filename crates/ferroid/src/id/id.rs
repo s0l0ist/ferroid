@@ -7,6 +7,12 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 pub trait Id:
     Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
+    /// Zero value (used for resetting the sequence)
+    const ZERO: Self::Ty;
+
+    /// One value (used for incrementing the sequence)
+    const ONE: Self::Ty;
+
     /// Scalar type for all bit fields (typically `u64` or `u128`)
     type Ty: Copy
         + Clone

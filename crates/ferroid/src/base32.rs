@@ -80,7 +80,7 @@ where
     }
 
     fn decode(s: &str) -> Result<Self> {
-        let raw = decode_base32::<Self::Ty>(s)?;
+        let raw = decode_base32(s)?;
         Ok(Self::from_raw(raw))
     }
 }
