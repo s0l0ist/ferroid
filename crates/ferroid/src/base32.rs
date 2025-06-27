@@ -14,7 +14,7 @@ pub trait BeBytes: Sized {
     type Base32Array: AsRef<[u8]> + AsMut<[u8]> + Default + Copy;
 
     fn to_be_bytes(self) -> Self::ByteArray;
-    fn from_be_bytes(bytes: &[u8]) -> Option<Self>;
+    fn from_be_bytes(bytes: &[u8]) -> Result<Self>;
 }
 impl BeBytes for u32 {
     const SIZE: usize = core::mem::size_of::<u32>();
@@ -27,9 +27,11 @@ impl BeBytes for u32 {
         self.to_be_bytes()
     }
 
-    fn from_be_bytes(bytes: &[u8]) -> Option<Self> {
-        let arr: [u8; Self::SIZE] = bytes.try_into().ok()?;
-        Some(Self::from_be_bytes(arr))
+    fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
+        let arr: [u8; Self::SIZE] = bytes
+            .try_into()
+            .map_err(|e| Base32Error::TryFromSliceError(e))?;
+        Ok(Self::from_be_bytes(arr))
     }
 }
 impl BeBytes for u64 {
@@ -43,9 +45,11 @@ impl BeBytes for u64 {
         self.to_be_bytes()
     }
 
-    fn from_be_bytes(bytes: &[u8]) -> Option<Self> {
-        let arr: [u8; Self::SIZE] = bytes.try_into().ok()?;
-        Some(Self::from_be_bytes(arr))
+    fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
+        let arr: [u8; Self::SIZE] = bytes
+            .try_into()
+            .map_err(|e| Base32Error::TryFromSliceError(e))?;
+        Ok(Self::from_be_bytes(arr))
     }
 }
 impl BeBytes for u128 {
@@ -59,9 +63,11 @@ impl BeBytes for u128 {
         self.to_be_bytes()
     }
 
-    fn from_be_bytes(bytes: &[u8]) -> Option<Self> {
-        let arr: [u8; Self::SIZE] = bytes.try_into().ok()?;
-        Some(Self::from_be_bytes(arr))
+    fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
+        let arr: [u8; Self::SIZE] = bytes
+            .try_into()
+            .map_err(|e| Base32Error::TryFromSliceError(e))?;
+        Ok(Self::from_be_bytes(arr))
     }
 }
 
@@ -96,12 +102,14 @@ where
 pub enum Base32Error {
     DecodeInvalidLen,
     DecodeInvalidAscii,
+    TryFromSliceError(std::array::TryFromSliceError),
 }
 impl fmt::Display for Base32Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Base32Error::DecodeInvalidAscii => write!(f, "invlaid ascii char"),
-            Base32Error::DecodeInvalidLen => write!(f, "invlaid length"),
+            Base32Error::DecodeInvalidAscii => write!(f, "invalid ascii char"),
+            Base32Error::DecodeInvalidLen => write!(f, "invalid length"),
+            Base32Error::TryFromSliceError(e) => write!(f, "{}", e),
         }
     }
 }
@@ -198,7 +206,7 @@ fn decode_base32<T: BeBytes>(s: &str) -> Result<T> {
         out_bytes[byte_idx] = (acc << remaining_bits) as u8;
     }
 
-    T::from_be_bytes(out_bytes).ok_or(Error::Base32Error(Base32Error::DecodeInvalidAscii))
+    T::from_be_bytes(out_bytes)
 }
 
 #[cfg(all(test, feature = "snowflake"))]
