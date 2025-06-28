@@ -74,10 +74,14 @@ where
 {
     fn encode(&self) -> String {
         let mut buf = <Self::Ty as BeBytes>::Base32Array::default();
-        encode_base32(self.to_raw(), &mut buf);
+        self.encode_to_buf(&mut buf);
 
         // SAFTEY: Base32 is always valid ASCII
         unsafe { String::from_utf8_unchecked(buf.as_ref().to_vec()) }
+    }
+
+    fn encode_to_buf(&self, buf: &mut <<Self as Id>::Ty as BeBytes>::Base32Array) {
+        encode_base32(self.to_raw(), buf);
     }
 
     fn decode(s: &str) -> Result<Self> {
@@ -237,8 +241,10 @@ mod snowflake_tests {
         T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
     {
         let raw = id.to_raw();
-        let encoded = id.encode();
-        let decoded = T::decode(&encoded).expect("decode should succeed");
+        let mut buf = <T::Ty as BeBytes>::Base32Array::default();
+        id.encode_to_buf(&mut buf);
+        let encoded = core::str::from_utf8(buf.as_ref()).unwrap();
+        let decoded = T::decode(encoded).expect("decode should succeed");
 
         let type_name = type_name::<T>();
 
@@ -385,8 +391,11 @@ mod ulid_tests {
         T::Ty: BeBytes + fmt::Binary + fmt::LowerHex + fmt::Display + fmt::Debug,
     {
         let raw = id.to_raw();
-        let encoded = id.encode();
-        let decoded = T::decode(&encoded).expect("decode should succeed");
+
+        let mut buf = <T::Ty as BeBytes>::Base32Array::default();
+        id.encode_to_buf(&mut buf);
+        let encoded = core::str::from_utf8(buf.as_ref()).unwrap();
+        let decoded = T::decode(encoded).expect("decode should succeed");
 
         let type_name = type_name::<T>();
 
