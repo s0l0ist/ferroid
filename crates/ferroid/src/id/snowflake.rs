@@ -62,6 +62,14 @@ pub trait Snowflake:
         Self::from_components(ts, self.machine_id(), Self::ZERO)
     }
 
+    /// Returns `true` if the ID's internal structure is valid, such as reserved
+    /// bits being unset or fields within expected ranges.
+    fn is_valid(&self) -> bool;
+
+    /// Returns a normalized version of the ID with any invalid or reserved bits
+    /// cleared. This guarantees a valid, canonical representation.
+    fn into_valid(self) -> Self;
+
     fn to_padded_string(&self) -> String;
 }
 
@@ -245,6 +253,14 @@ macro_rules! define_snowflake_id {
                 debug_assert!(machine_id <= Self::MACHINE_ID_MASK, "machine_id overflow");
                 debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
                 Self::from(timestamp, machine_id, sequence)
+            }
+
+            fn is_valid(&self) -> bool {
+                *self == Self::from_components(self.timestamp(), self.machine_id(), self.sequence())
+            }
+
+            fn into_valid(self) -> Self {
+                Self::from_components(self.timestamp(), self.machine_id(), self.sequence())
             }
 
             fn to_padded_string(&self) -> String {

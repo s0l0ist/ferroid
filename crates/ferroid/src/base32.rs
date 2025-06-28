@@ -29,7 +29,7 @@ impl BeBytes for u32 {
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
-        let arr: [u8; Self::SIZE] = bytes.try_into().map_err(Base32Error::from)?;
+        let arr = bytes.try_into().map_err(Base32Error::from)?;
         Ok(Self::from_be_bytes(arr))
     }
 }
@@ -45,7 +45,7 @@ impl BeBytes for u64 {
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
-        let arr: [u8; Self::SIZE] = bytes.try_into().map_err(Base32Error::from)?;
+        let arr = bytes.try_into().map_err(Base32Error::from)?;
         Ok(Self::from_be_bytes(arr))
     }
 }
@@ -61,29 +61,122 @@ impl BeBytes for u128 {
     }
 
     fn from_be_bytes(bytes: &[u8]) -> Result<Self> {
-        let arr: [u8; Self::SIZE] = bytes.try_into().map_err(Base32Error::from)?;
+        let arr = bytes.try_into().map_err(Base32Error::from)?;
         Ok(Self::from_be_bytes(arr))
     }
 }
 
-/// A trait for types that can be encoded to and decoded from base32 (crockford)
-/// strings.
+/// Extension trait for types that support Crockford Base32 encoding and
+/// decoding.
+///
+/// This trait enables converting IDs (typically backed by primitive integers)
+/// to and from fixed-length, lexicographically sortable Base32 strings using
+/// the [Crockford Base32](https://www.crockford.com/base32.html) alphabet.
+///
+/// It relies on the [`BeBytes`] trait for bit-level access to the underlying
+/// integer representation, and produces fixed-width ASCII-encoded output
+/// suitable for ordered storage (e.g., in databases, file systems, or URLs).
+///
+/// # Features
+///
+/// - Zero-allocation encoding support
+/// - Fixed-width, lexicographically sortable output
+/// - ASCII-safe encoding using Crockford's Base32 alphabet
+/// - Fallible decoding with strong validation
 pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
+    /// Encodes this ID into a fixed-length [`String`] using Crockford Base32.
+    ///
+    /// The resulting string is guaranteed to be ASCII and lexicographically
+    /// sortable.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[cfg(all(feature = "snowflake", feature = "base32"))]
+    /// {
+    ///     use ferroid::{Base32Ext, SnowflakeTwitterId};
+    ///     let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
+    ///     let encoded = id.encode();
+    ///     assert_eq!(encoded, "46JA7902CV4V4");
+    /// }
+    /// ```
     fn encode(&self) -> String {
         let mut buf = <Self::Ty as BeBytes>::Base32Array::default();
         self.encode_to_buf(&mut buf);
 
-        // SAFTEY: Base32 is always valid ASCII
+        // SAFETY: Crockford Base32 output is always valid ASCII
         unsafe { String::from_utf8_unchecked(buf.as_ref().to_vec()) }
     }
-
+    /// Encodes this ID into the provided output buffer without allocating.
+    ///
+    /// This is the zero-allocation alternative to [`Self::encode`]. The buffer
+    /// must be exactly [`BeBytes::BASE32_SIZE`] in length.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[cfg(all(feature = "snowflake", feature = "base32"))]
+    /// {
+    ///     use ferroid::{Base32Ext, BeBytes, Id, SnowflakeTwitterId};
+    ///     let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
+    ///     let mut buf = <<SnowflakeTwitterId as Id>::Ty as BeBytes>::Base32Array::default();
+    ///     id.encode_to_buf(&mut buf);
+    ///
+    ///     // SAFETY: Crockford Base32 output is always valid ASCII
+    ///     let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
+    ///     assert_eq!(encoded, "46JA7902CV4V4");
+    /// }
+    /// ```
     fn encode_to_buf(&self, buf: &mut <<Self as Id>::Ty as BeBytes>::Base32Array) {
         encode_base32(self.to_raw(), buf);
     }
-
+    /// Decodes a Base32-encoded string back into an ID.
+    ///
+    /// **Note:** This method performs a structural decode of the Base32 string
+    /// into the raw underlying integer. It does **not** validate whether the
+    /// decoded value adheres to the ID's semantic constraints (e.g., reserved
+    /// bits, out-of-range fields).
+    ///
+    /// If validation is required, use `.is_valid()` to check, or
+    /// `.into_valid()` to normalize the value.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input string:
+    /// - is not the expected fixed length
+    /// - contains characters not in the Crockford Base32 alphabet (invalid
+    ///   ASCII)
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// #[cfg(all(feature = "snowflake", feature = "base32"))]
+    /// {
+    ///     use ferroid::{Base32Ext, Snowflake, SnowflakeTwitterId};
+    ///
+    ///     // A valid encoded ID
+    ///     let encoded = "46JA7902CV4V4";
+    ///     let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
+    ///
+    ///     assert!(decoded.is_valid());
+    ///     assert_eq!(decoded.to_raw(), 2_424_242_424_242_424_242);
+    ///
+    ///     // A syntactically valid but semantically invalid `SnowflakeTwitterId` - sets reserved bits
+    ///     let encoded = "ZZZZZZZZZZZZZ";
+    ///     let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
+    ///
+    ///     assert!(!decoded.is_valid());
+    ///     assert_eq!(decoded.to_raw(), u64::MAX);
+    ///
+    ///     // Normalize to a valid representation
+    ///     let valid = decoded.into_valid();
+    ///     assert!(valid.is_valid());
+    ///     assert_eq!(valid.to_raw(), 9_223_372_036_854_775_807); // max valid `SnowflakeTwitterId`
+    /// }
+    /// ```
     fn decode(s: &str) -> Result<Self> {
         let raw = decode_base32(s)?;
         Ok(Self::from_raw(raw))
@@ -99,15 +192,15 @@ where
 
 #[derive(Clone, Debug)]
 pub enum Base32Error {
-    DecodeInvalidLen,
-    DecodeInvalidAscii,
+    DecodeInvalidLen(usize),
+    DecodeInvalidAscii(u8),
     TryFromSliceError(core::array::TryFromSliceError),
 }
 impl fmt::Display for Base32Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Base32Error::DecodeInvalidAscii => write!(f, "invalid ascii char"),
-            Base32Error::DecodeInvalidLen => write!(f, "invalid length"),
+            Base32Error::DecodeInvalidAscii(b) => write!(f, "invalid ascii byte: {b}"),
+            Base32Error::DecodeInvalidLen(len) => write!(f, "invalid length: {len}"),
             Base32Error::TryFromSliceError(e) => write!(f, "{}", e),
         }
     }
@@ -144,21 +237,7 @@ const LOOKUP: [u8; 256] = {
 };
 const BITS_PER_CHAR: usize = 5;
 
-pub fn encode_base32<
-    T: BeBytes
-        + Default
-        + Copy
-        + From<u8>
-        + core::ops::Shl<usize, Output = T>
-        + core::ops::Shr<usize, Output = T>
-        + core::ops::BitOr<Output = T>
-        + core::ops::BitAnd<Output = T>
-        + PartialEq
-        + From<u8>,
->(
-    val: T,
-    buf: &mut T::Base32Array,
-) {
+pub fn encode_base32<T: BeBytes>(val: T, buf: &mut T::Base32Array) {
     let mut bits = 0_usize;
     let mut acc = 0_u16;
     let mask = 0x1F_u16;
@@ -188,11 +267,11 @@ pub fn encode_base32<
     }
 }
 
-/// Decodes a fixed-length Crockford base32 string into the primitive integer type.
+/// Decodes a fixed-length Crockford base32 string into the primitive integer
+/// type.
 fn decode_base32<
     T: BeBytes
         + Default
-        + Copy
         + From<u8>
         + core::ops::Shl<usize, Output = T>
         + core::ops::Shr<usize, Output = T>
@@ -201,7 +280,9 @@ fn decode_base32<
     encoded: &str,
 ) -> Result<T> {
     if encoded.len() != T::BASE32_SIZE {
-        return Err(Error::Base32Error(Base32Error::DecodeInvalidLen));
+        return Err(Error::Base32Error(Base32Error::DecodeInvalidLen(
+            encoded.len(),
+        )));
     }
     let mut acc = T::default();
     let total_bits = T::BASE32_SIZE * BITS_PER_CHAR;
@@ -211,7 +292,7 @@ fn decode_base32<
     for (i, b) in encoded.bytes().enumerate() {
         let val = LOOKUP[b as usize];
         if val == NO_VALUE {
-            return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii));
+            return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii(b)));
         }
 
         if excess > 0 && i == T::BASE32_SIZE - 1 {
@@ -355,7 +436,7 @@ mod snowflake_tests {
         let result = SnowflakeTwitterId::decode(invalid);
         assert!(matches!(
             result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidAscii))
+            Err(Error::Base32Error(Base32Error::DecodeInvalidAscii(64)))
         ));
     }
 
@@ -366,7 +447,7 @@ mod snowflake_tests {
         let result = SnowflakeTwitterId::decode(too_short);
         assert!(matches!(
             result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidLen))
+            Err(Error::Base32Error(Base32Error::DecodeInvalidLen(12)))
         ));
 
         // Longer than 13-byte base32 for u64 (decoded slice won't be 8 bytes)
@@ -374,7 +455,7 @@ mod snowflake_tests {
         let result = SnowflakeTwitterId::decode(too_long);
         assert!(matches!(
             result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidLen))
+            Err(Error::Base32Error(Base32Error::DecodeInvalidLen(14)))
         ));
     }
 }

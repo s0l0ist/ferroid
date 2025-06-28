@@ -47,6 +47,14 @@ pub trait Ulid:
         Self::from_components(ts, rand)
     }
 
+    /// Returns `true` if the ID's internal structure is valid, such as reserved
+    /// bits being unset or fields within expected ranges.
+    fn is_valid(&self) -> bool;
+
+    /// Returns a normalized version of the ID with any invalid or reserved bits
+    /// cleared. This guarantees a valid, canonical representation.
+    fn into_valid(self) -> Self;
+
     fn to_padded_string(&self) -> String;
 }
 
@@ -114,7 +122,7 @@ macro_rules! define_ulid {
             // type. This is to avoid aliasing surprises.
             assert!(
                 $reserved_bits + $timestamp_bits + $random_bits == <$int>::BITS,
-                "Snowflake layout overflows the underlying integer type"
+                "Ulid layout overflows the underlying integer type"
             );
         };
 
@@ -204,10 +212,18 @@ macro_rules! define_ulid {
             fn from_components(timestamp: $int, random: $int) -> Self {
                 // Random bits can frequencly overflow, but this is okay since
                 // they're masked. We don't need a debug assertion here because
-                // this is expected behavior. However, the timestamp and
-                // part should never overflow.
+                // this is expected behavior. However, the timestamp and part
+                // should never overflow.
                 debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
                 Self::from(timestamp, random)
+            }
+
+            fn is_valid(&self) -> bool {
+                *self == Self::from_components(self.timestamp(), self.random())
+            }
+
+            fn into_valid(self) -> Self {
+                Self::from_components(self.timestamp(), self.random())
             }
 
             fn to_padded_string(&self) -> String {
