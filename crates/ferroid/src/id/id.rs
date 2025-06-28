@@ -16,6 +16,7 @@ pub trait Id:
     /// Scalar type for all bit fields (typically `u64` or `u128`)
     type Ty: Copy
         + Clone
+        + Default
         + Add<Output = Self::Ty>
         + AddAssign
         + Sub<Output = Self::Ty>
@@ -32,6 +33,17 @@ pub trait Id:
         + ToU64
         + fmt::Debug
         + fmt::Display
+        + From<u8>
+        + core::ops::Shl<usize, Output = Self::Ty>
+        + core::ops::Shr<usize, Output = Self::Ty>
+        + core::ops::ShlAssign
+        + core::ops::ShrAssign
+        + core::ops::BitOr<Output = Self::Ty>
+        + core::ops::BitAnd<Output = Self::Ty>
+        + core::ops::BitXor<Output = Self::Ty>
+        + core::ops::BitAndAssign
+        + core::ops::BitOrAssign
+        + core::ops::BitXorAssign
         + Into<Self::Ty>
         + From<Self::Ty>;
 

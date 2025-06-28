@@ -138,13 +138,29 @@ const LOOKUP: [u8; 256] = {
     }
     lut
 };
+const BITS_PER_CHAR: usize = 5;
 
-pub fn encode_base32<T: BeBytes>(value: T, buf: &mut T::Base32Array) {
-    let mut bits = 0usize;
+pub fn encode_base32<
+    T: BeBytes
+        + Default
+        + Copy
+        + From<u8>
+        + core::ops::Shl<usize, Output = T>
+        + core::ops::Shr<usize, Output = T>
+        + core::ops::BitOr<Output = T>
+        + core::ops::BitAnd<Output = T>
+        + PartialEq
+        + From<u8>,
+>(
+    val: T,
+    buf: &mut T::Base32Array,
+) {
+    let mut bits = 0_usize;
     let mut acc = 0_u16;
+    let mask = 0x1F_u16;
 
-    let raw = value.to_be_bytes();
-    let bytes = raw.as_ref();
+    let byte_array = val.to_be_bytes();
+    let bytes = byte_array.as_ref();
     let mut out = 0;
 
     let buf_slice = buf.as_mut();
@@ -153,54 +169,57 @@ pub fn encode_base32<T: BeBytes>(value: T, buf: &mut T::Base32Array) {
         acc = (acc << 8) | b as u16;
         bits += 8;
 
-        while bits >= 5 && out < buf_slice.len() {
-            bits -= 5;
-            let index = ((acc >> bits) & 0x1F) as usize;
+        while bits >= BITS_PER_CHAR && out < buf_slice.len() {
+            bits -= BITS_PER_CHAR;
+            let index = ((acc >> bits) & mask) as usize;
             buf_slice[out] = ALPHABET[index];
             out += 1;
         }
     }
 
-    // Padding: top bits if any
+    // Pad top bits
     if bits > 0 && out < buf_slice.len() {
-        let index = ((acc << (5 - bits)) & 0x1F) as usize;
+        let index = ((acc << (BITS_PER_CHAR - bits)) & mask) as usize;
         buf_slice[out] = ALPHABET[index];
     }
 }
 
 /// Decodes a fixed-length Crockford base32 string into the primitive integer type.
-fn decode_base32<T: BeBytes>(s: &str) -> Result<T> {
-    if s.len() != T::BASE32_SIZE {
+fn decode_base32<
+    T: BeBytes
+        + Default
+        + Copy
+        + From<u8>
+        + core::ops::Shl<usize, Output = T>
+        + core::ops::Shr<usize, Output = T>
+        + core::ops::BitOr<Output = T>,
+>(
+    encoded: &str,
+) -> Result<T> {
+    if encoded.len() != T::BASE32_SIZE {
         return Err(Error::Base32Error(Base32Error::DecodeInvalidLen));
     }
+    let mut acc = T::default();
+    let total_bits = T::BASE32_SIZE * BITS_PER_CHAR;
+    let target_bits = T::SIZE * 8;
+    let excess = total_bits.saturating_sub(target_bits);
 
-    let bytes = s.as_bytes();
-    let mut out = T::ByteArray::default();
-    let out_bytes = out.as_mut();
-
-    // Reverse the encoding process - accumulate bits and write to bytes
-    let mut bits = 0_usize;
-    let mut acc = 0_u16;
-    let mut byte_idx = 0;
-
-    for &b in bytes {
+    for (i, b) in encoded.bytes().enumerate() {
         let val = LOOKUP[b as usize];
         if val == NO_VALUE {
             return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii));
         }
 
-        acc = (acc << 5) | val as u16;
-        bits += 5;
-
-        // Extract complete bytes
-        while bits >= 8 && byte_idx < out_bytes.len() {
-            bits -= 8;
-            out_bytes[byte_idx] = (acc >> bits) as u8;
-            byte_idx += 1;
+        if excess > 0 && i == T::BASE32_SIZE - 1 {
+            // Last character with excess bits: shift by less to avoid overflow
+            acc = (acc << (BITS_PER_CHAR - excess)) | (T::from(val) >> excess);
+        } else {
+            // Normal accumulation
+            acc = (acc << BITS_PER_CHAR) | T::from(val);
         }
     }
 
-    T::from_be_bytes(out_bytes)
+    Ok(acc)
 }
 
 #[cfg(all(test, feature = "snowflake"))]
