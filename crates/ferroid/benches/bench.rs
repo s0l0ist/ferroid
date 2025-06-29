@@ -1,11 +1,12 @@
 use core::hint::black_box;
+use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, BasicSnowflakeGenerator, BasicUlidGenerator, Error, IdGenStatus,
-    LockSnowflakeGenerator, LockUlidGenerator, MonotonicClock, RandSource, SmolSleep, Snowflake,
-    SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId, ThreadRandom, TimeSource,
-    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
+    AtomicSnowflakeGenerator, Base32Ext, BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes,
+    Error, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator, MonotonicClock, RandSource,
+    SmolSleep, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId,
+    ThreadRandom, TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
 };
 use futures::future::try_join_all;
 use std::{thread::scope, time::Instant};
@@ -147,11 +148,9 @@ fn bench_generator_threaded<ID, G, T>(
                                                     break;
                                                 }
                                                 IdGenStatus::Pending { yield_for } => {
-                                                    std::thread::sleep(
-                                                        std::time::Duration::from_millis(
-                                                            yield_for.to_u64()?,
-                                                        ),
-                                                    );
+                                                    std::thread::sleep(Duration::from_millis(
+                                                        yield_for.to_u64()?,
+                                                    ));
                                                 }
                                             }
                                         }
@@ -359,11 +358,9 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                                                     break;
                                                 }
                                                 IdGenStatus::Pending { yield_for } => {
-                                                    std::thread::sleep(
-                                                        std::time::Duration::from_millis(
-                                                            yield_for.to_u64()?,
-                                                        ),
-                                                    );
+                                                    std::thread::sleep(Duration::from_millis(
+                                                        yield_for.to_u64()?,
+                                                    ));
                                                 }
                                             }
                                         }
@@ -497,6 +494,176 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
     group.finish();
 }
 
+fn bench_snowflake_base32<ID, G, T>(
+    c: &mut Criterion,
+    group_name: &str,
+    generator_factory: impl Fn(u64, T) -> G + Copy,
+    clock_factory: impl Fn() -> T + Copy,
+) where
+    ID: Snowflake + Base32Ext,
+    ID::Ty: BeBytes,
+    G: SnowflakeGenerator<ID, T>,
+    T: TimeSource<ID::Ty>,
+{
+    let clock = clock_factory();
+    let generator = generator_factory(0x3FF, clock);
+
+    let mut ids = Vec::with_capacity(TOTAL_IDS);
+    for _ in 0..TOTAL_IDS {
+        loop {
+            match generator.next_id() {
+                IdGenStatus::Ready { id } => {
+                    ids.push(id);
+                    break;
+                }
+                IdGenStatus::Pending { yield_for } => {
+                    std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap()));
+                }
+            }
+        }
+    }
+    let mut encoded = Vec::with_capacity(TOTAL_IDS);
+    for id in &ids {
+        let enc = id.encode();
+        encoded.push(enc);
+    }
+
+    let mut group = c.benchmark_group(group_name);
+    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+
+    group.bench_function(format!("encode_to_buf/elems/{}", TOTAL_IDS), |b| {
+        b.iter_custom(|iters| {
+            let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                for id in &ids {
+                    black_box(id.encode_to_buf(black_box(&mut buf)));
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.bench_function(format!("encode_to_string/elems/{}", TOTAL_IDS), |b| {
+        b.iter_custom(|iters| {
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                for id in &ids {
+                    black_box(id.encode());
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.bench_function(format!("decode/elems/{}", TOTAL_IDS), |b| {
+        b.iter_custom(|iters| {
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                for enc in &encoded {
+                    black_box(ID::decode(black_box(enc)).unwrap());
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+}
+
+fn bench_ulid_base32<ID, G, T, R>(
+    c: &mut Criterion,
+    group_name: &str,
+    generator_factory: impl Fn(T, R) -> G + Copy,
+    clock_factory: impl Fn() -> T + Copy,
+    rand_factory: impl Fn() -> R + Copy,
+) where
+    ID: Ulid + Base32Ext,
+    ID::Ty: BeBytes,
+    G: UlidGenerator<ID, T, R>,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
+{
+    let clock = clock_factory();
+    let rand = rand_factory();
+    let generator = generator_factory(clock, rand);
+
+    let mut ids = Vec::with_capacity(TOTAL_IDS);
+    for _ in 0..TOTAL_IDS {
+        loop {
+            match generator.next_id() {
+                IdGenStatus::Ready { id } => {
+                    ids.push(id);
+                    break;
+                }
+                IdGenStatus::Pending { yield_for } => {
+                    std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap()));
+                }
+            }
+        }
+    }
+
+    let mut encoded = Vec::with_capacity(TOTAL_IDS);
+    for id in &ids {
+        let enc = id.encode();
+        encoded.push(enc);
+    }
+
+    let mut group = c.benchmark_group(group_name);
+    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+
+    group.bench_function(format!("encode_to_buf/elems/{}", TOTAL_IDS), |b| {
+        b.iter_custom(|iters| {
+            let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                for id in &ids {
+                    black_box(id.encode_to_buf(black_box(&mut buf)));
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.bench_function(format!("encode_to_string/elems/{}", TOTAL_IDS), |b| {
+        b.iter_custom(|iters| {
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                for id in &ids {
+                    black_box(id.encode());
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.bench_function(format!("decode/elems/{}", TOTAL_IDS), |b| {
+        b.iter_custom(|iters| {
+            let start = Instant::now();
+
+            for _ in 0..iters {
+                for enc in &encoded {
+                    black_box(ID::decode(black_box(enc)).unwrap());
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    group.finish();
+}
+
 // --- MOCK CLOCK (fixed, non-advancing time) ---
 
 /// Single-threaded benchmark for `BasicSnowflakeGenerator` with a fixed clock.
@@ -560,8 +727,7 @@ fn bench_generator_threaded_basic(c: &mut Criterion) {
         MonotonicClock::default,
     )
 }
-/// Multi-threaded benchmark for `LockSnowflakeGenerator` with
-/// `MonotonicClock`.
+/// Multi-threaded benchmark for `LockSnowflakeGenerator` with `MonotonicClock`.
 fn bench_generator_threaded_lock(c: &mut Criterion) {
     bench_generator_threaded::<SnowflakeTwitterId, _, _>(
         c,
@@ -694,6 +860,23 @@ fn benchmark_mono_smol_ulid_lock(c: &mut Criterion) {
     );
 }
 
+// Base32 encode/decode
+fn bench_base32(c: &mut Criterion) {
+    bench_snowflake_base32::<SnowflakeTwitterId, _, _>(
+        c,
+        "base32/snow",
+        BasicSnowflakeGenerator::new,
+        MonotonicClock::default,
+    );
+    bench_ulid_base32::<ULID, _, _, _>(
+        c,
+        "base32/ulid",
+        BasicUlidGenerator::new,
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
+}
+
 criterion_group!(
     benches,
     // --- Snowflake ---
@@ -716,7 +899,7 @@ criterion_group!(
     benchmark_mono_smol_lock,
     benchmark_mono_smol_atomic,
     // --- Ulid ---
-
+    //
     // Mock clock
     benchmark_mock_sequential_ulid_basic,
     benchmark_mock_sequential_ulid_lock,
@@ -729,5 +912,7 @@ criterion_group!(
     // Async multi worker, multi generator
     benchmark_mono_tokio_ulid_lock,
     benchmark_mono_smol_ulid_lock,
+    // --- Base32 ---
+    bench_base32,
 );
 criterion_main!(benches);

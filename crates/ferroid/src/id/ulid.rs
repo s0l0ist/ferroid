@@ -12,12 +12,6 @@ use core::{fmt, hash::Hash};
 pub trait Ulid:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
-    /// Zero value (used for resetting the sequence)
-    const ZERO: Self::Ty;
-
-    /// One value (used for incrementing the sequence)
-    const ONE: Self::Ty;
-
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -53,19 +47,27 @@ pub trait Ulid:
         Self::from_components(ts, rand)
     }
 
+    /// Returns `true` if the ID's internal structure is valid, such as reserved
+    /// bits being unset or fields within expected ranges.
+    fn is_valid(&self) -> bool;
+
+    /// Returns a normalized version of the ID with any invalid or reserved bits
+    /// cleared. This guarantees a valid, canonical representation.
+    fn into_valid(self) -> Self;
+
     fn to_padded_string(&self) -> String;
 }
 
 /// # Field Ordering Semantics
 ///
 /// The `define_ulid!` macro defines a bit layout for a custom Ulid using four
-/// required components: `reserved`, `timestamp`, `random`, and `sequence`.
+/// required components: `reserved`, `timestamp`, and `random`.
 ///
 /// These components are always laid out from **most significant bit (MSB)** to
 /// **least significant bit (LSB)** - in that exact order.
 ///
 /// - The first field (`reserved`) occupies the highest bits.
-/// - The last field (`sequence`) occupies the lowest bits.
+/// - The last field (`random`) occupies the lowest bits.
 /// - The total number of bits **must exactly equal** the size of the backing
 ///   integer type (`u64`, `u128`, etc.). If it doesn't, the macro will trigger
 ///   a compile-time assertion failure.
@@ -75,7 +77,6 @@ pub trait Ulid:
 ///     <TypeName>, <IntegerType>,
 ///     reserved: <bits>,
 ///     timestamp: <bits>,
-///     sequence: <bits>,
 ///     random: <bits>
 /// );
 ///```
@@ -121,7 +122,7 @@ macro_rules! define_ulid {
             // type. This is to avoid aliasing surprises.
             assert!(
                 $reserved_bits + $timestamp_bits + $random_bits == <$int>::BITS,
-                "Snowflake layout overflows the underlying integer type"
+                "Layout must match underlying type width"
             );
         };
 
@@ -138,6 +139,11 @@ macro_rules! define_ulid {
             pub const RESERVED_MASK: $int = ((1 << Self::RESERVED_BITS) - 1);
             pub const TIMESTAMP_MASK: $int = ((1 << Self::TIMESTAMP_BITS) - 1);
             pub const RANDOM_MASK: $int = ((1 << Self::RANDOM_BITS) - 1);
+
+            const fn valid_mask() -> $int {
+                (Self::TIMESTAMP_MASK << Self::TIMESTAMP_SHIFT) |
+                (Self::RANDOM_MASK << Self::RANDOM_SHIFT)
+            }
 
             pub const fn from(timestamp: $int, random: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
@@ -177,6 +183,8 @@ macro_rules! define_ulid {
 
         impl $crate::Id for $name {
             type Ty = $int;
+            const ZERO: $int = 0;
+            const ONE: $int = 1;
 
             /// Converts this type into its raw type representation
             fn to_raw(&self) -> Self::Ty {
@@ -190,9 +198,6 @@ macro_rules! define_ulid {
         }
 
         impl $crate::Ulid for $name {
-            const ZERO: $int = 0;
-            const ONE: $int = 1;
-
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
@@ -212,10 +217,19 @@ macro_rules! define_ulid {
             fn from_components(timestamp: $int, random: $int) -> Self {
                 // Random bits can frequencly overflow, but this is okay since
                 // they're masked. We don't need a debug assertion here because
-                // this is expected behavior. However, the timestamp and
-                // part should never overflow.
+                // this is expected behavior. However, the timestamp and part
+                // should never overflow.
                 debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
                 Self::from(timestamp, random)
+            }
+
+            fn is_valid(&self) -> bool {
+                (self.to_raw() & !Self::valid_mask()) == 0
+            }
+
+            fn into_valid(self) -> Self {
+                let raw = self.to_raw() & Self::valid_mask();
+                Self::from_raw(raw)
             }
 
             fn to_padded_string(&self) -> String {
@@ -276,6 +290,14 @@ define_ulid!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ulid_validity() {
+        let id = ULID::from_raw(u128::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
 
     #[test]
     fn test_ulid_id_fields_and_bounds() {

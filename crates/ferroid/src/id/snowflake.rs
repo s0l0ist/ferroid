@@ -21,12 +21,6 @@ use core::{fmt, hash::Hash};
 pub trait Snowflake:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
-    /// Zero value (used for resetting the sequence)
-    const ZERO: Self::Ty;
-
-    /// One value (used for incrementing the sequence)
-    const ONE: Self::Ty;
-
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -67,6 +61,14 @@ pub trait Snowflake:
     fn rollover_to_timestamp(&self, ts: Self::Ty) -> Self {
         Self::from_components(ts, self.machine_id(), Self::ZERO)
     }
+
+    /// Returns `true` if the ID's internal structure is valid, such as reserved
+    /// bits being unset or fields within expected ranges.
+    fn is_valid(&self) -> bool;
+
+    /// Returns a normalized version of the ID with any invalid or reserved bits
+    /// cleared. This guarantees a valid, canonical representation.
+    fn into_valid(self) -> Self;
 
     fn to_padded_string(&self) -> String;
 }
@@ -139,7 +141,7 @@ macro_rules! define_snowflake_id {
             // type. This is to avoid aliasing surprises.
             assert!(
                 $reserved_bits + $timestamp_bits + $machine_bits + $sequence_bits == <$int>::BITS,
-                "Snowflake layout overflows the underlying integer type"
+                "Layout must match underlying type width"
             );
         };
 
@@ -158,6 +160,12 @@ macro_rules! define_snowflake_id {
             pub const TIMESTAMP_MASK: $int = ((1 << Self::TIMESTAMP_BITS) - 1);
             pub const MACHINE_ID_MASK: $int = ((1 << Self::MACHINE_ID_BITS) - 1);
             pub const SEQUENCE_MASK: $int = ((1 << Self::SEQUENCE_BITS) - 1);
+
+            const fn valid_mask() -> $int {
+                (Self::TIMESTAMP_MASK << Self::TIMESTAMP_SHIFT) |
+                (Self::MACHINE_ID_MASK << Self::MACHINE_ID_SHIFT) |
+                (Self::SEQUENCE_MASK << Self::SEQUENCE_SHIFT)
+            }
 
             pub const fn from(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
@@ -207,6 +215,8 @@ macro_rules! define_snowflake_id {
 
         impl $crate::Id for $name {
             type Ty = $int;
+            const ZERO: $int = 0;
+            const ONE: $int = 1;
 
             /// Converts this type into its raw type representation
             fn to_raw(&self) -> Self::Ty {
@@ -220,9 +230,6 @@ macro_rules! define_snowflake_id {
         }
 
         impl $crate::Snowflake for $name {
-            const ZERO: $int = 0;
-            const ONE: $int = 1;
-
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
@@ -252,6 +259,15 @@ macro_rules! define_snowflake_id {
                 debug_assert!(machine_id <= Self::MACHINE_ID_MASK, "machine_id overflow");
                 debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
                 Self::from(timestamp, machine_id, sequence)
+            }
+
+            fn is_valid(&self) -> bool {
+                (self.to_raw() & !Self::valid_mask()) == 0
+            }
+
+            fn into_valid(self) -> Self {
+                let raw = self.to_raw() & Self::valid_mask();
+                Self::from_raw(raw)
             }
 
             fn to_padded_string(&self) -> String {
@@ -579,6 +595,46 @@ mod tests {
     fn long_sequence_overflow_panics() {
         let seq = SnowflakeLongId::max_sequence() + 1;
         SnowflakeLongId::from_components(0, 0, seq);
+    }
+
+    #[test]
+    fn twitter_validity() {
+        let id = SnowflakeTwitterId::from_raw(u64::MAX);
+        assert!(!id.is_valid()); // reserved bits (1)
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn instagram_validity() {
+        let id = SnowflakeInstagramId::from_raw(u64::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn discord_validity() {
+        let id = SnowflakeDiscordId::from_raw(u64::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn mastodon_validity() {
+        let id = SnowflakeMastodonId::from_raw(u64::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn long_validity() {
+        let id = SnowflakeLongId::from_raw(u128::MAX);
+        assert!(!id.is_valid()); // reserved bits (40)
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
     }
 
     #[test]

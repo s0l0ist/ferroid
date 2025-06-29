@@ -9,9 +9,7 @@ pub enum Error {
     LockPoisoned,
     FailedToU64,
     #[cfg(feature = "base32")]
-    DecodeNonAsciiValue,
-    #[cfg(feature = "base32")]
-    DecodeInvalidLen,
+    Base32Error(crate::Base32Error),
 }
 
 impl fmt::Display for Error {
