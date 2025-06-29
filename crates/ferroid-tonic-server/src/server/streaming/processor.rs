@@ -62,7 +62,7 @@ pub async fn handle_stream_request(
                         return;
                     }
 
-                    let bytes = bytes::Bytes::copy_from_slice(&chunk_buf);
+                    let bytes = bytes::Bytes::copy_from_slice(chunk_buf);
                     if let Err(_e) = chunk_tx.send(Ok(IdChunk { packed_ids: bytes })).await {
                         #[cfg(feature = "tracing")]
                         tracing::debug!("Worker {_worker_id} failed to send chunk: {_e}");

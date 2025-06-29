@@ -118,7 +118,7 @@ where
     assert_eq!(id1.timestamp().to_u64().unwrap(), 42);
     assert_eq!(id2.timestamp().to_u64().unwrap(), 42);
     assert_eq!(id3.timestamp().to_u64().unwrap(), 42);
-    assert_eq!(id1.random().to_u64().unwrap(), 42 + 0);
+    assert_eq!(id1.random().to_u64().unwrap(), 42);
     assert_eq!(id2.random().to_u64().unwrap(), 42 + 1);
     assert_eq!(id3.random().to_u64().unwrap(), 42 + 2);
     assert!(id1 < id2 && id2 < id3);
@@ -279,7 +279,7 @@ fn lock_generator_rollover_test() {
 #[test]
 fn basic_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
-    let rand = ThreadRandom::default();
+    let rand = ThreadRandom;
     let generator: BasicUlidGenerator<ULID, _, _> = BasicUlidGenerator::new(clock, rand);
     run_generator_monotonic(generator);
 }
@@ -287,7 +287,7 @@ fn basic_generator_monotonic_clock_random_increments() {
 #[test]
 fn lock_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
-    let rand = ThreadRandom::default();
+    let rand = ThreadRandom;
     let generator: LockUlidGenerator<ULID, _, _> = LockUlidGenerator::new(clock, rand);
     run_generator_monotonic(generator);
 }
@@ -295,7 +295,7 @@ fn lock_generator_monotonic_clock_random_increments() {
 #[test]
 fn lock_generator_threaded_monotonic() {
     let clock = MonotonicClock::default();
-    let rand = ThreadRandom::default();
+    let rand = ThreadRandom;
     run_generator_monotonic_threaded(move || {
         LockUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
     });

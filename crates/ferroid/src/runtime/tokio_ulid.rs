@@ -166,7 +166,7 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_ulid_ids(
-        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl Ulid + fmt::Debug>>>>,
+        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl Ulid>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks)
             .await

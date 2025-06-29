@@ -173,7 +173,7 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_ulid_ids(
-        tasks: Vec<Task<Result<Vec<impl Ulid + fmt::Debug>>>>,
+        tasks: Vec<Task<Result<Vec<impl Ulid>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 

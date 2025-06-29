@@ -4,7 +4,7 @@ use core::convert::TryInto;
 use core::fmt;
 
 const fn base32_size(bytes: usize) -> usize {
-    ((bytes * 8) + 4) / 5
+    (bytes * 8).div_ceil(5)
 }
 
 /// A trait for types that can be encoded to and decoded from big-endian bytes.

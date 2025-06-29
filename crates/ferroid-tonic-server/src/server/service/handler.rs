@@ -217,8 +217,7 @@ impl IdGenerator for IdService {
         let fut = {
             use tracing::Instrument;
             let span = tracing::info_span!("streaming");
-            let fut = fut.instrument(span);
-            fut
+            fut.instrument(span)
         };
 
         tokio::spawn(fut);
