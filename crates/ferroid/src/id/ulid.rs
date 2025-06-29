@@ -122,7 +122,7 @@ macro_rules! define_ulid {
             // type. This is to avoid aliasing surprises.
             assert!(
                 $reserved_bits + $timestamp_bits + $random_bits == <$int>::BITS,
-                "Ulid layout overflows the underlying integer type"
+                "Layout must match underlying type width"
             );
         };
 
@@ -139,6 +139,11 @@ macro_rules! define_ulid {
             pub const RESERVED_MASK: $int = ((1 << Self::RESERVED_BITS) - 1);
             pub const TIMESTAMP_MASK: $int = ((1 << Self::TIMESTAMP_BITS) - 1);
             pub const RANDOM_MASK: $int = ((1 << Self::RANDOM_BITS) - 1);
+
+            const fn valid_mask() -> $int {
+                (Self::TIMESTAMP_MASK << Self::TIMESTAMP_SHIFT) |
+                (Self::RANDOM_MASK << Self::RANDOM_SHIFT)
+            }
 
             pub const fn from(timestamp: $int, random: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
@@ -219,11 +224,12 @@ macro_rules! define_ulid {
             }
 
             fn is_valid(&self) -> bool {
-                *self == Self::from_components(self.timestamp(), self.random())
+                (self.to_raw() & !Self::valid_mask()) == 0
             }
 
             fn into_valid(self) -> Self {
-                Self::from_components(self.timestamp(), self.random())
+                let raw = self.to_raw() & Self::valid_mask();
+                Self::from_raw(raw)
             }
 
             fn to_padded_string(&self) -> String {
@@ -284,6 +290,14 @@ define_ulid!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ulid_validity() {
+        let id = ULID::from_raw(u128::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
 
     #[test]
     fn test_ulid_id_fields_and_bounds() {

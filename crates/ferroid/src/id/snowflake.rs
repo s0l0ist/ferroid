@@ -141,7 +141,7 @@ macro_rules! define_snowflake_id {
             // type. This is to avoid aliasing surprises.
             assert!(
                 $reserved_bits + $timestamp_bits + $machine_bits + $sequence_bits == <$int>::BITS,
-                "Snowflake layout overflows the underlying integer type"
+                "Layout must match underlying type width"
             );
         };
 
@@ -160,6 +160,12 @@ macro_rules! define_snowflake_id {
             pub const TIMESTAMP_MASK: $int = ((1 << Self::TIMESTAMP_BITS) - 1);
             pub const MACHINE_ID_MASK: $int = ((1 << Self::MACHINE_ID_BITS) - 1);
             pub const SEQUENCE_MASK: $int = ((1 << Self::SEQUENCE_BITS) - 1);
+
+            const fn valid_mask() -> $int {
+                (Self::TIMESTAMP_MASK << Self::TIMESTAMP_SHIFT) |
+                (Self::MACHINE_ID_MASK << Self::MACHINE_ID_SHIFT) |
+                (Self::SEQUENCE_MASK << Self::SEQUENCE_SHIFT)
+            }
 
             pub const fn from(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
@@ -256,11 +262,12 @@ macro_rules! define_snowflake_id {
             }
 
             fn is_valid(&self) -> bool {
-                *self == Self::from_components(self.timestamp(), self.machine_id(), self.sequence())
+                (self.to_raw() & !Self::valid_mask()) == 0
             }
 
             fn into_valid(self) -> Self {
-                Self::from_components(self.timestamp(), self.machine_id(), self.sequence())
+                let raw = self.to_raw() & Self::valid_mask();
+                Self::from_raw(raw)
             }
 
             fn to_padded_string(&self) -> String {
@@ -588,6 +595,46 @@ mod tests {
     fn long_sequence_overflow_panics() {
         let seq = SnowflakeLongId::max_sequence() + 1;
         SnowflakeLongId::from_components(0, 0, seq);
+    }
+
+    #[test]
+    fn twitter_validity() {
+        let id = SnowflakeTwitterId::from_raw(u64::MAX);
+        assert!(!id.is_valid()); // reserved bits (1)
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn instagram_validity() {
+        let id = SnowflakeInstagramId::from_raw(u64::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn discord_validity() {
+        let id = SnowflakeDiscordId::from_raw(u64::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn mastodon_validity() {
+        let id = SnowflakeMastodonId::from_raw(u64::MAX);
+        assert!(id.is_valid());
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
+    }
+
+    #[test]
+    fn long_validity() {
+        let id = SnowflakeLongId::from_raw(u128::MAX);
+        assert!(!id.is_valid()); // reserved bits (40)
+        let valid = id.into_valid();
+        assert!(valid.is_valid());
     }
 
     #[test]

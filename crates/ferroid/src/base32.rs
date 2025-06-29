@@ -135,20 +135,20 @@ where
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
-    /// **Note:** This method performs a structural decode of the Base32 string
-    /// into the raw underlying integer. It does **not** validate whether the
-    /// decoded value adheres to the ID's semantic constraints (e.g., reserved
-    /// bits, out-of-range fields).
+    /// ⚠️ **Note:** This method performs a structural decode of the Base32
+    /// string into the raw underlying integer. It does **not** validate whether
+    /// the decoded value satisfies semantic invariants of the ID format (e.g.,
+    /// reserved bits).
     ///
-    /// If validation is required, use `.is_valid()` to check, or
-    /// `.into_valid()` to normalize the value.
+    /// If your ID type includes reserved bits, you should explicitly validate
+    /// the result using `.is_valid()` or normalize it using `.into_valid()`.
     ///
     /// # Errors
     ///
     /// Returns an error if the input string:
     /// - is not the expected fixed length
-    /// - contains characters not in the Crockford Base32 alphabet (invalid
-    ///   ASCII)
+    /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
+    ///   alphabet)
     ///
     /// # Example
     ///
@@ -157,24 +157,22 @@ where
     /// {
     ///     use ferroid::{Base32Ext, Snowflake, SnowflakeTwitterId};
     ///
-    ///     // A valid encoded ID
+    ///     // A syntactically and semantically valid ID
     ///     let encoded = "46JA7902CV4V4";
     ///     let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
-    ///
     ///     assert!(decoded.is_valid());
     ///     assert_eq!(decoded.to_raw(), 2_424_242_424_242_424_242);
     ///
-    ///     // A syntactically valid but semantically invalid `SnowflakeTwitterId` - sets reserved bits
+    ///     // A syntactically valid but semantically invalid ID (sets the reserved bit in `SnowflakeTwitterId`)
     ///     let encoded = "ZZZZZZZZZZZZZ";
     ///     let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
-    ///
     ///     assert!(!decoded.is_valid());
     ///     assert_eq!(decoded.to_raw(), u64::MAX);
     ///
     ///     // Normalize to a valid representation
     ///     let valid = decoded.into_valid();
     ///     assert!(valid.is_valid());
-    ///     assert_eq!(valid.to_raw(), 9_223_372_036_854_775_807); // max valid `SnowflakeTwitterId`
+    ///     assert_eq!(valid.to_raw(), 9_223_372_036_854_775_807); // max valid SnowflakeTwitterId
     /// }
     /// ```
     fn decode(s: &str) -> Result<Self> {
