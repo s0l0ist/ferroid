@@ -27,8 +27,9 @@ pub trait Id:
         + Eq
         + PartialEq
         + Hash
+        // For clock millis and testing
         + ToU64
-        // For testing
+        // For base32 decode and testing
         + From<u8>
         // Arithmetic
         + Add<Output = Self::Ty>

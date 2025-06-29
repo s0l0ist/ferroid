@@ -539,47 +539,41 @@ fn bench_snowflake_base32<ID, G, T>(
         b.iter_custom(|iters| {
             let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
             let start = Instant::now();
+
             for _ in 0..iters {
                 for id in &ids {
-                    id.encode_to_buf(&mut buf);
+                    black_box(id.encode_to_buf(black_box(&mut buf)));
                 }
             }
+
             start.elapsed()
         });
     });
-
-    group.finish();
-
-    let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
 
     group.bench_function(format!("encode_to_string/elems/{}", TOTAL_IDS), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
+
             for _ in 0..iters {
                 for id in &ids {
-                    let enc = id.encode();
-                    black_box(enc);
+                    black_box(id.encode());
                 }
             }
+
             start.elapsed()
         });
     });
 
-    group.finish();
-
-    let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
-
     group.bench_function(format!("decode/elems/{}", TOTAL_IDS), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
+
             for _ in 0..iters {
                 for enc in &encoded {
-                    let id = ID::decode(enc).unwrap();
-                    black_box(id);
+                    black_box(ID::decode(black_box(enc)).unwrap());
                 }
             }
+
             start.elapsed()
         });
     });
@@ -632,47 +626,41 @@ fn bench_ulid_base32<ID, G, T, R>(
         b.iter_custom(|iters| {
             let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
             let start = Instant::now();
+
             for _ in 0..iters {
                 for id in &ids {
-                    id.encode_to_buf(&mut buf);
+                    black_box(id.encode_to_buf(black_box(&mut buf)));
                 }
             }
+
             start.elapsed()
         });
     });
-
-    group.finish();
-
-    let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
 
     group.bench_function(format!("encode_to_string/elems/{}", TOTAL_IDS), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
+
             for _ in 0..iters {
                 for id in &ids {
-                    let enc = id.encode();
-                    black_box(enc);
+                    black_box(id.encode());
                 }
             }
+
             start.elapsed()
         });
     });
 
-    group.finish();
-
-    let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
-
     group.bench_function(format!("decode/elems/{}", TOTAL_IDS), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
+
             for _ in 0..iters {
                 for enc in &encoded {
-                    let id = ID::decode(enc).unwrap();
-                    black_box(id);
+                    black_box(ID::decode(black_box(enc)).unwrap());
                 }
             }
+
             start.elapsed()
         });
     });
