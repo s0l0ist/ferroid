@@ -1,4 +1,5 @@
 use core::hint::black_box;
+use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
@@ -8,7 +9,6 @@ use ferroid::{
     ThreadRandom, TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
 };
 use futures::future::try_join_all;
-use std::time::Duration;
 use std::{thread::scope, time::Instant};
 use tokio::runtime::Builder;
 
@@ -148,11 +148,9 @@ fn bench_generator_threaded<ID, G, T>(
                                                     break;
                                                 }
                                                 IdGenStatus::Pending { yield_for } => {
-                                                    std::thread::sleep(
-                                                        std::time::Duration::from_millis(
-                                                            yield_for.to_u64()?,
-                                                        ),
-                                                    );
+                                                    std::thread::sleep(Duration::from_millis(
+                                                        yield_for.to_u64()?,
+                                                    ));
                                                 }
                                             }
                                         }
@@ -360,11 +358,9 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                                                     break;
                                                 }
                                                 IdGenStatus::Pending { yield_for } => {
-                                                    std::thread::sleep(
-                                                        std::time::Duration::from_millis(
-                                                            yield_for.to_u64()?,
-                                                        ),
-                                                    );
+                                                    std::thread::sleep(Duration::from_millis(
+                                                        yield_for.to_u64()?,
+                                                    ));
                                                 }
                                             }
                                         }
@@ -731,8 +727,7 @@ fn bench_generator_threaded_basic(c: &mut Criterion) {
         MonotonicClock::default,
     )
 }
-/// Multi-threaded benchmark for `LockSnowflakeGenerator` with
-/// `MonotonicClock`.
+/// Multi-threaded benchmark for `LockSnowflakeGenerator` with `MonotonicClock`.
 fn bench_generator_threaded_lock(c: &mut Criterion) {
     bench_generator_threaded::<SnowflakeTwitterId, _, _>(
         c,
@@ -885,6 +880,7 @@ fn bench_base32(c: &mut Criterion) {
 criterion_group!(
     benches,
     // --- Snowflake ---
+    //
     // Mock clock
     benchmark_mock_sequential_basic,
     benchmark_mock_sequential_lock,
@@ -903,6 +899,7 @@ criterion_group!(
     benchmark_mono_smol_lock,
     benchmark_mono_smol_atomic,
     // --- Ulid ---
+    //
     // Mock clock
     benchmark_mock_sequential_ulid_basic,
     benchmark_mock_sequential_ulid_lock,
