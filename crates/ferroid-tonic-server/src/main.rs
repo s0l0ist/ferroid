@@ -140,7 +140,7 @@ fn build_id_service(service: IdService) -> IdGeneratorServer<IdService> {
 async fn shutdown_signal(
     service: IdService,
     health_reporter: HealthReporter,
-    providers: TelemetryProviders,
+    _providers: TelemetryProviders,
 ) {
     #[cfg(unix)]
     let terminate = async {
@@ -186,20 +186,20 @@ async fn shutdown_signal(
 
     #[cfg(feature = "tracing")]
     {
-        if let Err(err) = providers.tracer_provider.force_flush() {
+        if let Err(err) = _providers.tracer_provider.force_flush() {
             eprintln!("Error flushing traces: {:#?}", err);
         }
-        if let Err(err) = providers.tracer_provider.shutdown() {
+        if let Err(err) = _providers.tracer_provider.shutdown() {
             eprintln!("Error shutting down tracer: {:#?}", err);
         }
     }
 
     #[cfg(feature = "metrics")]
     {
-        if let Err(err) = providers.meter_provider.force_flush() {
+        if let Err(err) = _providers.meter_provider.force_flush() {
             eprintln!("Error flushing metrics: {:#?}", err);
         }
-        if let Err(err) = providers.meter_provider.shutdown() {
+        if let Err(err) = _providers.meter_provider.shutdown() {
             eprintln!("Error shutting down meter: {:#?}", err);
         }
     }
