@@ -24,7 +24,8 @@ The core library provides:
   - `BasicSnowflakeGenerator`: single-threaded
   - `LockSnowflakeGenerator`: multi-threaded with locking
   - `AtomicSnowflakeGenerator`: multi-threaded, lock-free
-  - `BasicUlidGenerator`: multi-threaded, high-entropy ULID generation
+  - `BasicUlidGenerator`: single-threaded, high-entropy ULID generation
+  - `LockUlidGenerator`: multi-threaded, high-entropy ULID generation
 
 - **Async Support**: Integrates with `tokio` and `smol`
 - **Encoding Support**: Crockford base32 encoding/decoding for compact, sortable
