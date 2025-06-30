@@ -305,7 +305,7 @@ mod tests {
         let rand = ULID::max_random();
 
         let id = ULID::from(ts, rand);
-        println!("ID: {:#?}", id);
+        println!("ID: {id:#?}");
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.random(), rand);
         assert_eq!(ULID::from_components(ts, rand), id);

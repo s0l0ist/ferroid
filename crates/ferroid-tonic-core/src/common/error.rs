@@ -46,9 +46,9 @@ impl From<Error> for Status {
     fn from(err: Error) -> Self {
         match err {
             Error::ChannelError { context } => {
-                Status::internal(format!("Channel error: {}", context))
+                Status::internal(format!("Channel error: {context}"))
             }
-            Error::IdGeneration(e) => Status::internal(format!("ID generation error: {:?}", e)),
+            Error::IdGeneration(e) => Status::internal(format!("ID generation error: {e:?}")),
             Error::RequestCancelled => Status::cancelled("Request was cancelled"),
             Error::InvalidRequest { reason } => Status::invalid_argument(reason),
             Error::ServiceShutdown => Status::unavailable("Service is shutting down"),

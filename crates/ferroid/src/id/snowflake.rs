@@ -429,7 +429,7 @@ mod tests {
         let seq = SnowflakeTwitterId::max_sequence();
 
         let id = SnowflakeTwitterId::from(ts, mid, seq);
-        println!("ID: {:#?}", id);
+        println!("ID: {id:#?}");
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
@@ -443,7 +443,7 @@ mod tests {
         let seq = SnowflakeDiscordId::max_sequence();
 
         let id = SnowflakeDiscordId::from(ts, mid, seq);
-        println!("ID: {:#?}", id);
+        println!("ID: {id:#?}");
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
@@ -457,7 +457,7 @@ mod tests {
         let seq = SnowflakeMastodonId::max_sequence();
 
         let id = SnowflakeMastodonId::from(ts, mid, seq);
-        println!("ID: {:#?}", id);
+        println!("ID: {id:#?}");
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), 0); // machine_id is always zero
         assert_eq!(id.sequence(), seq);
@@ -471,7 +471,7 @@ mod tests {
         let seq = SnowflakeInstagramId::max_sequence();
 
         let id = SnowflakeInstagramId::from(ts, mid, seq);
-        println!("ID: {:#?}", id);
+        println!("ID: {id:#?}");
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
@@ -485,7 +485,7 @@ mod tests {
         let seq = SnowflakeLongId::max_sequence();
 
         let id = SnowflakeLongId::from(ts, mid, seq);
-        println!("ID: {:#?}", id);
+        println!("ID: {id:#?}");
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);

@@ -187,20 +187,20 @@ async fn shutdown_signal(
     #[cfg(feature = "tracing")]
     {
         if let Err(err) = _providers.tracer_provider.force_flush() {
-            eprintln!("Error flushing traces: {:#?}", err);
+            eprintln!("Error flushing traces: {err:#?}");
         }
         if let Err(err) = _providers.tracer_provider.shutdown() {
-            eprintln!("Error shutting down tracer: {:#?}", err);
+            eprintln!("Error shutting down tracer: {err:#?}");
         }
     }
 
     #[cfg(feature = "metrics")]
     {
         if let Err(err) = _providers.meter_provider.force_flush() {
-            eprintln!("Error flushing metrics: {:#?}", err);
+            eprintln!("Error flushing metrics: {err:#?}");
         }
         if let Err(err) = _providers.meter_provider.shutdown() {
-            eprintln!("Error shutting down meter: {:#?}", err);
+            eprintln!("Error shutting down meter: {err:#?}");
         }
     }
 }

@@ -62,14 +62,14 @@ where
         match self {
             IdGenStatus::Ready { id } => id,
             IdGenStatus::Pending { yield_for } => {
-                panic!("unexpected pending (yield for: {})", yield_for)
+                panic!("unexpected pending (yield for: {yield_for})")
             }
         }
     }
 
     fn unwrap_pending(self) -> T::Ty {
         match self {
-            IdGenStatus::Ready { id } => panic!("unexpected ready ({})", id),
+            IdGenStatus::Ready { id } => panic!("unexpected ready ({id})"),
             IdGenStatus::Pending { yield_for } => yield_for,
         }
     }
@@ -197,7 +197,7 @@ where
     });
 
     let final_count = seen_ids.lock().unwrap().len();
-    assert_eq!(final_count, TOTAL_IDS, "Expected {} unique IDs", TOTAL_IDS);
+    assert_eq!(final_count, TOTAL_IDS, "Expected {TOTAL_IDS} unique IDs");
 }
 
 #[test]

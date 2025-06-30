@@ -46,7 +46,7 @@ fn bench_generator_hot<ID, G, T>(
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(TOTAL_IDS as u64));
 
-    group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
 
@@ -83,7 +83,7 @@ fn bench_generator_hot_yield<ID, G, T>(
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(TOTAL_IDS as u64));
 
-    group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
 
@@ -126,44 +126,41 @@ fn bench_generator_threaded<ID, G, T>(
     for thread_count in [1, 2, 4, 8, 16] {
         let total_ids = TOTAL_IDS * thread_count;
         group.throughput(Throughput::Elements(total_ids as u64));
-        group.bench_function(
-            format!("elems/{}/threads/{}", total_ids, thread_count),
-            |b| {
-                b.iter_custom(|iters| {
-                    let clock = clock_factory();
+        group.bench_function(format!("elems/{total_ids}/threads/{thread_count}"), |b| {
+            b.iter_custom(|iters| {
+                let clock = clock_factory();
 
-                    let start = Instant::now();
-                    for _ in 0..iters {
-                        scope(|s| {
-                            for i in 0..thread_count {
-                                let clock = clock.clone();
-                                s.spawn(move || {
-                                    // generator per thread
-                                    let generator = generator_fn(ID::Ty::from(i as u64), clock);
-                                    for _ in 0..TOTAL_IDS {
-                                        loop {
-                                            match generator.next_id() {
-                                                IdGenStatus::Ready { id } => {
-                                                    black_box(id);
-                                                    break;
-                                                }
-                                                IdGenStatus::Pending { yield_for } => {
-                                                    std::thread::sleep(Duration::from_millis(
-                                                        yield_for.to_u64()?,
-                                                    ));
-                                                }
+                let start = Instant::now();
+                for _ in 0..iters {
+                    scope(|s| {
+                        for i in 0..thread_count {
+                            let clock = clock.clone();
+                            s.spawn(move || {
+                                // generator per thread
+                                let generator = generator_fn(ID::Ty::from(i as u64), clock);
+                                for _ in 0..TOTAL_IDS {
+                                    loop {
+                                        match generator.next_id() {
+                                            IdGenStatus::Ready { id } => {
+                                                black_box(id);
+                                                break;
+                                            }
+                                            IdGenStatus::Pending { yield_for } => {
+                                                std::thread::sleep(Duration::from_millis(
+                                                    yield_for.to_u64()?,
+                                                ));
                                             }
                                         }
                                     }
-                                    Ok::<(), Error>(())
-                                });
-                            }
-                        })
-                    }
-                    start.elapsed()
-                });
-            },
-        );
+                                }
+                                Ok::<(), Error>(())
+                            });
+                        }
+                    })
+                }
+                start.elapsed()
+            });
+        });
     }
 
     group.finish();
@@ -189,34 +186,31 @@ fn bench_generator_async_tokio<ID, G, T>(
         let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
-        group.bench_function(
-            format!("elems/{}/gens/{}", total_ids, num_generators),
-            |b| {
-                let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+        group.bench_function(format!("elems/{total_ids}/gens/{num_generators}"), |b| {
+            let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
-                b.to_async(&rt).iter_custom(move |iters| async move {
-                    let clock = clock_factory();
+            b.to_async(&rt).iter_custom(move |iters| async move {
+                let clock = clock_factory();
 
-                    let start = Instant::now();
-                    for _ in 0..iters {
-                        let tasks = (0..num_generators).map(|i| {
-                            let clock = clock.clone();
-                            tokio::spawn(async move {
-                                // generator per task
-                                let generator = generator_fn(i as u64, clock.clone());
-                                for _ in 0..TOTAL_IDS {
-                                    let id = generator.try_next_id_async::<TokioSleep>().await?;
-                                    black_box(id);
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        });
-                        try_join_all(tasks).await.unwrap();
-                    }
-                    start.elapsed()
-                });
-            },
-        );
+                let start = Instant::now();
+                for _ in 0..iters {
+                    let tasks = (0..num_generators).map(|i| {
+                        let clock = clock.clone();
+                        tokio::spawn(async move {
+                            // generator per task
+                            let generator = generator_fn(i as u64, clock.clone());
+                            for _ in 0..TOTAL_IDS {
+                                let id = generator.try_next_id_async::<TokioSleep>().await?;
+                                black_box(id);
+                            }
+                            Ok::<(), Error>(())
+                        })
+                    });
+                    try_join_all(tasks).await.unwrap();
+                }
+                start.elapsed()
+            });
+        });
     }
 
     group.finish();
@@ -245,32 +239,29 @@ pub fn bench_generator_async_smol<ID, G, T>(
         let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
-        group.bench_function(
-            format!("elems/{}/gens/{}", total_ids, num_generators),
-            |b| {
-                b.to_async(SmolExecutor).iter_custom(|iters| async move {
-                    let clock = clock_factory();
+        group.bench_function(format!("elems/{total_ids}/gens/{num_generators}"), |b| {
+            b.to_async(SmolExecutor).iter_custom(|iters| async move {
+                let clock = clock_factory();
 
-                    let start = Instant::now();
-                    for _ in 0..iters {
-                        let tasks = (0..num_generators).map(|i| {
-                            let clock = clock.clone();
-                            smol::spawn(async move {
-                                // generator per task
-                                let generator = generator_fn(i as u64, clock.clone());
-                                for _ in 0..TOTAL_IDS {
-                                    let id = generator.try_next_id_async::<SmolSleep>().await?;
-                                    black_box(id);
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        });
-                        try_join_all(tasks).await.unwrap();
-                    }
-                    start.elapsed()
-                });
-            },
-        );
+                let start = Instant::now();
+                for _ in 0..iters {
+                    let tasks = (0..num_generators).map(|i| {
+                        let clock = clock.clone();
+                        smol::spawn(async move {
+                            // generator per task
+                            let generator = generator_fn(i as u64, clock.clone());
+                            for _ in 0..TOTAL_IDS {
+                                let id = generator.try_next_id_async::<SmolSleep>().await?;
+                                black_box(id);
+                            }
+                            Ok::<(), Error>(())
+                        })
+                    });
+                    try_join_all(tasks).await.unwrap();
+                }
+                start.elapsed()
+            });
+        });
     }
 
     group.finish();
@@ -289,7 +280,7 @@ fn bench_generator_ulid<ID, G, T, R>(
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(TOTAL_IDS as u64));
 
-    group.bench_function(format!("elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
 
@@ -334,46 +325,43 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
         let total_ids = TOTAL_IDS * thread_count;
         // let ids_per_thread = total_ids / thread_count;
         group.throughput(Throughput::Elements(total_ids as u64));
-        group.bench_function(
-            format!("elems/{}/threads/{}", total_ids, thread_count),
-            |b| {
-                b.iter_custom(|iters| {
-                    let clock = clock_factory();
-                    let rand = rand_factory();
+        group.bench_function(format!("elems/{total_ids}/threads/{thread_count}"), |b| {
+            b.iter_custom(|iters| {
+                let clock = clock_factory();
+                let rand = rand_factory();
 
-                    let start = Instant::now();
-                    for _ in 0..iters {
-                        scope(|s| {
-                            for _ in 0..thread_count {
-                                let clock = clock.clone();
-                                let rand = rand.clone();
-                                s.spawn(move || {
-                                    // generator per thread
-                                    let generator = generator_fn(clock, rand);
-                                    for _ in 0..TOTAL_IDS {
-                                        loop {
-                                            match generator.next_id() {
-                                                IdGenStatus::Ready { id } => {
-                                                    black_box(id);
-                                                    break;
-                                                }
-                                                IdGenStatus::Pending { yield_for } => {
-                                                    std::thread::sleep(Duration::from_millis(
-                                                        yield_for.to_u64()?,
-                                                    ));
-                                                }
+                let start = Instant::now();
+                for _ in 0..iters {
+                    scope(|s| {
+                        for _ in 0..thread_count {
+                            let clock = clock.clone();
+                            let rand = rand.clone();
+                            s.spawn(move || {
+                                // generator per thread
+                                let generator = generator_fn(clock, rand);
+                                for _ in 0..TOTAL_IDS {
+                                    loop {
+                                        match generator.next_id() {
+                                            IdGenStatus::Ready { id } => {
+                                                black_box(id);
+                                                break;
+                                            }
+                                            IdGenStatus::Pending { yield_for } => {
+                                                std::thread::sleep(Duration::from_millis(
+                                                    yield_for.to_u64()?,
+                                                ));
                                             }
                                         }
                                     }
-                                    Ok::<(), Error>(())
-                                });
-                            }
-                        })
-                    }
-                    start.elapsed()
-                });
-            },
-        );
+                                }
+                                Ok::<(), Error>(())
+                            });
+                        }
+                    })
+                }
+                start.elapsed()
+            });
+        });
     }
 
     group.finish();
@@ -401,36 +389,33 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
         let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
-        group.bench_function(
-            format!("elems/{}/gens/{}", total_ids, num_generators),
-            |b| {
-                let rt = Builder::new_multi_thread().enable_all().build().unwrap();
+        group.bench_function(format!("elems/{total_ids}/gens/{num_generators}"), |b| {
+            let rt = Builder::new_multi_thread().enable_all().build().unwrap();
 
-                b.to_async(&rt).iter_custom(move |iters| async move {
-                    let clock = clock_factory();
-                    let rand = rand_factory();
+            b.to_async(&rt).iter_custom(move |iters| async move {
+                let clock = clock_factory();
+                let rand = rand_factory();
 
-                    let start = Instant::now();
-                    for _ in 0..iters {
-                        let tasks = (0..num_generators).map(|_| {
-                            let clock = clock.clone();
-                            let rand = rand.clone();
-                            tokio::spawn(async move {
-                                // generator per task
-                                let generator = generator_fn(clock.clone(), rand.clone());
-                                for _ in 0..TOTAL_IDS {
-                                    let id = generator.try_next_id_async::<TokioSleep>().await?;
-                                    black_box(id);
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        });
-                        try_join_all(tasks).await.unwrap();
-                    }
-                    start.elapsed()
-                });
-            },
-        );
+                let start = Instant::now();
+                for _ in 0..iters {
+                    let tasks = (0..num_generators).map(|_| {
+                        let clock = clock.clone();
+                        let rand = rand.clone();
+                        tokio::spawn(async move {
+                            // generator per task
+                            let generator = generator_fn(clock.clone(), rand.clone());
+                            for _ in 0..TOTAL_IDS {
+                                let id = generator.try_next_id_async::<TokioSleep>().await?;
+                                black_box(id);
+                            }
+                            Ok::<(), Error>(())
+                        })
+                    });
+                    try_join_all(tasks).await.unwrap();
+                }
+                start.elapsed()
+            });
+        });
     }
 
     group.finish();
@@ -461,34 +446,31 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
         let total_ids = TOTAL_IDS * num_generators;
 
         group.throughput(Throughput::Elements(total_ids as u64));
-        group.bench_function(
-            format!("elems/{}/gens/{}", total_ids, num_generators),
-            |b| {
-                b.to_async(SmolExecutor).iter_custom(|iters| async move {
-                    let clock = clock_factory();
-                    let rand = rand_factory();
+        group.bench_function(format!("elems/{total_ids}/gens/{num_generators}"), |b| {
+            b.to_async(SmolExecutor).iter_custom(|iters| async move {
+                let clock = clock_factory();
+                let rand = rand_factory();
 
-                    let start = Instant::now();
-                    for _ in 0..iters {
-                        let tasks = (0..num_generators).map(|_| {
-                            let clock = clock.clone();
-                            let rand = rand.clone();
-                            smol::spawn(async move {
-                                // generator per task
-                                let generator = generator_fn(clock.clone(), rand.clone());
-                                for _ in 0..TOTAL_IDS {
-                                    let id = generator.try_next_id_async::<SmolSleep>().await?;
-                                    black_box(id);
-                                }
-                                Ok::<(), Error>(())
-                            })
-                        });
-                        try_join_all(tasks).await.unwrap();
-                    }
-                    start.elapsed()
-                });
-            },
-        );
+                let start = Instant::now();
+                for _ in 0..iters {
+                    let tasks = (0..num_generators).map(|_| {
+                        let clock = clock.clone();
+                        let rand = rand.clone();
+                        smol::spawn(async move {
+                            // generator per task
+                            let generator = generator_fn(clock.clone(), rand.clone());
+                            for _ in 0..TOTAL_IDS {
+                                let id = generator.try_next_id_async::<SmolSleep>().await?;
+                                black_box(id);
+                            }
+                            Ok::<(), Error>(())
+                        })
+                    });
+                    try_join_all(tasks).await.unwrap();
+                }
+                start.elapsed()
+            });
+        });
     }
 
     group.finish();
@@ -531,14 +513,15 @@ fn bench_snowflake_base32<ID, G, T>(
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(TOTAL_IDS as u64));
 
-    group.bench_function(format!("encode_to_buf/elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("encode_to_buf/elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
             let start = Instant::now();
 
             for _ in 0..iters {
                 for id in &ids {
-                    black_box(id.encode_to_buf(black_box(&mut buf)));
+                    id.encode_to_buf(black_box(&mut buf));
+                    black_box(());
                 }
             }
 
@@ -546,7 +529,7 @@ fn bench_snowflake_base32<ID, G, T>(
         });
     });
 
-    group.bench_function(format!("encode_to_string/elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("encode_to_string/elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
 
@@ -560,7 +543,7 @@ fn bench_snowflake_base32<ID, G, T>(
         });
     });
 
-    group.bench_function(format!("decode/elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("decode/elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
 
@@ -618,14 +601,15 @@ fn bench_ulid_base32<ID, G, T, R>(
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(TOTAL_IDS as u64));
 
-    group.bench_function(format!("encode_to_buf/elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("encode_to_buf/elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
             let start = Instant::now();
 
             for _ in 0..iters {
                 for id in &ids {
-                    black_box(id.encode_to_buf(black_box(&mut buf)));
+                    id.encode_to_buf(black_box(&mut buf));
+                    black_box(());
                 }
             }
 
@@ -633,7 +617,7 @@ fn bench_ulid_base32<ID, G, T, R>(
         });
     });
 
-    group.bench_function(format!("encode_to_string/elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("encode_to_string/elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
 
@@ -647,7 +631,7 @@ fn bench_ulid_base32<ID, G, T, R>(
         });
     });
 
-    group.bench_function(format!("decode/elems/{}", TOTAL_IDS), |b| {
+    group.bench_function(format!("decode/elems/{TOTAL_IDS}"), |b| {
         b.iter_custom(|iters| {
             let start = Instant::now();
 
