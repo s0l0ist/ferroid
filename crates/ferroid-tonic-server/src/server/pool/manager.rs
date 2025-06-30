@@ -74,7 +74,7 @@ impl WorkerPool {
         match worker.send(request).await {
             Ok(()) => Ok(()),
             Err(_) => Err(Error::ChannelError {
-                context: format!("Worker {} channel closed", worker_idx),
+                context: format!("Worker {worker_idx} channel closed"),
             }),
         }
     }

@@ -60,6 +60,7 @@ fn grpc_bench(c: &mut Criterion) {
     let uri = Uri::try_from("http://0.0.0.0:50051").expect("Invalid URI");
     // Start the server. This may require a full compilation so set the timeout
     // high. Adjust features and CLI args to the server as necessary.
+    #[allow(clippy::zombie_processes)]
     let mut server = Command::new("cargo")
         .args([
             "run",
@@ -194,7 +195,7 @@ pub fn wait_for_port(addr: &str, timeout_secs: u64) {
         }
         thread::sleep(Duration::from_millis(100));
     }
-    panic!("Server did not start listening on {}", addr);
+    panic!("Server did not start listening on {addr}");
 }
 
 criterion_group!(grpc_benches, grpc_bench);

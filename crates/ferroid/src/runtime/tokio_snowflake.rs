@@ -203,7 +203,7 @@ mod tests {
 
         let mut seen = HashSet::with_capacity(all_ids.len());
         for id in &all_ids {
-            assert!(seen.insert(id), "Duplicate ID found: {:?}", id);
+            assert!(seen.insert(id), "Duplicate ID found: {id:?}");
         }
 
         Ok(())

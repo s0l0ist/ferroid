@@ -87,7 +87,7 @@ pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
-    /// Encodes this ID into a fixed-length [`String`] using Crockford Base32.
+    /// Encodes this ID into a [`String`] using Crockford Base32.
     ///
     /// The resulting string is guaranteed to be ASCII and lexicographically
     /// sortable.
@@ -95,12 +95,25 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(all(feature = "snowflake", feature = "base32"))]
-    /// {
-    ///     use ferroid::{Base32Ext, SnowflakeTwitterId};
-    ///     let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
-    ///     let encoded = id.encode();
-    ///     assert_eq!(encoded, "46JA7902CV4V4");
+    /// #[cfg(feature = "base32")]
+    /// {   
+    ///     use ferroid::Base32Ext;
+    ///
+    ///     #[cfg(feature = "snowflake")]
+    ///     {
+    ///         use ferroid::SnowflakeTwitterId;
+    ///         let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
+    ///         let encoded = id.encode();
+    ///         assert_eq!(encoded, "46JA7902CV4V4");
+    ///     }
+    ///
+    ///     #[cfg(feature = "ulid")]
+    ///     {
+    ///         use ferroid::ULID;
+    ///         let id = ULID::from_raw(2_424_242_424_242_424_242);
+    ///         let encoded = id.encode();
+    ///         assert_eq!(encoded, "00000000000008D4MEJ04SP9P8");
+    ///     }
     /// }
     /// ```
     fn encode(&self) -> String {
@@ -110,26 +123,50 @@ where
         // SAFETY: Crockford Base32 output is always valid ASCII
         unsafe { String::from_utf8_unchecked(buf.as_ref().to_vec()) }
     }
-    /// Encodes this ID into the provided output buffer without allocating.
+    /// Encodes this ID into the provided output buffer without heap allocation.
     ///
-    /// This is the zero-allocation alternative to [`Self::encode`]. The buffer
-    /// must be exactly [`BeBytes::BASE32_SIZE`] in length.
+    /// This is the zero-allocation alternative to [`Base32Ext::encode`]. The
+    /// output buffer must be exactly [`BeBytes::BASE32_SIZE`] bytes in length,
+    /// which is guaranteed at compile time when using [`BeBytes::Base32Array`].
     ///
     /// # Example
     ///
     /// ```
-    /// #[cfg(all(feature = "snowflake", feature = "base32"))]
-    /// {
-    ///     use ferroid::{Base32Ext, BeBytes, Id, SnowflakeTwitterId};
-    ///     let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
-    ///     let mut buf = <<SnowflakeTwitterId as Id>::Ty as BeBytes>::Base32Array::default();
-    ///     id.encode_to_buf(&mut buf);
+    /// #[cfg(feature = "base32")]
+    /// {   
+    ///     use ferroid::Base32Ext;
     ///
-    ///     // SAFETY: Crockford Base32 output is always valid ASCII
-    ///     let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
-    ///     assert_eq!(encoded, "46JA7902CV4V4");
+    ///     #[cfg(feature = "snowflake")]
+    ///     {
+    ///         use ferroid::{BeBytes, Id, SnowflakeTwitterId};
+    ///         let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
+    ///
+    ///         // Allocate a zeroed, stack-based buffer with the exact size required for encoding.
+    ///         let mut buf = <<SnowflakeTwitterId as Id>::Ty as BeBytes>::Base32Array::default();
+    ///         id.encode_to_buf(&mut buf);
+    ///
+    ///         // SAFETY: Crockford Base32 is guaranteed to produce valid ASCII
+    ///         let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
+    ///         assert_eq!(encoded, "46JA7902CV4V4");
+    ///     }
+    ///
+    ///     #[cfg(feature = "ulid")]
+    ///     {
+    ///         use ferroid::{BeBytes, Id, ULID};
+    ///         let id = ULID::from_raw(2_424_242_424_242_424_242);
+    ///
+    ///         // Allocate a zeroed, stack-based buffer with the exact size required for encoding.
+    ///         let mut buf = <<ULID as Id>::Ty as BeBytes>::Base32Array::default();
+    ///         id.encode_to_buf(&mut buf);
+    ///
+    ///         // SAFETY: Crockford Base32 is guaranteed to produce valid ASCII
+    ///         let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
+    ///         assert_eq!(encoded, "00000000000008D4MEJ04SP9P8");
+    ///     }
     /// }
     /// ```
+    ///
+    /// See also: [`Base32Ext::encode`] for an allocation-producing version.
     fn encode_to_buf(&self, buf: &mut <<Self as Id>::Ty as BeBytes>::Base32Array) {
         encode_base32(self.to_raw(), buf);
     }
@@ -153,26 +190,31 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(all(feature = "snowflake", feature = "base32"))]
-    /// {
-    ///     use ferroid::{Base32Ext, Snowflake, SnowflakeTwitterId};
+    /// #[cfg(feature = "base32")]
+    /// {   
+    ///     use ferroid::Base32Ext;
     ///
-    ///     // A syntactically and semantically valid ID
-    ///     let encoded = "46JA7902CV4V4";
-    ///     let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
-    ///     assert!(decoded.is_valid());
-    ///     assert_eq!(decoded.to_raw(), 2_424_242_424_242_424_242);
+    ///     #[cfg(feature = "snowflake")]
+    ///     {
+    ///         use ferroid::{Snowflake, SnowflakeTwitterId};
     ///
-    ///     // A syntactically valid but semantically invalid ID (sets the reserved bit in `SnowflakeTwitterId`)
-    ///     let encoded = "ZZZZZZZZZZZZZ";
-    ///     let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
-    ///     assert!(!decoded.is_valid());
-    ///     assert_eq!(decoded.to_raw(), u64::MAX);
+    ///         // A syntactically and semantically valid ID
+    ///         let encoded = "46JA7902CV4V4";
+    ///         let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
+    ///         assert!(decoded.is_valid());
+    ///         assert_eq!(decoded.to_raw(), 2_424_242_424_242_424_242);
     ///
-    ///     // Normalize to a valid representation
-    ///     let valid = decoded.into_valid();
-    ///     assert!(valid.is_valid());
-    ///     assert_eq!(valid.to_raw(), 9_223_372_036_854_775_807); // max valid SnowflakeTwitterId
+    ///         // A syntactically valid but semantically invalid ID (sets the reserved bit in `SnowflakeTwitterId`)
+    ///         let encoded = "ZZZZZZZZZZZZZ";
+    ///         let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
+    ///         assert!(!decoded.is_valid());
+    ///         assert_eq!(decoded.to_raw(), u64::MAX);
+    ///
+    ///         // Normalize to a valid representation
+    ///         let valid = decoded.into_valid();
+    ///         assert!(valid.is_valid());
+    ///         assert_eq!(valid.to_raw(), 9_223_372_036_854_775_807); // max valid SnowflakeTwitterId
+    ///     }
     /// }
     /// ```
     fn decode(s: &str) -> Result<Self> {
@@ -199,7 +241,7 @@ impl fmt::Display for Base32Error {
         match self {
             Base32Error::DecodeInvalidAscii(b) => write!(f, "invalid ascii byte: {b}"),
             Base32Error::DecodeInvalidLen(len) => write!(f, "invalid length: {len}"),
-            Base32Error::TryFromSliceError(e) => write!(f, "{}", e),
+            Base32Error::TryFromSliceError(e) => write!(f, "{e}"),
         }
     }
 }
@@ -235,33 +277,36 @@ const LOOKUP: [u8; 256] = {
 };
 const BITS_PER_CHAR: usize = 5;
 
-pub fn encode_base32<T: BeBytes>(val: T, buf: &mut T::Base32Array) {
+fn encode_base32<T: BeBytes>(val: T, buf: &mut T::Base32Array) {
     let mut bits = 0_usize;
     let mut acc = 0_u16;
-    let mask = 0x1F_u16;
-
-    let byte_array = val.to_be_bytes();
-    let bytes = byte_array.as_ref();
-    let mut out = 0;
-
+    let mask = 0x1F;
+    let be_bytes = val.to_be_bytes();
+    let bytes = be_bytes.as_ref();
     let buf_slice = buf.as_mut();
 
+    let mut out = 0;
     for &b in bytes {
         acc = (acc << 8) | b as u16;
         bits += 8;
-
-        while bits >= BITS_PER_CHAR && out < buf_slice.len() {
+        while bits >= BITS_PER_CHAR {
             bits -= BITS_PER_CHAR;
-            let index = ((acc >> bits) & mask) as usize;
-            buf_slice[out] = ALPHABET[index];
+            // buf_slice[out] = ALPHABET[((acc >> bits) & mask) as usize];
+            // SAFTEY: this will always succeed due to compile-time guarantees
+            unsafe {
+                *buf_slice.get_unchecked_mut(out) = ALPHABET[((acc >> bits) & mask) as usize]
+            };
             out += 1;
         }
     }
-
-    // Pad top bits
-    if bits > 0 && out < buf_slice.len() {
-        let index = ((acc << (BITS_PER_CHAR - bits)) & mask) as usize;
-        buf_slice[out] = ALPHABET[index];
+    if bits > 0 {
+        // buf_slice[out] = ALPHABET[((acc << (BITS_PER_CHAR - bits)) & mask) as
+        // usize]; SAFTEY: this will always succeed due to compile-time
+        // guarantees
+        unsafe {
+            *buf_slice.get_unchecked_mut(out) =
+                ALPHABET[((acc << (BITS_PER_CHAR - bits)) & mask) as usize]
+        };
     }
 }
 
@@ -327,16 +372,16 @@ mod snowflake_tests {
 
         let type_name = type_name::<T>();
 
-        println!("=== {} {} ===", type_name, label);
-        println!("id (raw decimal): {}", raw);
-        println!("id (raw binary):  {:064b}", raw);
+        println!("=== {type_name} {label} ===");
+        println!("id (raw decimal): {raw}");
+        println!("id (raw binary):  {raw:064b}");
         println!("timestamp:  0x{:x}", id.timestamp());
         println!("machine id: 0x{:x}", id.machine_id());
         println!("sequence:   0x{:x}", id.sequence());
-        println!("encoded:    {}", encoded);
-        println!("decoded:    {}", decoded);
+        println!("encoded:    {encoded}");
+        println!("decoded:    {decoded}");
 
-        assert_eq!(id, decoded, "{} roundtrip failed for {}", label, type_name);
+        assert_eq!(id, decoded, "{label} roundtrip failed for {type_name}");
     }
 
     #[test]
@@ -478,15 +523,15 @@ mod ulid_tests {
 
         let type_name = type_name::<T>();
 
-        println!("=== {} {} ===", type_name, label);
-        println!("id (raw decimal): {}", raw);
-        println!("id (raw binary):  {:064b}", raw);
+        println!("=== {type_name} {label} ===");
+        println!("id (raw decimal): {raw}");
+        println!("id (raw binary):  {raw:064b}");
         println!("timestamp:  0x{:x}", id.timestamp());
         println!("random: 0x{:x}", id.random());
-        println!("encoded:    {}", encoded);
-        println!("decoded:    {}", decoded);
+        println!("encoded:    {encoded}");
+        println!("decoded:    {decoded}");
 
-        assert_eq!(id, decoded, "{} roundtrip failed for {}", label, type_name);
+        assert_eq!(id, decoded, "{label} roundtrip failed for {type_name}");
     }
 
     #[test]
@@ -499,7 +544,7 @@ mod ulid_tests {
     #[test]
     fn ulid_zero() {
         let id = ULID::from_components(0, 0);
-        println!("id {:#?}", id);
+        println!("id {id:#?}");
         test_encode_decode_ulid(id, "zero");
         assert_eq!(id.to_raw(), 0)
     }
