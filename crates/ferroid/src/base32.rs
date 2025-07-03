@@ -291,7 +291,6 @@ fn encode_base32<T: BeBytes>(val: T, buf: &mut T::Base32Array) {
         bits += 8;
         while bits >= BITS_PER_CHAR {
             bits -= BITS_PER_CHAR;
-            // buf_slice[out] = ALPHABET[((acc >> bits) & mask) as usize];
             // SAFTEY: this will always succeed due to compile-time guarantees
             unsafe {
                 *buf_slice.get_unchecked_mut(out) = ALPHABET[((acc >> bits) & mask) as usize]
@@ -300,9 +299,7 @@ fn encode_base32<T: BeBytes>(val: T, buf: &mut T::Base32Array) {
         }
     }
     if bits > 0 {
-        // buf_slice[out] = ALPHABET[((acc << (BITS_PER_CHAR - bits)) & mask) as
-        // usize]; SAFTEY: this will always succeed due to compile-time
-        // guarantees
+        // SAFTEY: this will always succeed due to compile-time guarantees
         unsafe {
             *buf_slice.get_unchecked_mut(out) =
                 ALPHABET[((acc << (BITS_PER_CHAR - bits)) & mask) as usize]

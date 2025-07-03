@@ -9,6 +9,7 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 /// Shared ticker thread that updates every millisecond.
+#[derive(Debug)]
 struct SharedTickerInner {
     current: AtomicU64,
     _handle: OnceLock<JoinHandle<()>>,
@@ -23,7 +24,7 @@ struct SharedTickerInner {
 /// Internally, the clock measures time by capturing `Instant::now()` at
 /// construction and adding to it the duration elapsed since a given epoch
 /// (computed from `SystemTime::now()` at startup).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MonotonicClock {
     inner: Arc<SharedTickerInner>,
     epoch_offset: u64, // in milliseconds

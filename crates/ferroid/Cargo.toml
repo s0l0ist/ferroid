@@ -5,8 +5,8 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 readme = "README.md"
-description.workspace = true
-repository.workspace = true
+description = "Flexible ID generators for producing unique, monotonic, and lexicographically sortable IDs."
+repository = "https://github.com/s0l0ist/ferroid/blob/main/crates/ferroid"
 documentation.workspace = true
 keywords.workspace = true
 

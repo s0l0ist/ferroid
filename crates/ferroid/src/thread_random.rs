@@ -14,7 +14,7 @@ use rand::{Rng, rng};
 /// cannot be shared or moved across threads. However, since this type is a
 /// zero-sized wrapper that does not store the RNG, it **is** thread-safe and
 /// may be freely used across threads.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct ThreadRandom;
 
 impl RandSource<u64> for ThreadRandom {
