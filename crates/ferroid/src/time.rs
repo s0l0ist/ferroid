@@ -15,6 +15,9 @@ pub const INSTAGRAM_EPOCH: Duration = Duration::from_millis(1_293_840_000_000);
 /// Mastodon epoch: Thursday, January 1, 1970 00:00:00 UTC
 pub const MASTODON_EPOCH: Duration = Duration::from_millis(0);
 
+/// Unix epoch: Thursday, January 1, 1970 00:00:00 UTC
+pub const UNIX_EPOCH: Duration = Duration::from_millis(0);
+
 /// A trait for time sources that return a monotonic or wall-clock timestamp.
 ///
 /// This abstraction allows you to plug in a real system clock, a monotonic

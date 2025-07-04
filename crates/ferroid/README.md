@@ -87,9 +87,9 @@ that case, you can spin, yield, or sleep depending on your environment:
 
 #[cfg(feature = "ulid")]
 {
-    use ferroid::{MonotonicClock, IdGenStatus, TWITTER_EPOCH, ThreadRandom, BasicUlidGenerator, ULID};
+    use ferroid::{MonotonicClock, IdGenStatus, UNIX_EPOCH, ThreadRandom, BasicUlidGenerator, ULID};
 
-    let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
+    let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
     let rand = ThreadRandom::default();
     let generator = BasicUlidGenerator::new(clock, rand);
 
@@ -123,7 +123,7 @@ features:
 ```rust
 #[cfg(feature = "async-tokio")]
 {
-    use ferroid::{Result, MonotonicClock, MASTODON_EPOCH};
+    use ferroid::{Result, MonotonicClock, MASTODON_EPOCH, UNIX_EPOCH};
 
     #[tokio::main]
     async fn main() -> Result<()> {
@@ -145,7 +145,7 @@ features:
         {
             use ferroid::{ThreadRandom, UlidGeneratorAsyncTokioExt, BasicUlidGenerator, ULID};
 
-            let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+            let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
             let rand = ThreadRandom::default();
             let generator = BasicUlidGenerator::new(clock, rand);
 
@@ -159,7 +159,7 @@ features:
 
 #[cfg(feature = "async-smol")]
 {
-    use ferroid::{Result, MonotonicClock, CUSTOM_EPOCH};
+    use ferroid::{Result, MonotonicClock};
 
     fn main() -> Result<()> {
         smol::block_on(async {
@@ -167,7 +167,7 @@ features:
             {
                 use ferroid::{
                     AtomicSnowflakeGenerator, SnowflakeMastodonId,
-                    SnowflakeGeneratorAsyncSmolExt
+                    SnowflakeGeneratorAsyncSmolExt, CUSTOM_EPOCH
                 };
 
                 let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
@@ -179,9 +179,9 @@ features:
 
             #[cfg(feature = "ulid")]
             {
-                use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID};
+                use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID, UNIX_EPOCH};
 
-                let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
+                let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
                 let rand = ThreadRandom::default();
                 let generator = BasicUlidGenerator::new(clock, rand);
 
@@ -316,14 +316,38 @@ Where:
 > - $k \ll 2^r$ and $g \ll 2^r$
 > - Each generator's range of $k$ IDs starts at a uniformly random position within the $r$-bit space
 
-| Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    |
-| ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| 1                | 1                              | $0$ (single generator; no collision possible)                                                           |
-| 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           |
-| 2                | 1                              | $\displaystyle \frac{2 \times 1 \times 1}{2 \cdot 2^{80}} \approx 8.27 \times 10^{-25}$                 |
-| 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         |
-| 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999 \times 1}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$         |
-| 1,000            | 65,536                         | $\displaystyle \frac{1{,}000 \times 999 \times 131{,}071}{2 \cdot 2^{80}} \approx 5.42 \times 10^{-14}$ |
+#### Estimating Time Until a Collision Occurs
+
+While collisions only happen within a single millisecond, we often want to know how long it takes before **any** collision happens, given continuous generation over time.
+
+The expected time in milliseconds to reach a 50% chance of collision is:
+
+$T_{50\%} \approx \frac{\ln 2}{P_\text{collision}} = \frac{0.6931 \cdot 2 \cdot 2^r}{g(g - 1)(2k - 1)}$
+
+This is derived from the cumulative probability formula:
+
+$P_\text{collision}(T) = 1 - (1 - P_\text{collision})^T$
+
+Solving for $T$ when $P_\text{collision}(T) = 0.5$:
+
+$(1 - P_\text{collision})^T = 0.5$
+
+$\Rightarrow T \approx \frac{\ln(0.5)}{\ln(1 - P_\text{collision})}$
+
+Using the approximation $\ln(1 - x) \approx -x$ for small $x$, this simplifies to:
+
+$\Rightarrow T \approx \frac{\ln 2}{P_\text{collision}}$
+
+The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$ milliseconds, there's a 50% chance that at least one collision has occurred.
+
+| Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{50\%}$)                |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1                | 1                              | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
+| 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
+| 2                | 1                              | $\displaystyle \frac{2 \times 1 \times 1}{2 \cdot 2^{80}} \approx 8.27 \times 10^{-25}$                 | $\approx 8.38 \times 10^{23} \text{ ms}$                    |
+| 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         | $\approx 6.41 \times 10^{18} \text{ ms}$                    |
+| 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999 \times 1}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$         | $\approx 1.68 \times 10^{18} \text{ ms}$                    |
+| 1,000            | 65,536                         | $\displaystyle \frac{1{,}000 \times 999 \times 131{,}071}{2 \cdot 2^{80}} \approx 5.42 \times 10^{-14}$ | $\approx 1.28 \times 10^{13} \text{ ms} \approx 406\ years$ |
 
 ### Serialize as padded string
 
