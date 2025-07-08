@@ -3,11 +3,11 @@ use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, Base32Ext, BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes,
-    Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator, MonotonicClock, RandSource,
-    SmolSleep, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeMastodonId,
-    SnowflakeTwitterId, ThreadRandom, TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator,
-    UlidGeneratorAsyncExt,
+    AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
+    BasicUlidGenerator, BeBytes, Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
+    MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
+    SnowflakeGeneratorAsyncExt, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource,
+    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
 };
 use futures::future::try_join_all;
 use std::{thread::scope, time::Instant};
@@ -479,7 +479,7 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
 
 fn bench_snow_base32<ID>(c: &mut Criterion, group_name: &str)
 where
-    ID: Snowflake + Base32Ext,
+    ID: Snowflake + Base32SnowExt,
     ID::Ty: BeBytes,
 {
     let id = ID::from_components(
@@ -515,7 +515,7 @@ where
 
 fn bench_ulid_base32<ID>(c: &mut Criterion, group_name: &str)
 where
-    ID: Ulid + Base32Ext,
+    ID: Ulid + Base32UlidExt,
     ID::Ty: BeBytes,
 {
     let id = ID::from_components(ID::max_timestamp(), ID::max_random());

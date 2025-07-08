@@ -364,7 +364,7 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
 
     #[cfg(feature = "base32")]
     {
-        use ferroid::Base32Ext;
+        use ferroid::Base32SnowExt;
 
         let encoded = id.encode();
         assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
@@ -384,7 +384,7 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
 
     #[cfg(feature = "base32")]
     {
-        use ferroid::Base32Ext;
+        use ferroid::Base32UlidExt;
 
         let encoded = id.encode();
         assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
