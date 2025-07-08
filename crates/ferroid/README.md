@@ -367,7 +367,7 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
         use ferroid::Base32Ext;
 
         let encoded = id.encode();
-        assert_eq!(format!("base32: {encoded}"), "base32: 00000Y4G0082M");
+        assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
 
         let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
         assert_eq!(id, decoded);
@@ -387,10 +387,16 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
         use ferroid::Base32Ext;
 
         let encoded = id.encode();
-        assert_eq!(format!("base32: {encoded}"), "base32: 000000F2800000000000000058");
+        assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
 
         let decoded = ULID::decode(&encoded).expect("decode should succeed");
+        assert_eq!(decoded.timestamp(), 123456);
+        assert_eq!(decoded.random(), 42);
         assert_eq!(id, decoded);
+
+        let decoded = ULID::decode("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        assert_eq!(decoded.timestamp(), 1469922850259);
+        assert_eq!(decoded.random(), 1012768647078601740696923);
     }
 }
 ```
