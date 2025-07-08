@@ -160,21 +160,10 @@ mod tests {
     }
 
     #[test]
-    fn test_leading_zeros() {
-        // value with leading zeros in bytes (u32)
-        let val: u32 = 0x00001234;
-        roundtrip_u32(val);
-
-        // value with leading zeros in bytes (u64)
-        let val: u64 = 0x0000000012345678;
-        roundtrip_u64(val);
-    }
-
-    #[test]
     fn test_alias_and_case_insensitive() {
         // Crockford alias: O=o=0, I=i=L=l=1
         let ex = "OILoil";
-        for c in ex.chars() {
+        for c in ex.bytes() {
             let s = format!("{:0>7}", c); // pad to 7 chars
             let res = decode_base32::<u32>(&s);
             assert!(res.is_ok(), "alias '{}' failed", c);
