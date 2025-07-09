@@ -12,7 +12,7 @@ impl fmt::Display for Base32Error {
         match self {
             Base32Error::DecodeInvalidAscii(b) => write!(f, "invalid ascii byte: {b}"),
             Base32Error::DecodeInvalidLen(len) => write!(f, "invalid length: {len}"),
-            Base32Error::DecodeOverflow(bytes) => write!(f, "invalid length: {bytes:X?}"),
+            Base32Error::DecodeOverflow(bytes) => write!(f, "decode overflow: {bytes:X?}"),
         }
     }
 }
