@@ -58,7 +58,7 @@ pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
             out += 1;
         }
     }
-    debug_assert!(bits == 0, "No leftover bits for u128 encoding!");
+    debug_assert!(bits == 0, "No leftover bits for encoding!");
 }
 
 /// Decodes a fixed-length Crockford base32 string into the given primitive
