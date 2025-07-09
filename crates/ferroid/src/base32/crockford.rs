@@ -13,7 +13,7 @@ const LOOKUP: [u8; 256] = {
         let c = ALPHABET[i];
         lut[c as usize] = i as u8;
         if c.is_ascii_uppercase() {
-            lut[(c as u8 + 32) as usize] = i as u8; // lowercase letter
+            lut[(c + 32) as usize] = i as u8; // lowercase letter
         }
         i += 1;
     }
@@ -98,7 +98,7 @@ mod tests {
         encode_base32(&bytes, &mut buf);
         let s = std::str::from_utf8(&buf).unwrap();
         let decoded = decode_base32(s).unwrap();
-        assert_eq!(val, decoded, "roundtrip for u32: input={}, b32={}", val, s);
+        assert_eq!(val, decoded, "roundtrip for u32: input={val}, b32={s}");
     }
 
     fn roundtrip_u64(val: u64) {
@@ -107,7 +107,7 @@ mod tests {
         encode_base32(&bytes, &mut buf);
         let s = std::str::from_utf8(&buf).unwrap();
         let decoded = decode_base32(s).unwrap();
-        assert_eq!(val, decoded, "roundtrip for u64: input={}, b32={}", val, s);
+        assert_eq!(val, decoded, "roundtrip for u64: input={val}, b32={s}");
     }
 
     fn roundtrip_u128(val: u128) {
@@ -116,7 +116,7 @@ mod tests {
         encode_base32(&bytes, &mut buf);
         let s = std::str::from_utf8(&buf).unwrap();
         let decoded = decode_base32(s).unwrap();
-        assert_eq!(val, decoded, "roundtrip for u128: input={}, b32={}", val, s);
+        assert_eq!(val, decoded, "roundtrip for u128: input={val}, b32={s}");
     }
 
     #[test]
@@ -161,9 +161,9 @@ mod tests {
         // Crockford alias: O=o=0, I=i=L=l=1
         let ex = "OILoil";
         for c in ex.bytes() {
-            let s = format!("{:0>7}", c); // pad to 7 chars
+            let s = format!("{c:0>7}"); // pad to 7 chars
             let res = decode_base32::<u32>(&s);
-            assert!(res.is_ok(), "alias '{}' failed", c);
+            assert!(res.is_ok(), "alias '{c}' failed");
         }
         // Mixed case
         let encoded = "ABCD123";
@@ -184,7 +184,7 @@ mod tests {
         assert!(res.is_err());
         match res.unwrap_err() {
             Error::Base32Error(Base32Error::DecodeInvalidAscii(b'!')) => {}
-            e => panic!("unexpected error: {:?}", e),
+            e => panic!("unexpected error: {e:?}"),
         }
     }
 

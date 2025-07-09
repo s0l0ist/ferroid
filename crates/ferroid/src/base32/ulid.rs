@@ -41,7 +41,7 @@ where
     /// }
     /// ```
     fn encode(&self) -> String {
-        Self::enc(&self)
+        Self::enc(self)
     }
     /// Encodes this ID into the provided output buffer without heap allocation.
     ///
@@ -73,7 +73,7 @@ where
     ///
     /// See also: [`Base32UlidExt::encode`] for an allocation-producing version.
     fn encode_to_buf(&self, buf: &mut <<Self as Id>::Ty as BeBytes>::Base32Array) {
-        Self::enc_to_buf(&self, buf);
+        Self::enc_to_buf(self, buf);
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
