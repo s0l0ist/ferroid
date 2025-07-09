@@ -354,50 +354,40 @@ The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$ milli
 Use `.to_padded_string()` or `.encode()` for sortable string representations:
 
 ```rust
-#[cfg(feature = "snowflake")]
+#[cfg(all(feature = "base32", feature = "snowflake"))]
 {
-    use ferroid::{Snowflake, SnowflakeTwitterId};
+    use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId};
 
     let id = SnowflakeTwitterId::from(123456, 1, 42);
     assert_eq!(format!("default: {id}"), "default: 517811998762");
     assert_eq!(format!("padded: {}", id.to_padded_string()), "padded: 00000000517811998762");
 
-    #[cfg(feature = "base32")]
-    {
-        use ferroid::Base32SnowExt;
+    let encoded = id.encode();
+    assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
 
-        let encoded = id.encode();
-        assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
-
-        let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
-        assert_eq!(id, decoded);
-    }
+    let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
+    assert_eq!(id, decoded);
 }
 
-#[cfg(feature = "ulid")]
+#[cfg(all(feature = "base32", feature = "ulid"))]
 {
-    use ferroid::{Ulid, ULID};
+    use ferroid::{Base32UlidExt, Ulid, ULID};
 
     let id = ULID::from(123456, 42);
     assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");
     assert_eq!(format!("padded: {}", id.to_padded_string()), "padded: 000000000149249145986343659392525664298");
 
-    #[cfg(feature = "base32")]
-    {
-        use ferroid::Base32UlidExt;
+    let encoded = id.encode();
+    assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
 
-        let encoded = id.encode();
-        assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
+    let decoded = ULID::decode(&encoded).expect("decode should succeed");
+    assert_eq!(decoded.timestamp(), 123456);
+    assert_eq!(decoded.random(), 42);
+    assert_eq!(id, decoded);
 
-        let decoded = ULID::decode(&encoded).expect("decode should succeed");
-        assert_eq!(decoded.timestamp(), 123456);
-        assert_eq!(decoded.random(), 42);
-        assert_eq!(id, decoded);
-
-        let decoded = ULID::decode("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
-        assert_eq!(decoded.timestamp(), 1469922850259);
-        assert_eq!(decoded.random(), 1012768647078601740696923);
-    }
+    let decoded = ULID::decode("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+    assert_eq!(decoded.timestamp(), 1469922850259);
+    assert_eq!(decoded.random(), 1012768647078601740696923);
 }
 ```
 

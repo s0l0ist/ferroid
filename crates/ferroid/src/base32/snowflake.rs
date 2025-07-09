@@ -29,15 +29,12 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(feature = "base32")]
+    /// #[cfg(all(feature = "base32", feature = "snowflake"))]
     /// {   
-    ///     #[cfg(feature = "snowflake")]
-    ///     {
-    ///         use ferroid::{Base32SnowExt, SnowflakeTwitterId};
-    ///         let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
-    ///         let encoded = id.encode();
-    ///         assert_eq!(encoded, "23953MG16DJDJ");
-    ///     }
+    ///     use ferroid::{Base32SnowExt, SnowflakeTwitterId};
+    ///     let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
+    ///     let encoded = id.encode();
+    ///     assert_eq!(encoded, "23953MG16DJDJ");
     /// }
     /// ```
     fn encode(&self) -> String {
@@ -53,21 +50,16 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(feature = "base32")]
+    /// #[cfg(all(feature = "base32", feature = "snowflake"))]
     /// {   
-    ///     #[cfg(feature = "snowflake")]
-    ///     {
-    ///         use ferroid::{Base32SnowExt, BeBytes, Id, SnowflakeTwitterId};
-    ///         let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
-    ///
-    ///         // Allocate a zeroed, stack-based buffer with the exact size required for encoding.
-    ///         let mut buf = <<SnowflakeTwitterId as Id>::Ty as BeBytes>::Base32Array::default();
-    ///         id.encode_to_buf(&mut buf);
-    ///
-    ///         // SAFETY: Crockford Base32 is guaranteed to produce valid ASCII
-    ///         let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
-    ///         assert_eq!(encoded, "23953MG16DJDJ");
-    ///     }
+    ///     use ferroid::{Base32SnowExt, BeBytes, Id, SnowflakeTwitterId};
+    ///     let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
+    ///     // Allocate a zeroed, stack-based buffer with the exact size required for encoding.
+    ///     let mut buf = <<SnowflakeTwitterId as Id>::Ty as BeBytes>::Base32Array::default();
+    ///     id.encode_to_buf(&mut buf);
+    ///     // SAFETY: Crockford Base32 is guaranteed to produce valid ASCII
+    ///     let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
+    ///     assert_eq!(encoded, "23953MG16DJDJ");
     /// }
     /// ```
     ///
@@ -108,38 +100,37 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(feature = "base32")] {
-    ///     #[cfg(feature = "snowflake")] {
-    ///         use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId, Error, Base32Error, Id};
+    /// #[cfg(all(feature = "base32", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId, Error, Base32Error, Id};
     ///
-    ///         // Crockford base32 encodes in 5-bit chunks, so encoding a u64 (64 bits)
-    ///         // requires 13 characters (13 x 5 = 65 bits). The highest (leftmost) bit
-    ///         // in the base32 encoding is always truncated (ignored) for performance,
-    ///         // so *any* 13-char base32 string decodes to a u64. Only the lower 64
-    ///         // bits are used; there is no explicit error for "overflow".
+    ///     // Crockford base32 encodes in 5-bit chunks, so encoding a u64 (64 bits)
+    ///     // requires 13 characters (13 x 5 = 65 bits). The highest (leftmost) bit
+    ///     // in the base32 encoding is always truncated (ignored) for performance,
+    ///     // so *any* 13-char base32 string decodes to a u64. Only the lower 64
+    ///     // bits are used; there is no explicit error for "overflow".
     ///
-    ///         // Twitter Snowflake IDs reserve the highest bit (the 64th bit).
-    ///         // As long as this reserved bit is zero, the decode will succeed.
+    ///     // Twitter Snowflake IDs reserve the highest bit (the 64th bit).
+    ///     // As long as this reserved bit is zero, the decode will succeed.
     ///
-    ///         // For example, both "7ZZZZZZZZZZZZ" and "NZZZZZZZZZZZZ" are valid:
-    ///         // '7' = 0b00111 (top bit 0, reserved bit 0, rest 111...)
-    ///         // 'N' = 0b10111 (top bit 1, reserved bit 0, rest 111...)
-    ///         assert!(SnowflakeTwitterId::decode("7ZZZZZZZZZZZZ").is_ok());
-    ///         assert!(SnowflakeTwitterId::decode("NZZZZZZZZZZZZ").is_ok());
+    ///     // For example, both "7ZZZZZZZZZZZZ" and "NZZZZZZZZZZZZ" are valid:
+    ///     // '7' = 0b00111 (top bit 0, reserved bit 0, rest 111...)
+    ///     // 'N' = 0b10111 (top bit 1, reserved bit 0, rest 111...)
+    ///     assert!(SnowflakeTwitterId::decode("7ZZZZZZZZZZZZ").is_ok());
+    ///     assert!(SnowflakeTwitterId::decode("NZZZZZZZZZZZZ").is_ok());
     ///
-    ///         // If the reserved bit is set (e.g., 'F' = 0b01111 or 'Z' = 0b11111), the ID is invalid:
-    ///         // 'F' = 0b01111 (top bit X, reserved bit 1, rest 111...).
-    ///         match SnowflakeTwitterId::decode("FZZZZZZZZZZZZ") {
-    ///             Ok(_) => panic!("Should not succeed!"),
-    ///             Err(Error::Base32Error(Base32Error::DecodeOverflow(bytes))) => {
-    ///                 let prim = u64::from_be_bytes(bytes.try_into().unwrap());
-    ///                 let invalid = SnowflakeTwitterId::from_raw(prim);
-    ///                 assert!(!invalid.is_valid());
-    ///                 let valid = invalid.into_valid(); // clears reserved bits
-    ///                 assert!(valid.is_valid());
-    ///             }
-    ///             Err(e) => panic!("Unexpected error: {e:?}"),
+    ///     // If the reserved bit is set (e.g., 'F' = 0b01111 or 'Z' = 0b11111), the ID is invalid:
+    ///     // 'F' = 0b01111 (top bit X, reserved bit 1, rest 111...).
+    ///     match SnowflakeTwitterId::decode("FZZZZZZZZZZZZ") {
+    ///         Ok(_) => panic!("Should not succeed!"),
+    ///         Err(Error::Base32Error(Base32Error::DecodeOverflow(bytes))) => {
+    ///             let prim = u64::from_be_bytes(bytes.try_into().unwrap());
+    ///             let invalid = SnowflakeTwitterId::from_raw(prim);
+    ///             assert!(!invalid.is_valid());
+    ///             let valid = invalid.into_valid(); // clears reserved bits
+    ///             assert!(valid.is_valid());
     ///         }
+    ///         Err(e) => panic!("Unexpected error: {e:?}"),
     ///     }
     /// }
     /// ```

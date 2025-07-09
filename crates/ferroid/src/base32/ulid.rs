@@ -29,15 +29,12 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(feature = "base32")]
+    /// #[cfg(all(feature = "base32", feature = "ulid"))]
     /// {   
-    ///     #[cfg(feature = "ulid")]
-    ///     {
-    ///         use ferroid::{Base32UlidExt, ULID};
-    ///         let id = ULID::from_raw(2_424_242_424_242_424_242);
-    ///         let encoded = id.encode();
-    ///         assert_eq!(encoded, "000000000000023953MG16DJDJ");
-    ///     }
+    ///     use ferroid::{Base32UlidExt, ULID};
+    ///     let id = ULID::from_raw(2_424_242_424_242_424_242);
+    ///     let encoded = id.encode();
+    ///     assert_eq!(encoded, "000000000000023953MG16DJDJ");
     /// }
     /// ```
     fn encode(&self) -> String {
@@ -53,21 +50,18 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(feature = "base32")]
+    /// #[cfg(all(feature = "base32", feature = "ulid"))]
     /// {   
-    ///     #[cfg(feature = "ulid")]
-    ///     {
-    ///         use ferroid::{Base32UlidExt, BeBytes, Id, ULID};
-    ///         let id = ULID::from_raw(2_424_242_424_242_424_242);
+    ///     use ferroid::{Base32UlidExt, BeBytes, Id, ULID};
+    ///     let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
-    ///         // Allocate a zeroed, stack-based buffer with the exact size required for encoding.
-    ///         let mut buf = <<ULID as Id>::Ty as BeBytes>::Base32Array::default();
-    ///         id.encode_to_buf(&mut buf);
+    ///     // Allocate a zeroed, stack-based buffer with the exact size required for encoding.
+    ///     let mut buf = <<ULID as Id>::Ty as BeBytes>::Base32Array::default();
+    ///     id.encode_to_buf(&mut buf);
     ///
-    ///         // SAFETY: Crockford Base32 is guaranteed to produce valid ASCII
-    ///         let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
-    ///         assert_eq!(encoded, "000000000000023953MG16DJDJ");
-    ///     }
+    ///     // SAFETY: Crockford Base32 is guaranteed to produce valid ASCII
+    ///     let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
+    ///     assert_eq!(encoded, "000000000000023953MG16DJDJ");
     /// }
     /// ```
     ///
@@ -108,24 +102,21 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(feature = "base32")]
+    /// #[cfg(all(feature = "base32", feature = "ulid"))]
     /// {
-    ///     #[cfg(feature = "ulid")]
-    ///     {
-    ///         use ferroid::{Base32UlidExt, Ulid, ULID};
-    ///         // Crockford base32 encodes in 5-bit chunks, so encoding a 128-bit ULID
-    ///         // requires 26 characters (26 x 5 = 130 bits). The two highest (leftmost)
-    ///         // bits from base32 encoding are always truncated (ignored) for performance.
-    ///         // This means *any* 26-character base32 string decodes structurally to a ULID,
-    ///         // regardless of whether it would be considered "out of range" by the ULID spec.
-    ///         // No overflow or error occurs for "too high" strings—only the lower 128 bits are used.
+    ///     use ferroid::{Base32UlidExt, Ulid, ULID};
+    ///     // Crockford base32 encodes in 5-bit chunks, so encoding a 128-bit ULID
+    ///     // requires 26 characters (26 x 5 = 130 bits). The two highest (leftmost)
+    ///     // bits from base32 encoding are always truncated (ignored) for performance.
+    ///     // This means *any* 26-character base32 string decodes structurally to a ULID,
+    ///     // regardless of whether it would be considered "out of range" by the ULID spec.
+    ///     // No overflow or error occurs for "too high" strings—only the lower 128 bits are used.
     ///
-    ///         // For example, both "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" and "ZZZZZZZZZZZZZZZZZZZZZZZZZZ" are valid:
-    ///         // '7' = 0b00111 (top bits 00, rest 111...)
-    ///         // 'Z' = 0b11111 (top bits 11, rest 111...)
-    ///         assert!(ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
-    ///         assert!(ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
-    ///     }
+    ///     // For example, both "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" and "ZZZZZZZZZZZZZZZZZZZZZZZZZZ" are valid:
+    ///     // '7' = 0b00111 (top bits 00, rest 111...)
+    ///     // 'Z' = 0b11111 (top bits 11, rest 111...)
+    ///     assert!(ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
+    ///     assert!(ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
     /// }
     /// ```
     fn decode(s: &str) -> Result<Self> {
