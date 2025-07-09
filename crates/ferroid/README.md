@@ -322,7 +322,7 @@ While collisions only happen within a single millisecond, we often want to know 
 
 The expected time in milliseconds to reach a 50% chance of collision is:
 
-$T_{50\%} \approx \frac{\ln 2}{P_\text{collision}} = \frac{0.6931 \cdot 2 \cdot 2^r}{g(g - 1)(2k - 1)}$
+$T_{\text{50\%}} \approx \frac{\ln 2}{P_\text{collision}} = \frac{0.6931 \cdot 2 \cdot 2^r}{g(g - 1)(2k - 1)}$
 
 This is derived from the cumulative probability formula:
 
@@ -340,7 +340,7 @@ $\Rightarrow T \approx \frac{\ln 2}{P_\text{collision}}$
 
 The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$ milliseconds, there's a 50% chance that at least one collision has occurred.
 
-| Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{50\%}$)                |
+| Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{\text{50\%}}$)         |
 | ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | 1                | 1                              | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
 | 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
