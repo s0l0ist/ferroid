@@ -93,8 +93,8 @@ where
     ///   bits in your layout), decoding a string with excess bits may set these
     ///   reserved bits to 1, causing `.is_valid()` to fail, and decode to
     ///   return an error.
-    /// - For vanilla ULID, decoding will always succeed (truncating as needed),
-    ///   but for custom layouts, validation may fail if reserved bits are set.
+    /// - For vanilla IDs, decoding will always succeed (truncating as needed),
+    ///   but for layouts with reserved bits, validation may fail.
     ///
     /// # Errors
     ///
@@ -112,10 +112,19 @@ where
     /// {
     ///     #[cfg(feature = "ulid")]
     ///     {
-    ///         use ferroid::{Base32UlidExt, Ulid, ULID, Error, Base32Error, Id};
-    ///         let decoded = ULID::decode("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
-    ///         assert_eq!(decoded.timestamp(), 1469922850259);
-    ///         assert_eq!(decoded.random(), 1012768647078601740696923);
+    ///         use ferroid::{Base32UlidExt, Ulid, ULID};
+    ///         // Crockford base32 encodes in 5-bit chunks, so encoding a 128-bit ULID
+    ///         // requires 26 characters (26 x 5 = 130 bits). The two highest (leftmost)
+    ///         // bits from base32 encoding are always truncated (ignored) for performance.
+    ///         // This means *any* 26-character base32 string decodes structurally to a ULID,
+    ///         // regardless of whether it would be considered "out of range" by the ULID spec.
+    ///         // No overflow or error occurs for "too high" strings—only the lower 128 bits are used.
+    ///
+    ///         // For example, both "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" and "ZZZZZZZZZZZZZZZZZZZZZZZZZZ" are valid:
+    ///         // '7' = 0b00111 (top bits 00, rest 111...)
+    ///         // 'Z' = 0b11111 (top bits 11, rest 111...)
+    ///         assert!(ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
+    ///         assert!(ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
     ///     }
     /// }
     /// ```
@@ -137,8 +146,8 @@ where
 {
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(all(test, feature = "ulid"))]
+mod test {
     use crate::{Base32UlidExt, ULID, Ulid};
 
     #[test]

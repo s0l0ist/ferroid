@@ -37,6 +37,7 @@ const LOOKUP: [u8; 256] = {
 /// The internal accumulator (`acc`) is a `u16` and never overflows: bits are
 /// always drained in 5-bit groups as soon as possible, so `acc` never exceeds
 /// 16 bits.
+#[inline(always)]
 pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
     let input_bits = input.len() * 8;
     let output_chars = buf_slice.len();
@@ -57,20 +58,16 @@ pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
             out += 1;
         }
     }
-    if bits > 0 {
-        unsafe {
-            *buf_slice.get_unchecked_mut(out) =
-                ALPHABET[((acc << (BITS_PER_CHAR - bits)) & mask) as usize];
-        }
-    }
+    debug_assert!(bits == 0, "No leftover bits for u128 encoding!");
 }
 
 /// Decodes a fixed-length Crockford base32 string into the given primitive
 /// integer type.
 ///
-/// Returns an error if the input contains invalid base32 characters. The 
+/// Returns an error if the input contains invalid base32 characters. The
 /// accumulator never overflows as long as `encoded` fits within the bit width
 /// of `T` which the callee must uphold.
+#[inline(always)]
 pub(crate) fn decode_base32<T>(encoded: &str) -> Result<T>
 where
     T: BeBytes

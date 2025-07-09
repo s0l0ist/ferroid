@@ -93,9 +93,8 @@ where
     ///   bits in your layout), decoding a string with excess bits may set these
     ///   reserved bits to 1, causing `.is_valid()` to fail, and decode to
     ///   return an error.
-    /// - For vanilla Snowflake IDs without reserved bits, decoding will always
-    ///   succeed (truncating as needed), but for custom layouts, validation may
-    ///   fail if reserved bits are set.
+    /// - For vanilla IDs, decoding will always succeed (truncating as needed),
+    ///   but for layouts with reserved bits, validation may fail.
     ///
     /// # Errors
     ///
@@ -109,28 +108,35 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(feature = "base32")] {   
-    ///     #[cfg(feature = "snowflake")]
-    ///     {
+    /// #[cfg(feature = "base32")] {
+    ///     #[cfg(feature = "snowflake")] {
     ///         use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId, Error, Base32Error, Id};
-    ///         // --- Success case ---
-    ///         let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
-    ///         let encoded = id.encode();
-    ///         let decoded = SnowflakeTwitterId::decode(&encoded).unwrap();
-    ///         assert_eq!(decoded, id);
     ///
-    ///         // --- Failure/overflow case ---
-    ///         // Construct a string which decodes to max value (overflow for some ID types).
+    ///         // Crockford base32 encodes in 5-bit chunks, so encoding a u64 (64 bits)
+    ///         // requires 13 characters (13 x 5 = 65 bits). The highest (leftmost) bit
+    ///         // in the base32 encoding is always truncated (ignored) for performance,
+    ///         // so *any* 13-char base32 string decodes to a u64. Only the lower 64
+    ///         // bits are used; there is no explicit error for "overflow".
+    ///
+    ///         // Twitter Snowflake IDs reserve the highest bit (the 64th bit).
+    ///         // As long as this reserved bit is zero, the decode will succeed.
+    ///
+    ///         // For example, both "7ZZZZZZZZZZZZ" and "NZZZZZZZZZZZZ" are valid:
+    ///         // '7' = 0b00111 (top bit 0, reserved bit 0, rest 111...)
+    ///         // 'N' = 0b10111 (top bit 1, reserved bit 0, rest 111...)
+    ///         assert!(SnowflakeTwitterId::decode("7ZZZZZZZZZZZZ").is_ok());
+    ///         assert!(SnowflakeTwitterId::decode("NZZZZZZZZZZZZ").is_ok());
+    ///
+    ///         // If the reserved bit is set (e.g., 'F' = 0b01111 or 'Z' = 0b11111), the ID is invalid:
+    ///         // 'F' = 0b01111 (top bit X, reserved bit 1, rest 111...).
     ///         match SnowflakeTwitterId::decode("FZZZZZZZZZZZZ") {
     ///             Ok(_) => panic!("Should not succeed!"),
     ///             Err(Error::Base32Error(Base32Error::DecodeOverflow(bytes))) => {
-    ///                 // Reconstruct the primitive value from bytes
     ///                 let prim = u64::from_be_bytes(bytes.try_into().unwrap());
-    ///                 // Recover as a raw ID
     ///                 let invalid = SnowflakeTwitterId::from_raw(prim);
-    ///                 // Optionally, normalize and continue:
-    ///                 let valid = invalid.into_valid();
-    ///                 // `valid` is now zeroed out any reserved bits.
+    ///                 assert!(!invalid.is_valid());
+    ///                 let valid = invalid.into_valid(); // clears reserved bits
+    ///                 assert!(valid.is_valid());
     ///             }
     ///             Err(e) => panic!("Unexpected error: {e:?}"),
     ///         }
@@ -155,8 +161,8 @@ where
 {
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(all(test, feature = "snowflake"))]
+mod test {
     use crate::{
         Base32Error, Base32SnowExt, Error, Snowflake, SnowflakeDiscordId, SnowflakeInstagramId,
         SnowflakeMastodonId, SnowflakeTwitterId,
