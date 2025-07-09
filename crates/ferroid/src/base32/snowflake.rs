@@ -17,7 +17,7 @@ use crate::{Base32Error, Base32Ext, BeBytes, Error, Id, Result, Snowflake};
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub trait Base32SnowExt: Base32Ext + Snowflake
+pub trait Base32SnowExt: Snowflake
 where
     Self::Ty: BeBytes,
 {
