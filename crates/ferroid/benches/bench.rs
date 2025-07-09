@@ -3,10 +3,11 @@ use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, Base32Ext, BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes,
-    Error, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator, MonotonicClock, RandSource,
-    SmolSleep, Snowflake, SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeTwitterId,
-    ThreadRandom, TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
+    AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
+    BasicUlidGenerator, BeBytes, Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
+    MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
+    SnowflakeGeneratorAsyncExt, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource,
+    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
 };
 use futures::future::try_join_all;
 use std::{thread::scope, time::Instant};
@@ -476,172 +477,102 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
     group.finish();
 }
 
-fn bench_snowflake_base32<ID, G, T>(
-    c: &mut Criterion,
-    group_name: &str,
-    generator_factory: impl Fn(u64, T) -> G + Copy,
-    clock_factory: impl Fn() -> T + Copy,
-) where
-    ID: Snowflake + Base32Ext,
+fn bench_snow_base32<ID>(c: &mut Criterion, group_name: &str)
+where
+    ID: Snowflake + Base32SnowExt,
     ID::Ty: BeBytes,
-    G: SnowflakeGenerator<ID, T>,
-    T: TimeSource<ID::Ty>,
 {
-    let clock = clock_factory();
-    let generator = generator_factory(0x3FF, clock);
-
-    let mut ids = Vec::with_capacity(TOTAL_IDS);
-    for _ in 0..TOTAL_IDS {
-        loop {
-            match generator.next_id() {
-                IdGenStatus::Ready { id } => {
-                    ids.push(id);
-                    break;
-                }
-                IdGenStatus::Pending { yield_for } => {
-                    std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap()));
-                }
-            }
-        }
-    }
-    let mut encoded = Vec::with_capacity(TOTAL_IDS);
-    for id in &ids {
-        let enc = id.encode();
-        encoded.push(enc);
-    }
+    let id = ID::from_components(
+        ID::max_timestamp(),
+        ID::max_machine_id(),
+        ID::max_sequence(),
+    );
+    let encoded = id.encode();
+    let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
 
     let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+    group.throughput(Throughput::Elements(1));
 
-    group.bench_function(format!("encode_to_buf/elems/{TOTAL_IDS}"), |b| {
-        b.iter_custom(|iters| {
-            let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
-            let start = Instant::now();
-
-            for _ in 0..iters {
-                for id in &ids {
-                    id.encode_to_buf(black_box(&mut buf));
-                    black_box(());
-                }
-            }
-
-            start.elapsed()
+    group.bench_function("encode/string", |b| {
+        b.iter(|| {
+            black_box(id.encode());
         });
     });
-
-    group.bench_function(format!("encode_to_string/elems/{TOTAL_IDS}"), |b| {
-        b.iter_custom(|iters| {
-            let start = Instant::now();
-
-            for _ in 0..iters {
-                for id in &ids {
-                    black_box(id.encode());
-                }
-            }
-
-            start.elapsed()
+    group.bench_function("encode/buffer", |b| {
+        b.iter(|| {
+            id.encode_to_buf(black_box(&mut buf));
+            black_box(());
         });
     });
-
-    group.bench_function(format!("decode/elems/{TOTAL_IDS}"), |b| {
-        b.iter_custom(|iters| {
-            let start = Instant::now();
-
-            for _ in 0..iters {
-                for enc in &encoded {
-                    black_box(ID::decode(black_box(enc)).unwrap());
-                }
-            }
-
-            start.elapsed()
+    group.bench_function("decode", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(&encoded)).unwrap());
         });
     });
 
     group.finish();
 }
 
-fn bench_ulid_base32<ID, G, T, R>(
-    c: &mut Criterion,
-    group_name: &str,
-    generator_factory: impl Fn(T, R) -> G + Copy,
-    clock_factory: impl Fn() -> T + Copy,
-    rand_factory: impl Fn() -> R + Copy,
-) where
-    ID: Ulid + Base32Ext,
+fn bench_ulid_base32<ID>(c: &mut Criterion, group_name: &str)
+where
+    ID: Ulid + Base32UlidExt,
     ID::Ty: BeBytes,
-    G: UlidGenerator<ID, T, R>,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
 {
-    let clock = clock_factory();
-    let rand = rand_factory();
-    let generator = generator_factory(clock, rand);
-
-    let mut ids = Vec::with_capacity(TOTAL_IDS);
-    for _ in 0..TOTAL_IDS {
-        loop {
-            match generator.next_id() {
-                IdGenStatus::Ready { id } => {
-                    ids.push(id);
-                    break;
-                }
-                IdGenStatus::Pending { yield_for } => {
-                    std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap()));
-                }
-            }
-        }
-    }
-
-    let mut encoded = Vec::with_capacity(TOTAL_IDS);
-    for id in &ids {
-        let enc = id.encode();
-        encoded.push(enc);
-    }
+    let id = ID::from_components(ID::max_timestamp(), ID::max_random());
+    let encoded = id.encode();
+    let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
 
     let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(TOTAL_IDS as u64));
+    group.throughput(Throughput::Elements(1));
 
-    group.bench_function(format!("encode_to_buf/elems/{TOTAL_IDS}"), |b| {
-        b.iter_custom(|iters| {
-            let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
-            let start = Instant::now();
-
-            for _ in 0..iters {
-                for id in &ids {
-                    id.encode_to_buf(black_box(&mut buf));
-                    black_box(());
-                }
-            }
-
-            start.elapsed()
+    group.bench_function("encode/string", |b| {
+        b.iter(|| {
+            black_box(id.encode());
+        });
+    });
+    group.bench_function("encode/buffer", |b| {
+        b.iter(|| {
+            id.encode_to_buf(black_box(&mut buf));
+            black_box(());
+        });
+    });
+    group.bench_function("decode", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(&encoded)).unwrap());
         });
     });
 
-    group.bench_function(format!("encode_to_string/elems/{TOTAL_IDS}"), |b| {
-        b.iter_custom(|iters| {
-            let start = Instant::now();
+    group.finish();
+}
 
-            for _ in 0..iters {
-                for id in &ids {
-                    black_box(id.encode());
-                }
-            }
-
-            start.elapsed()
+fn bench_clock<ID, T>(c: &mut Criterion, group_name: &str, clock_factory: impl Fn() -> T)
+where
+    ID: Id,
+    ID::Ty: BeBytes,
+    T: TimeSource<ID::Ty>,
+{
+    let clock = clock_factory();
+    let mut group = c.benchmark_group(group_name);
+    group.bench_function("current_millis", |b| {
+        b.iter(|| {
+            black_box(clock.current_millis());
         });
     });
 
-    group.bench_function(format!("decode/elems/{TOTAL_IDS}"), |b| {
-        b.iter_custom(|iters| {
-            let start = Instant::now();
+    group.finish();
+}
 
-            for _ in 0..iters {
-                for enc in &encoded {
-                    black_box(ID::decode(black_box(enc)).unwrap());
-                }
-            }
-
-            start.elapsed()
+fn bench_rand<ID, R>(c: &mut Criterion, group_name: &str, rand_factory: impl Fn() -> R)
+where
+    ID: Id,
+    ID::Ty: BeBytes,
+    R: RandSource<ID::Ty>,
+{
+    let rand = rand_factory();
+    let mut group = c.benchmark_group(group_name);
+    group.bench_function("rand", |b| {
+        b.iter(|| {
+            black_box(rand.rand());
         });
     });
 
@@ -846,23 +777,27 @@ fn benchmark_mono_smol_ulid_lock(c: &mut Criterion) {
 
 // Base32 encode/decode
 fn bench_base32(c: &mut Criterion) {
-    bench_snowflake_base32::<SnowflakeTwitterId, _, _>(
-        c,
-        "base32/snow",
-        BasicSnowflakeGenerator::new,
-        MonotonicClock::default,
-    );
-    bench_ulid_base32::<ULID, _, _, _>(
-        c,
-        "base32/ulid",
-        BasicUlidGenerator::new,
-        MonotonicClock::default,
-        ThreadRandom::default,
-    );
+    bench_snow_base32::<SnowflakeMastodonId>(c, "base32/snow");
+    bench_ulid_base32::<ULID>(c, "base32/ulid");
+}
+
+fn bench_mono_clock(c: &mut Criterion) {
+    bench_clock::<SnowflakeTwitterId, _>(c, "mono/clock/u64", MonotonicClock::default);
+    bench_clock::<ULID, _>(c, "mono/clock/u128", MonotonicClock::default);
+}
+fn bench_thread_rand(c: &mut Criterion) {
+    bench_rand::<SnowflakeTwitterId, _>(c, "thread/rng/u64", ThreadRandom::default);
+    bench_rand::<ULID, _>(c, "thread/rng/u128", ThreadRandom::default);
 }
 
 criterion_group!(
     benches,
+    // --- Base32 ---
+    bench_base32,
+    // --- Clock ---
+    bench_mono_clock,
+    // --- RNG ---
+    bench_thread_rand,
     // --- Snowflake ---
     //
     // Mock clock
@@ -896,7 +831,5 @@ criterion_group!(
     // Async multi worker, multi generator
     benchmark_mono_tokio_ulid_lock,
     benchmark_mono_smol_ulid_lock,
-    // --- Base32 ---
-    bench_base32,
 );
 criterion_main!(benches);
