@@ -72,14 +72,15 @@ where
     /// Decodes a Base32-encoded string back into an ID.
     ///
     /// ⚠️ **Note:**  
-    /// This method structurally decodes any 26-character Crockford base32
-    /// string into a 128-bit integer, regardless of whether the input is a
-    /// canonical ULID.  
+    /// This method structurally decodes a Crockford base32 string into an
+    /// integer representing a ULID, regardless of whether the input is a
+    /// canonical ULID.
     ///
-    /// - If the input string is longer than the ULID spec's maximum
-    ///   ("7ZZZZZZZZZZZZZZZZZZZZZZZZZ"), the excess bits are automatically
-    ///   truncated (i.e., the top 2 bits of the decoded value are discarded),
-    ///   so no overflow or error occurs.
+    /// - If the input string's Crockford encoding is larger than
+    ///   the ULID spec's maximum (i.e. "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" for 128-bit
+    ///   integers), the excess bits are automatically truncated (i.e., the top
+    ///   2 bits of the decoded value are discarded), so no overflow or error
+    ///   occurs.
     /// - As a result, base32 strings that are technically invalid per the ULID
     ///   spec (i.e., lexicographically greater than the max ULID string) will
     ///   still successfully decode, with the truncated value.
@@ -87,13 +88,12 @@ where
     ///   bits in your layout), decoding a string with excess bits may set these
     ///   reserved bits to 1, causing `.is_valid()` to fail, and decode to
     ///   return an error.
-    /// - For vanilla IDs, decoding will always succeed (truncating as needed),
-    ///   but for layouts with reserved bits, validation may fail.
     ///
     /// # Errors
     ///
     /// Returns an error if the input string:
-    /// - is not the expected fixed length
+    /// - is not the expected fixed length of the backing integer representation
+    ///   (i.e. 26 chars for u128)
     /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
     ///   alphabet)
     /// - sets reserved bits that make the decoded value invalid for this ID
@@ -106,11 +106,10 @@ where
     /// {
     ///     use ferroid::{Base32UlidExt, Ulid, ULID};
     ///     // Crockford base32 encodes in 5-bit chunks, so encoding a 128-bit ULID
-    ///     // requires 26 characters (26 x 5 = 130 bits). The two highest (leftmost)
+    ///     // requires 26 characters (26 * 5 = 130 bits). The two highest (leftmost)
     ///     // bits from base32 encoding are always truncated (ignored) for performance.
     ///     // This means *any* 26-character base32 string decodes structurally to a ULID,
     ///     // regardless of whether it would be considered "out of range" by the ULID spec.
-    ///     // No overflow or error occurs for "too high" strings—only the lower 128 bits are used.
     ///
     ///     // For example, both "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" and "ZZZZZZZZZZZZZZZZZZZZZZZZZZ" are valid:
     ///     // '7' = 0b00111 (top bits 00, rest 111...)

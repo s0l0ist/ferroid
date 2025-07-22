@@ -70,14 +70,14 @@ where
     /// Decodes a Base32-encoded string back into an ID.
     ///
     /// ⚠️ **Note:**  
-    /// This method structurally decodes any 13-character Crockford base32
-    /// string into a 64-bit integer, regardless of whether the input is a
-    /// canonical Snowflake ID.  
+    /// This method structurally decodes a Crockford base32 string into an
+    /// integer representing a Snowflake ID, regardless of whether the input is
+    /// a canonical Snowflake ID.
     ///
-    /// - If the input string is longer than the Snowflake's maximum
-    ///   ("FZZZZZZZZZZZZ"), the excess bit is automatically truncated (i.e.,
-    ///   the top 1 bit of the decoded value is discarded), so no overflow or
-    ///   error occurs.
+    /// - If the input string's Crockford encoding is larger than the
+    ///   Snowflake's maximum (i.e. "FZZZZZZZZZZZZ" for 64-bit integers), the
+    ///   excess bit is automatically truncated (i.e., the top 1 bit of the
+    ///   decoded value is discarded), so no overflow or error occurs.
     /// - As a result, base32 strings that are technically invalid (i.e.,
     ///   lexicographically greater than the max Snowflake string) will still
     ///   successfully decode, with the truncated value.
@@ -85,13 +85,12 @@ where
     ///   bits in your layout), decoding a string with excess bits may set these
     ///   reserved bits to 1, causing `.is_valid()` to fail, and decode to
     ///   return an error.
-    /// - For vanilla IDs, decoding will always succeed (truncating as needed),
-    ///   but for layouts with reserved bits, validation may fail.
     ///
     /// # Errors
     ///
     /// Returns an error if the input string:
-    /// - is not the expected fixed length
+    /// - is not the expected fixed length of the backing integer representation
+    ///   (i.e. 13 chars for u64, 26 chars for u128)
     /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
     ///   alphabet)
     /// - sets reserved bits that make the decoded value invalid for this ID
@@ -105,10 +104,9 @@ where
     ///     use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId, Error, Base32Error, Id};
     ///
     ///     // Crockford base32 encodes in 5-bit chunks, so encoding a u64 (64 bits)
-    ///     // requires 13 characters (13 x 5 = 65 bits). The highest (leftmost) bit
+    ///     // requires 13 characters (13 * 5 = 65 bits). The highest (leftmost) bit
     ///     // in the base32 encoding is always truncated (ignored) for performance,
-    ///     // so *any* 13-char base32 string decodes to a u64. Only the lower 64
-    ///     // bits are used; there is no explicit error for "overflow".
+    ///     // so *any* 13-char base32 string decodes to a u64.
     ///
     ///     // Twitter Snowflake IDs reserve the highest bit (the 64th bit).
     ///     // As long as this reserved bit is zero, the decode will succeed.

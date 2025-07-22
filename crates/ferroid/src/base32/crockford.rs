@@ -27,12 +27,13 @@ const LOOKUP: [u8; 256] = {
     lut
 };
 
-/// Encodes a byte slice into base32, writing output to `buf_slice`.
+/// Encodes a byte slice into Crockford base32, writing output to `buf_slice`.
 ///
 /// # Safety
-/// This function assumes `buf_slice` is sized exactly for the base32 output
-/// (typically ensured at compile time for encoding primitive types). No
-/// undefined behavior will occur if this contract is upheld.
+/// This function assumes `buf_slice` is sized exactly to fit the base32 output.
+/// This is typically guaranteed at compile time when encoding primitive types.
+/// No undefined behavior will occur if this contract is upheld - the caller
+/// must ensure the buffer is correctly sized.
 ///
 /// The internal accumulator (`acc`) is a `u16` and never overflows: bits are
 /// always drained in 5-bit groups as soon as possible, so `acc` never exceeds
@@ -62,11 +63,11 @@ pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 }
 
 /// Decodes a fixed-length Crockford base32 string into the given primitive
-/// integer type.
+/// integer type `T`.
 ///
 /// Returns an error if the input contains invalid base32 characters. The
-/// accumulator never overflows as long as `encoded` fits within the bit width
-/// of `T` which the callee must uphold.
+/// accumulator never overflows as long as the decoded value fits within the bit
+/// width of `T` - a condition the caller must ensure.
 #[inline(always)]
 pub(crate) fn decode_base32<T>(encoded: &str) -> Result<T>
 where
