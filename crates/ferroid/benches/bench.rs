@@ -3,11 +3,11 @@ use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
+    AtomicSnowflakeGenerator, Backoff, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
     BasicUlidGenerator, BeBytes, Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
     MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
     SnowflakeGeneratorAsyncExt, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource,
-    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt,
+    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, ulid_mono,
 };
 use futures::future::try_join_all;
 use std::{thread::scope, time::Instant};
@@ -579,6 +579,50 @@ where
     group.finish();
 }
 
+fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str, backoff: Backoff) {
+    let mut group = c.benchmark_group(group_name);
+    group.throughput(Throughput::Elements(1));
+    group.bench_function("spin", |b| {
+        b.iter(|| {
+            black_box(ulid_mono(backoff));
+        });
+    });
+
+    group.finish();
+}
+
+pub fn bench_thread_local_ulid_threaded(c: &mut Criterion, group_name: &str, backoff: Backoff) {
+    let mut group = c.benchmark_group(group_name);
+
+    for &thread_count in &[1, 2, 4, 8, 16] {
+        let total_ids = TOTAL_IDS * thread_count;
+        group.throughput(Throughput::Elements(total_ids as u64));
+
+        group.bench_function(format!("elems/{total_ids}/threads/{thread_count}"), |b| {
+            b.iter_custom(|iters| {
+                let start = Instant::now();
+
+                for _ in 0..iters {
+                    scope(|s| {
+                        for _ in 0..thread_count {
+                            s.spawn(|| {
+                                for _ in 0..TOTAL_IDS {
+                                    let id = ulid_mono(backoff);
+                                    black_box(id);
+                                }
+                            });
+                        }
+                    });
+                }
+
+                start.elapsed()
+            });
+        });
+    }
+
+    group.finish();
+}
+
 // --- MOCK CLOCK (fixed, non-advancing time) ---
 
 /// Single-threaded benchmark for `BasicSnowflakeGenerator` with a fixed clock.
@@ -790,6 +834,11 @@ fn bench_thread_rand(c: &mut Criterion) {
     bench_rand::<ULID, _>(c, "thread/rng/u128", ThreadRandom::default);
 }
 
+fn bench_thread_local(c: &mut Criterion) {
+    bench_thread_local_ulid(c, "thread_local/ulid", Backoff::Spin);
+    bench_thread_local_ulid_threaded(c, "thread_local/ulid", Backoff::Spin);
+}
+
 criterion_group!(
     benches,
     // --- Base32 ---
@@ -798,6 +847,8 @@ criterion_group!(
     bench_mono_clock,
     // --- RNG ---
     bench_thread_rand,
+    // --- Thread locals ---
+    bench_thread_local,
     // --- Snowflake ---
     //
     // Mock clock
