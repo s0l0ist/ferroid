@@ -3,7 +3,7 @@ use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, Backoff, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
+    AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
     BasicUlidGenerator, BeBytes, Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
     MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
     SnowflakeGeneratorAsyncExt, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource,
@@ -922,11 +922,11 @@ fn bench_thread_local(c: &mut Criterion) {
 criterion_group!(
     benches,
     // --- Base32 ---
-    // bench_base32,
-    // // --- Clock ---
-    // bench_mono_clock,
-    // // --- RNG ---
-    // bench_thread_rand,
+    bench_base32,
+    // --- Clock ---
+    bench_mono_clock,
+    // --- RNG ---
+    bench_thread_rand,
     // --- Thread locals ---
     bench_thread_local,
     // --- Snowflake ---
