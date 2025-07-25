@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 const fn base32_size(bytes: usize) -> usize {
     (bytes * 8).div_ceil(5)
 }
@@ -6,8 +8,26 @@ const fn base32_size(bytes: usize) -> usize {
 pub trait BeBytes: Sized {
     const SIZE: usize;
     const BASE32_SIZE: usize;
-    type ByteArray: AsRef<[u8]> + AsMut<[u8]> + Default + Copy;
-    type Base32Array: AsRef<[u8]> + AsMut<[u8]> + Default + Copy;
+    type ByteArray: AsRef<[u8]>
+        + AsMut<[u8]>
+        + core::fmt::Debug
+        + Default
+        + Copy
+        + PartialEq
+        + Eq
+        + PartialOrd
+        + Ord
+        + Hash;
+    type Base32Array: AsRef<[u8]>
+        + AsMut<[u8]>
+        + core::fmt::Debug
+        + Default
+        + Copy
+        + PartialEq
+        + Eq
+        + PartialOrd
+        + Ord
+        + Hash;
 
     fn to_be_bytes(self) -> Self::ByteArray;
     fn from_be_bytes(bytes: Self::ByteArray) -> Self;

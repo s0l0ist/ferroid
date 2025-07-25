@@ -351,7 +351,7 @@ The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$ milli
 
 ### Serialize as padded string
 
-Use `.to_padded_string()` or `.encode()` for sortable string representations:
+Use `.encode()` or `.encode_to_buf()` for sortable string representations:
 
 ```rust
 #[cfg(all(feature = "base32", feature = "snowflake"))]
@@ -360,7 +360,6 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
 
     let id = SnowflakeTwitterId::from(123456, 1, 42);
     assert_eq!(format!("default: {id}"), "default: 517811998762");
-    assert_eq!(format!("padded: {}", id.to_padded_string()), "padded: 00000000517811998762");
 
     let encoded = id.encode();
     assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
@@ -375,7 +374,6 @@ Use `.to_padded_string()` or `.encode()` for sortable string representations:
 
     let id = ULID::from(123456, 42);
     assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");
-    assert_eq!(format!("padded: {}", id.to_padded_string()), "padded: 000000000149249145986343659392525664298");
 
     let encoded = id.encode();
     assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");

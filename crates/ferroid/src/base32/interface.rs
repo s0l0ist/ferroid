@@ -17,20 +17,23 @@ use crate::{Base32Error, BeBytes, Error, Id, Result};
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub trait Base32Ext: Id
+pub(crate) trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
-    /// Encodes this ID into a [`String`] using Crockford Base32.
+    /// Allocates a default, zero-initialized buffer for Base32 encoding.
     ///
-    /// The resulting string is guaranteed to be ASCII and lexicographically
-    /// sortable.
-    fn enc(&self) -> String {
-        let mut buf = <Self::Ty as BeBytes>::Base32Array::default();
-        self.enc_to_buf(&mut buf);
-
-        // SAFETY: Crockford Base32 output is always valid ASCII
-        unsafe { String::from_utf8_unchecked(buf.as_ref().to_vec()) }
+    /// This is a convenience method that returns a [`BeBytes::Base32Array`]
+    /// suitable for use with [`Base32Ext::enc_to_buf`]. The returned buffer is
+    /// stack-allocated, has a fixed size known at compile time, and is
+    /// guaranteed to match the Crockford Base32 output size for the backing
+    /// integer type.
+    ///
+    /// See also: [`Base32Ext::enc_to_buf`] for usage.
+    ///
+    #[inline]
+    fn inner_buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
+        <<Self as Id>::Ty as BeBytes>::Base32Array::default()
     }
     /// Encodes this ID into the provided output buffer without heap allocation.
     ///
@@ -39,7 +42,8 @@ where
     /// which is guaranteed at compile time when using [`BeBytes::Base32Array`].
     ///
     /// See also: [`Base32Ext::enc`] for an allocation-producing version.
-    fn enc_to_buf(&self, buf: &mut <<Self as Id>::Ty as BeBytes>::Base32Array) {
+    #[inline]
+    fn inner_encode_to_buf(&self, buf: &mut <<Self as Id>::Ty as BeBytes>::Base32Array) {
         super::encode_base32(self.to_raw().to_be_bytes().as_ref(), buf.as_mut());
     }
     /// Decodes a Base32-encoded string back into an ID.
@@ -58,11 +62,15 @@ where
     /// - is not the expected fixed length
     /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
     ///   alphabet)
-    fn dec(s: &str) -> Result<Self> {
-        if s.len() != Self::Ty::BASE32_SIZE {
-            return Err(Error::Base32Error(Base32Error::DecodeInvalidLen(s.len())));
+    #[inline]
+    fn inner_decode(s: impl AsRef<str>) -> Result<Self> {
+        let s_ref = s.as_ref();
+        if s_ref.len() != Self::Ty::BASE32_SIZE {
+            return Err(Error::Base32Error(Base32Error::DecodeInvalidLen(
+                s_ref.len(),
+            )));
         }
-        let raw = super::decode_base32(s)?;
+        let raw = super::decode_base32(s_ref)?;
         Ok(Self::from_raw(raw))
     }
 }
