@@ -59,13 +59,6 @@ impl MonotonicClock {
     ///
     /// - `epoch`: The origin timestamp, as a [`Duration`] since 1970-01-01 UTC.
     ///
-    /// # Panics
-    ///
-    /// Panics if:
-    ///
-    /// - The current system time is earlier than the given epoch
-    /// - The internal ticker thread has already been initialized
-    ///
     /// # Example
     ///
     /// ```
@@ -74,10 +67,10 @@ impl MonotonicClock {
     /// let now = std::time::SystemTime::now()
     ///     .duration_since(std::time::UNIX_EPOCH)
     ///     .unwrap();
-    ///
     /// // Or use a default epoch
     /// // use ferroid::TWITTER_EPOCH,
     /// // let now = TWITTER_EPOCH;
+    ///
     /// let clock = MonotonicClock::with_epoch(now);
     ///
     /// std::thread::sleep(Duration::from_millis(5));
@@ -86,26 +79,22 @@ impl MonotonicClock {
     ///
     /// // On most systems, this will report a value near 5 ms. However, due to
     /// // small differences in timer alignment and sleep accuracy, the counter
-    /// // may be slightly behind. It's common to observe values like 4–6 ms
-    /// // after sleeping for 5 ms. The value will never go backward and is
-    /// // guaranteed to increase monotonically.
-    /// // assert!(ts >= 5);
+    /// // may be slightly behind or ahead on the first read. It's common to
+    /// // observe values like 4–6 ms after sleeping for 5 ms. The value will
+    /// // never go backward and is guaranteed to increase monotonically.
+    /// // assert!(ts >= ~5);
     /// ```
     ///
-    /// This allows you to control the timestamp layout (e.g., Snowflake-style
-    /// ID encoding) by anchoring all generated times to a custom epoch of your
-    /// choosing.
+    /// This allows you to control the timestamp layout by anchoring all
+    /// generated times to a custom epoch of your choosing.
     ///
     /// [`current_millis`]: TimeSource::current_millis
     pub fn with_epoch(epoch: Duration) -> Self {
         let start = Instant::now();
         let system_now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("System clock before UNIX_EPOCH");
-        let offset = system_now
-            .checked_sub(epoch)
-            .expect("System clock before custom epoch")
-            .as_millis() as u64;
+            .unwrap_or(core::time::Duration::ZERO);
+        let offset = system_now.saturating_sub(epoch).as_millis() as u64;
 
         let inner = Arc::new(SharedTickerInner {
             current: AtomicU64::new(0),

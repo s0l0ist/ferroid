@@ -179,6 +179,52 @@ macro_rules! define_ulid {
             pub const fn from_raw(raw: $int) -> Self {
                 Self { id: raw }
             }
+
+            /// Generates a ULID from the given timestamp in milliseconds since
+            /// UNIX epoch, using the built-in [`ThreadRandom`] random
+            /// generator.
+            ///
+            /// [`ThreadRandom`]: crate::ThreadRandom
+            pub fn from_timestamp(timestamp: <Self as $crate::Id>::Ty) -> Self {
+                Self::from_timestamp_and_rand(timestamp, &$crate::ThreadRandom)
+            }
+
+            /// Generates a ULID from the given timestamp in milliseconds since
+            /// UNIX epoch and a custom random number generator implementing
+            /// [`RandSource`]
+            ///
+            /// [`RandSource`]: crate::RandSource
+            pub fn from_timestamp_and_rand<R>(timestamp:  <Self as $crate::Id>::Ty, rng: &R) -> Self
+            where
+                R: $crate::RandSource<<Self as $crate::Id>::Ty>,
+            {
+                let random = rng.rand();
+                Self::from(timestamp, random)
+            }
+
+            /// Generates a ULID from the given `SystemTime`, using the built-in
+            /// [`ThreadRandom`] random generator.
+            ///
+            /// [`ThreadRandom`]: crate::ThreadRandom
+            pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
+                Self::from_datetime_and_rand(datetime, &$crate::ThreadRandom)
+            }
+
+            /// Generates a ULID from the given `SystemTime` and a custom random
+            /// number generator implementing [`RandSource`]
+            ///
+            /// [`RandSource`]: crate::RandSource
+            pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
+            where
+                R: $crate::RandSource<<Self as $crate::Id>::Ty>,
+            {
+                let timestamp = datetime
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap_or(core::time::Duration::ZERO)
+                    .as_millis();
+                let random = rng.rand();
+                Self::from(timestamp, random)
+            }
         }
 
         impl $crate::Id for $name {
@@ -290,6 +336,14 @@ define_ulid!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::RandSource;
+
+    struct MockRand;
+    impl RandSource<u128> for MockRand {
+        fn rand(&self) -> u128 {
+            42
+        }
+    }
 
     #[test]
     fn ulid_validity() {
@@ -320,5 +374,42 @@ mod tests {
         let id = ULID::from_components(1, 1);
         assert_eq!(id.timestamp(), 1);
         assert_eq!(id.random(), 1);
+    }
+
+    #[test]
+    fn ulid_from_timestamp() {
+        let id = ULID::from_timestamp(0);
+        assert_eq!(id.timestamp(), 0);
+
+        let id = ULID::from_timestamp(ULID::max_timestamp());
+        assert_eq!(id.timestamp(), ULID::max_timestamp());
+    }
+
+    #[test]
+    fn ulid_from_timestamp_and_rand() {
+        let id = ULID::from_timestamp_and_rand(42, &MockRand);
+        assert_eq!(id.timestamp(), 42);
+        assert_eq!(id.random(), 42);
+    }
+
+    #[test]
+    fn ulid_from_datetime() {
+        let id = ULID::from_datetime(std::time::SystemTime::UNIX_EPOCH);
+        assert_eq!(id.timestamp(), 0);
+
+        let id = ULID::from_datetime(
+            std::time::SystemTime::UNIX_EPOCH + core::time::Duration::from_millis(1000),
+        );
+        assert_eq!(id.timestamp(), 1000);
+    }
+
+    #[test]
+    fn ulid_from_datetime_and_rand() {
+        let id = ULID::from_datetime_and_rand(
+            std::time::SystemTime::UNIX_EPOCH + core::time::Duration::from_millis(42),
+            &MockRand,
+        );
+        assert_eq!(id.timestamp(), 42);
+        assert_eq!(id.random(), 42);
     }
 }
