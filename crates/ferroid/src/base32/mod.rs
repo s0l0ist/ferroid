@@ -11,7 +11,6 @@ mod ulid;
 pub use be_bytes::*;
 use crockford::*;
 pub use error::*;
-pub use interface::*;
 #[cfg(feature = "snowflake")]
 pub use snowflake::*;
 #[cfg(feature = "ulid")]

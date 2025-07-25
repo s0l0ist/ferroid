@@ -487,26 +487,61 @@ where
         ID::max_machine_id(),
         ID::max_sequence(),
     );
-    let encoded = id.encode();
-    let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
+    let mut buf = ID::buf();
 
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
 
-    group.bench_function("encode/string", |b| {
+    group.bench_function("encode/to_string", |b| {
         b.iter(|| {
-            black_box(id.encode());
+            black_box(id.encode().to_string());
         });
     });
-    group.bench_function("encode/buffer", |b| {
+    group.bench_function("encode/as_str", |b| {
         b.iter(|| {
-            id.encode_to_buf(black_box(&mut buf));
-            black_box(());
+            black_box(id.encode().as_str());
         });
     });
-    group.bench_function("decode", |b| {
+    group.bench_function("encode/format", |b| {
         b.iter(|| {
-            black_box(ID::decode(black_box(&encoded)).unwrap());
+            black_box(format!("{}", id.encode()));
+        });
+    });
+    group.bench_function("encode/buffer/to_string", |b| {
+        b.iter(|| {
+            let b = id.encode_to_buf(black_box(&mut buf));
+            black_box(b.to_string());
+        });
+    });
+    group.bench_function("encode/buffer/as_str", |b| {
+        b.iter(|| {
+            let b = id.encode_to_buf(black_box(&mut buf));
+            black_box(b.as_str());
+        });
+    });
+    group.bench_function("encode/buffer/format", |b| {
+        b.iter(|| {
+            let b = id.encode_to_buf(black_box(&mut buf));
+            black_box(format!("{}", b));
+        });
+    });
+
+    let encoded = id.encode();
+    let encoded_str = encoded.as_str();
+    let encoded_string = encoded.to_string();
+    group.bench_function("decode/as_ref", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(encoded.as_ref())).unwrap());
+        });
+    });
+    group.bench_function("decode/str", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(encoded_str)).unwrap());
+        });
+    });
+    group.bench_function("decode/string", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(&encoded_string)).unwrap());
         });
     });
 
@@ -519,26 +554,61 @@ where
     ID::Ty: BeBytes,
 {
     let id = ID::from_components(ID::max_timestamp(), ID::max_random());
-    let encoded = id.encode();
-    let mut buf = <ID::Ty as BeBytes>::Base32Array::default();
+    let mut buf = ID::buf();
 
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
 
-    group.bench_function("encode/string", |b| {
+    group.bench_function("encode/to_string", |b| {
         b.iter(|| {
-            black_box(id.encode());
+            black_box(id.encode().to_string());
         });
     });
-    group.bench_function("encode/buffer", |b| {
+    group.bench_function("encode/as_str", |b| {
         b.iter(|| {
-            id.encode_to_buf(black_box(&mut buf));
-            black_box(());
+            black_box(id.encode().as_str());
         });
     });
-    group.bench_function("decode", |b| {
+    group.bench_function("encode/format", |b| {
         b.iter(|| {
-            black_box(ID::decode(black_box(&encoded)).unwrap());
+            black_box(format!("{}", id.encode()));
+        });
+    });
+    group.bench_function("encode/buffer/to_string", |b| {
+        b.iter(|| {
+            let b = id.encode_to_buf(black_box(&mut buf));
+            black_box(b.to_string());
+        });
+    });
+    group.bench_function("encode/buffer/as_str", |b| {
+        b.iter(|| {
+            let b = id.encode_to_buf(black_box(&mut buf));
+            black_box(b.as_str());
+        });
+    });
+    group.bench_function("encode/buffer/format", |b| {
+        b.iter(|| {
+            let b = id.encode_to_buf(black_box(&mut buf));
+            black_box(format!("{}", b));
+        });
+    });
+
+    let encoded = id.encode();
+    let encoded_str = encoded.as_str();
+    let encoded_string = encoded.to_string();
+    group.bench_function("decode/as_ref", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(encoded.as_ref())).unwrap());
+        });
+    });
+    group.bench_function("decode/str", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(encoded_str)).unwrap());
+        });
+    });
+    group.bench_function("decode/string", |b| {
+        b.iter(|| {
+            black_box(ID::decode(black_box(&encoded_string)).unwrap());
         });
     });
 

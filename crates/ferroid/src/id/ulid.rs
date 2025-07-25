@@ -54,8 +54,6 @@ pub trait Ulid:
     /// Returns a normalized version of the ID with any invalid or reserved bits
     /// cleared. This guarantees a valid, canonical representation.
     fn into_valid(self) -> Self;
-
-    fn to_padded_string(&self) -> String;
 }
 
 /// # Field Ordering Semantics
@@ -277,17 +275,6 @@ macro_rules! define_ulid {
                 let raw = self.to_raw() & Self::valid_mask();
                 Self::from_raw(raw)
             }
-
-            fn to_padded_string(&self) -> String {
-                let max = Self::Ty::MAX;
-                let mut n = max;
-                let mut digits = 1;
-                while n >= 10 {
-                    n /= 10;
-                    digits += 1;
-                }
-                format!("{:0width$}", self.to_raw(), width = digits)
-            }
         }
 
         impl core::fmt::Display for $name {
@@ -298,13 +285,10 @@ macro_rules! define_ulid {
 
         impl core::fmt::Debug for $name {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                use $crate::Ulid;
-
                 let full = core::any::type_name::<Self>();
                 let name = full.rsplit("::").next().unwrap_or(full);
                 let mut dbg = f.debug_struct(name);
                 dbg.field("id", &format_args!("{:} (0x{:x})", self.to_raw(), self.to_raw()));
-                dbg.field("padded", &self.to_padded_string());
                 dbg.field("timestamp", &format_args!("{:} (0x{:x})", self.timestamp(), self.timestamp()));
                 dbg.field("random", &format_args!("{:} (0x{:x})", self.random(), self.random()));
                 dbg.finish()
