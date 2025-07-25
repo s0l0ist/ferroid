@@ -7,7 +7,6 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[non_exhaustive]
 pub enum Error {
     LockPoisoned,
-    FailedToU64,
     #[cfg(feature = "base32")]
     Base32Error(crate::Base32Error),
 }

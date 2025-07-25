@@ -61,11 +61,7 @@ fn ulid_mono(strategy: Backoff) -> ULID {
         Backoff::Spin => core::hint::spin_loop(),
         Backoff::Yield => std::thread::yield_now(),
         Backoff::Sleep => {
-            std::thread::sleep(core::time::Duration::from_millis(
-                yield_for
-                    .to_u64()
-                    .expect("ULID timestamp should always fit in u64 (48 bits)"),
-            ));
+            std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
         }
     })
 }

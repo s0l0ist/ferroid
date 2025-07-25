@@ -123,7 +123,7 @@ where
         match this.generator.try_next_id()? {
             IdGenStatus::Ready { id } => Poll::Ready(Ok(id)),
             IdGenStatus::Pending { yield_for } => {
-                let sleep_fut = S::sleep_for(Duration::from_millis(yield_for.to_u64()?));
+                let sleep_fut = S::sleep_for(Duration::from_millis(yield_for.to_u64()));
                 this.sleep.as_mut().set(Some(sleep_fut));
                 cx.waker().wake_by_ref();
                 Poll::Pending

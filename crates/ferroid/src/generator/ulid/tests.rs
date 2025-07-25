@@ -114,12 +114,12 @@ where
     let id2 = generator.next_id().unwrap_ready();
     let id3 = generator.next_id().unwrap_ready();
 
-    assert_eq!(id1.timestamp().to_u64().unwrap(), 42);
-    assert_eq!(id2.timestamp().to_u64().unwrap(), 42);
-    assert_eq!(id3.timestamp().to_u64().unwrap(), 42);
-    assert_eq!(id1.random().to_u64().unwrap(), 42);
-    assert_eq!(id2.random().to_u64().unwrap(), 42 + 1);
-    assert_eq!(id3.random().to_u64().unwrap(), 42 + 2);
+    assert_eq!(id1.timestamp().to_u64(), 42);
+    assert_eq!(id2.timestamp().to_u64(), 42);
+    assert_eq!(id3.timestamp().to_u64(), 42);
+    assert_eq!(id1.random().to_u64(), 42);
+    assert_eq!(id2.random().to_u64(), 42 + 1);
+    assert_eq!(id3.random().to_u64(), 42 + 2);
     assert!(id1 < id2 && id2 < id3);
 }
 
@@ -142,7 +142,7 @@ where
     R: RandSource<ID::Ty>,
 {
     let id = generator.next_id().unwrap_ready();
-    assert_eq!(id.timestamp().to_u64().unwrap(), 42);
+    assert_eq!(id.timestamp().to_u64(), 42);
 
     let yield_for = generator.next_id().unwrap_pending();
     assert_eq!(yield_for, ID::ONE);
@@ -150,7 +150,7 @@ where
     shared_time.clock.index.set(1);
 
     let id = generator.next_id().unwrap_ready();
-    assert_eq!(id.timestamp().to_u64().unwrap(), 43);
+    assert_eq!(id.timestamp().to_u64(), 43);
 }
 
 fn run_generator_monotonic<G, ID, T, R>(generator: G)

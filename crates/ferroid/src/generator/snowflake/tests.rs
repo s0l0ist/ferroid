@@ -85,12 +85,12 @@ where
     let id2 = generator.next_id().unwrap_ready();
     let id3 = generator.next_id().unwrap_ready();
 
-    assert_eq!(id1.timestamp().to_u64().unwrap(), 42);
-    assert_eq!(id2.timestamp().to_u64().unwrap(), 42);
-    assert_eq!(id3.timestamp().to_u64().unwrap(), 42);
-    assert_eq!(id1.sequence().to_u64().unwrap(), 0);
-    assert_eq!(id2.sequence().to_u64().unwrap(), 1);
-    assert_eq!(id3.sequence().to_u64().unwrap(), 2);
+    assert_eq!(id1.timestamp().to_u64(), 42);
+    assert_eq!(id2.timestamp().to_u64(), 42);
+    assert_eq!(id3.timestamp().to_u64(), 42);
+    assert_eq!(id1.sequence().to_u64(), 0);
+    assert_eq!(id2.sequence().to_u64(), 1);
+    assert_eq!(id3.sequence().to_u64(), 2);
     assert!(id1 < id2 && id2 < id3);
 }
 
@@ -110,10 +110,10 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
-    for i in 0..=ID::max_sequence().to_u64().unwrap() {
+    for i in 0..=ID::max_sequence().to_u64() {
         let id = generator.next_id().unwrap_ready();
-        assert_eq!(id.sequence().to_u64().unwrap(), i);
-        assert_eq!(id.timestamp().to_u64().unwrap(), 42);
+        assert_eq!(id.sequence().to_u64(), i);
+        assert_eq!(id.timestamp().to_u64(), 42);
     }
 
     let yield_for = generator.next_id().unwrap_pending();
@@ -122,8 +122,8 @@ where
     shared_time.clock.index.set(1);
 
     let id = generator.next_id().unwrap_ready();
-    assert_eq!(id.timestamp().to_u64().unwrap(), 43);
-    assert_eq!(id.sequence().to_u64().unwrap(), 0);
+    assert_eq!(id.timestamp().to_u64(), 43);
+    assert_eq!(id.sequence().to_u64(), 0);
 }
 
 fn run_generator_monotonic<G, ID, T>(generator: G)

@@ -148,13 +148,12 @@ fn bench_generator_threaded<ID, G, T>(
                                             }
                                             IdGenStatus::Pending { yield_for } => {
                                                 std::thread::sleep(Duration::from_millis(
-                                                    yield_for.to_u64()?,
+                                                    yield_for.to_u64(),
                                                 ));
                                             }
                                         }
                                     }
                                 }
-                                Ok::<(), Error>(())
                             });
                         }
                     })
@@ -349,13 +348,12 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                                             }
                                             IdGenStatus::Pending { yield_for } => {
                                                 std::thread::sleep(Duration::from_millis(
-                                                    yield_for.to_u64()?,
+                                                    yield_for.to_u64(),
                                                 ));
                                             }
                                         }
                                     }
                                 }
-                                Ok::<(), Error>(())
                             });
                         }
                     })
