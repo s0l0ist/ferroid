@@ -3,11 +3,11 @@ use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, Backoff, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
+    AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
     BasicUlidGenerator, BeBytes, Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
     MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
     SnowflakeGeneratorAsyncExt, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource,
-    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, ulid_mono,
+    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, UlidMono,
 };
 use futures::future::try_join_all;
 use std::{thread::scope, time::Instant};
@@ -148,13 +148,12 @@ fn bench_generator_threaded<ID, G, T>(
                                             }
                                             IdGenStatus::Pending { yield_for } => {
                                                 std::thread::sleep(Duration::from_millis(
-                                                    yield_for.to_u64()?,
+                                                    yield_for.to_u64(),
                                                 ));
                                             }
                                         }
                                     }
                                 }
-                                Ok::<(), Error>(())
                             });
                         }
                     })
@@ -349,13 +348,12 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                                             }
                                             IdGenStatus::Pending { yield_for } => {
                                                 std::thread::sleep(Duration::from_millis(
-                                                    yield_for.to_u64()?,
+                                                    yield_for.to_u64(),
                                                 ));
                                             }
                                         }
                                     }
                                 }
-                                Ok::<(), Error>(())
                             });
                         }
                     })
@@ -649,19 +647,30 @@ where
     group.finish();
 }
 
-fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str, backoff: Backoff) {
+fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str) {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
-    group.bench_function("spin", |b| {
+    group.bench_function("new", |b| {
         b.iter(|| {
-            black_box(ulid_mono(backoff));
+            black_box(UlidMono::new());
+        });
+    });
+    group.bench_function("from_timestamp", |b| {
+        b.iter(|| {
+            black_box(UlidMono::from_timestamp(42));
+        });
+    });
+    let now = std::time::SystemTime::now();
+    group.bench_function("from_datetime", |b| {
+        b.iter(|| {
+            black_box(UlidMono::from_datetime(now));
         });
     });
 
     group.finish();
 }
 
-pub fn bench_thread_local_ulid_threaded(c: &mut Criterion, group_name: &str, backoff: Backoff) {
+pub fn bench_thread_local_ulid_threaded(c: &mut Criterion, group_name: &str) {
     let mut group = c.benchmark_group(group_name);
 
     for &thread_count in &[1, 2, 4, 8, 16] {
@@ -677,8 +686,7 @@ pub fn bench_thread_local_ulid_threaded(c: &mut Criterion, group_name: &str, bac
                         for _ in 0..thread_count {
                             s.spawn(|| {
                                 for _ in 0..TOTAL_IDS {
-                                    let id = ulid_mono(backoff);
-                                    black_box(id);
+                                    black_box(UlidMono::new());
                                 }
                             });
                         }
@@ -905,8 +913,8 @@ fn bench_thread_rand(c: &mut Criterion) {
 }
 
 fn bench_thread_local(c: &mut Criterion) {
-    bench_thread_local_ulid(c, "thread_local/ulid", Backoff::Spin);
-    bench_thread_local_ulid_threaded(c, "thread_local/ulid", Backoff::Spin);
+    bench_thread_local_ulid(c, "thread_local/ulid");
+    bench_thread_local_ulid_threaded(c, "thread_local/ulid");
 }
 
 criterion_group!(
