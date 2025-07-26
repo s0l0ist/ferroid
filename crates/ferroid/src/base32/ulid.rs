@@ -180,11 +180,13 @@ where
 
     /// Returns a `&str` view of the base32 encoding.
     pub fn as_str(&self) -> &str {
+        // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
     pub fn to_string(&self) -> String {
+        // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 
@@ -255,11 +257,13 @@ where
 
     /// Returns a `&str` view of the base32 encoding.
     pub fn as_str(&self) -> &str {
+        // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
     pub fn to_string(&self) -> String {
+        // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 }
