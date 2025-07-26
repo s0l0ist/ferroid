@@ -30,14 +30,18 @@ const LOOKUP: [u8; 256] = {
 /// Encodes a byte slice into Crockford base32, writing output to `buf_slice`.
 ///
 /// # Safety
-/// This function assumes `buf_slice` is sized exactly to fit the base32 output.
-/// This is typically guaranteed at compile time when encoding primitive types.
-/// No undefined behavior will occur if this contract is upheld - the caller
-/// must ensure the buffer is correctly sized.
 ///
-/// The internal accumulator (`acc`) is a `u16` and never overflows: bits are
-/// always drained in 5-bit groups as soon as possible, so `acc` never exceeds
-/// 16 bits.
+/// - The caller must ensure that `buf_slice` is **exactly** the correct size to
+///   hold the base32-encoded output. This is guaranteed at compile time when
+///   encoding fixed-size inputs which we ensure in the caller when using
+///   `Base32Array`.
+///
+/// - The index into `ALPHABET` is masked with `0x1F` (31), ensuring it is
+///   always in the range 0..=31.
+///   - `ALPHABET` is a fixed-size array with exactly 32 elements, so all masked
+///     indices are valid.
+///   - Therefore, `ALPHABET[(acc >> bits) & 0x1F]` is guaranteed to be
+///     in-bounds.
 #[inline(always)]
 pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
     let input_bits = input.len() * 8;
@@ -53,21 +57,30 @@ pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
         bits += 8;
         while bits >= BITS_PER_CHAR {
             bits -= BITS_PER_CHAR;
+            // SAFETY: `out` is strictly less than `buf_slice.len()`, by
+            // caller's contract.
+            //
+            // SAFETY: `(acc >> bits) & mask` produces values in the range
+            // 0..=31.
             unsafe {
-                *buf_slice.get_unchecked_mut(out) = ALPHABET[((acc >> bits) & mask) as usize];
+                *buf_slice.get_unchecked_mut(out) =
+                    *ALPHABET.get_unchecked(((acc >> bits) & mask) as usize);
             }
             out += 1;
         }
     }
-    debug_assert!(bits == 0, "No leftover bits for encoding!");
 }
 
-/// Decodes a fixed-length Crockford base32 string into the given primitive
-/// integer type `T`.
+/// Decodes a fixed-length Crockford base32 string into the given integer type
+/// `T`.
 ///
-/// Returns an error if the input contains invalid base32 characters. The
-/// accumulator never overflows as long as the decoded value fits within the bit
-/// width of `T` - a condition the caller must ensure.
+/// Returns an error if the input contains invalid characters.
+///
+/// # Safety
+///
+/// - `encoded.bytes()` produces values in the range 0..=255.
+/// - `LOOKUP` is a fixed-size array of 256 elements, so `LOOKUP[b as usize]` is
+///   always in-bounds.
 #[inline(always)]
 pub(crate) fn decode_base32<T>(encoded: &str) -> Result<T>
 where
@@ -79,7 +92,8 @@ where
 {
     let mut acc = T::default();
     for b in encoded.bytes() {
-        let val = LOOKUP[b as usize];
+        // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
+        let val = unsafe { *LOOKUP.get_unchecked(b as usize) };
         if val == NO_VALUE {
             return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii(b)));
         }
