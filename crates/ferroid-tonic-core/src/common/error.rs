@@ -27,7 +27,7 @@ pub enum Error {
 
     /// Underlying Snowflake ID generation failed.
     #[error("ID error: {0:?}")]
-    IdGeneration(#[from] ferroid::Error),
+    IdGeneration(#[from] ferroid::Error<core::convert::Infallible>),
 
     /// The client aborted the request.
     #[error("Request cancelled by client")]

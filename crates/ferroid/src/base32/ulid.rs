@@ -136,12 +136,10 @@ where
     ///     assert!(ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
     /// }
     /// ```
-    fn decode(s: impl AsRef<str>) -> Result<Self> {
+    fn decode(s: impl AsRef<str>) -> Result<Self, Self> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow(
-                decoded.to_raw().to_be_bytes().as_ref().to_vec(),
-            )));
+            return Err(Error::Base32Error(Base32Error::DecodeOverflow(decoded)));
         }
         Ok(decoded)
     }
@@ -184,10 +182,12 @@ where
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 
     /// Consumes the builder and returns the raw buffer.
@@ -223,11 +223,13 @@ where
     }
 }
 
-impl<T: Base32UlidExt> PartialEq<String> for Base32UlidFormatter<T>
+#[cfg(feature = "alloc")]
+#[cfg_attr(not(feature = "alloc"), doc(hidden))]
+impl<T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatter<T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }
@@ -261,10 +263,12 @@ where
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 }
 
@@ -303,11 +307,13 @@ where
     }
 }
 
-impl<'a, T: Base32UlidExt> PartialEq<String> for Base32UlidFormatterRef<'a, T>
+#[cfg(feature = "alloc")]
+#[cfg_attr(not(feature = "alloc"), doc(hidden))]
+impl<'a, T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatterRef<'a, T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }

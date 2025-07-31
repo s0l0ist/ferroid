@@ -1,4 +1,5 @@
 use crate::SleepProvider;
+use alloc::boxed::Box;
 use core::pin::Pin;
 
 /// An implementation of [`SleepProvider`] using Tokio's timer.

@@ -203,7 +203,7 @@ fn bench_generator_async_tokio<ID, G, T>(
                                 let id = generator.try_next_id_async::<TokioSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), Error<core::convert::Infallible>>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -254,7 +254,7 @@ pub fn bench_generator_async_smol<ID, G, T>(
                                 let id = generator.try_next_id_async::<SmolSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), Error<core::convert::Infallible>>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -407,7 +407,7 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
                                 let id = generator.try_next_id_async::<TokioSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), Error<core::convert::Infallible>>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -462,7 +462,7 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
                                 let id = generator.try_next_id_async::<SmolSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), Error<core::convert::Infallible>>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();

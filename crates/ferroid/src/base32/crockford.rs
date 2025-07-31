@@ -82,7 +82,7 @@ pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 /// - `LOOKUP` is a fixed-size array of 256 elements, so `LOOKUP[b as usize]` is
 ///   always in-bounds.
 #[inline(always)]
-pub(crate) fn decode_base32<T>(encoded: &str) -> Result<T>
+pub(crate) fn decode_base32<T, E>(encoded: &str) -> Result<T, E>
 where
     T: BeBytes
         + Default
@@ -111,8 +111,8 @@ mod tests {
         let bytes = val.to_be_bytes();
         let mut buf = [0u8; 7]; // ceil(32/5) = 7 chars for u32
         encode_base32(&bytes, &mut buf);
-        let s = std::str::from_utf8(&buf).unwrap();
-        let decoded = decode_base32(s).unwrap();
+        let s = core::str::from_utf8(&buf).unwrap();
+        let decoded = decode_base32::<u32, ()>(s).unwrap();
         assert_eq!(val, decoded, "roundtrip for u32: input={val}, b32={s}");
     }
 
@@ -120,8 +120,8 @@ mod tests {
         let bytes = val.to_be_bytes();
         let mut buf = [0u8; 13]; // ceil(64/5) = 13 chars for u64
         encode_base32(&bytes, &mut buf);
-        let s = std::str::from_utf8(&buf).unwrap();
-        let decoded = decode_base32(s).unwrap();
+        let s = core::str::from_utf8(&buf).unwrap();
+        let decoded = decode_base32::<u64, ()>(s).unwrap();
         assert_eq!(val, decoded, "roundtrip for u64: input={val}, b32={s}");
     }
 
@@ -129,8 +129,8 @@ mod tests {
         let bytes = val.to_be_bytes();
         let mut buf = [0u8; 26]; // ceil(128/5) = 26 chars for u128
         encode_base32(&bytes, &mut buf);
-        let s = std::str::from_utf8(&buf).unwrap();
-        let decoded = decode_base32(s).unwrap();
+        let s = core::str::from_utf8(&buf).unwrap();
+        let decoded = decode_base32::<u128, ()>(s).unwrap();
         assert_eq!(val, decoded, "roundtrip for u128: input={val}, b32={s}");
     }
 
@@ -176,8 +176,8 @@ mod tests {
         // Crockford alias: O=o=0, I=i=L=l=1
         let ex = "OILoil";
         for c in ex.bytes() {
-            let s = format!("{c:0>7}"); // pad to 7 chars
-            let res = decode_base32::<u32>(&s);
+            let s = std::format!("{c:0>7}"); // pad to 7 chars
+            let res = decode_base32::<u32, ()>(&s);
             assert!(res.is_ok(), "alias '{c}' failed");
         }
         // Mixed case
@@ -185,9 +185,9 @@ mod tests {
         let lower = encoded.to_lowercase();
         let upper = encoded.to_uppercase();
         let mid = "aBcD123";
-        let val_lower = decode_base32::<u32>(&lower).unwrap();
-        let val_upper = decode_base32::<u32>(&upper).unwrap();
-        let val_mid = decode_base32::<u32>(mid).unwrap();
+        let val_lower = decode_base32::<u32, ()>(&lower).unwrap();
+        let val_upper = decode_base32::<u32, ()>(&upper).unwrap();
+        let val_mid = decode_base32::<u32, ()>(mid).unwrap();
         assert_eq!(val_lower, val_upper);
         assert_eq!(val_lower, val_mid);
     }
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn test_invalid_character() {
         let s = "ZZZZZZ!"; // '!' is not valid
-        let res = decode_base32::<u32>(s);
+        let res = decode_base32::<u32, ()>(s);
         assert!(res.is_err());
         match res.unwrap_err() {
             Error::Base32Error(Base32Error::DecodeInvalidAscii(b'!')) => {}
@@ -211,7 +211,7 @@ mod tests {
         encode_base32(&time_bytes, &mut out);
         let s = std::str::from_utf8(&out).unwrap();
         // check we can decode it back
-        let decoded = decode_base32::<u128>(s).unwrap();
+        let decoded = decode_base32::<u128, ()>(s).unwrap();
         assert_eq!(decoded, time);
     }
 }

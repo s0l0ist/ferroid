@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use core::hash::Hash;
 
 const fn base32_size(bytes: usize) -> usize {
     (bytes * 8).div_ceil(5)

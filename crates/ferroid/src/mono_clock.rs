@@ -1,13 +1,15 @@
 use crate::{CUSTOM_EPOCH, TimeSource};
+use alloc::sync::Arc;
 use core::time::Duration;
 use std::{
     sync::{
-        Arc, OnceLock,
+        OnceLock,
         atomic::{AtomicU64, Ordering},
     },
     thread::{self, JoinHandle},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
+
 /// Shared ticker thread that updates every millisecond.
 #[derive(Debug)]
 struct SharedTickerInner {

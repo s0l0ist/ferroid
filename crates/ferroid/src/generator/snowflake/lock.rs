@@ -1,6 +1,7 @@
 use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use alloc::sync::Arc;
 use core::cmp::Ordering;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 

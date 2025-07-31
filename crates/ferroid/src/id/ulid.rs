@@ -183,6 +183,8 @@ macro_rules! define_ulid {
             /// generator.
             ///
             /// [`ThreadRandom`]: crate::ThreadRandom
+            #[cfg(feature = "thread_local")]
+            #[cfg_attr(not(feature = "thread_local"), doc(hidden))]
             pub fn from_timestamp(timestamp: <Self as $crate::Id>::Ty) -> Self {
                 Self::from_timestamp_and_rand(timestamp, &$crate::ThreadRandom)
             }
@@ -204,6 +206,8 @@ macro_rules! define_ulid {
             /// [`ThreadRandom`] random generator.
             ///
             /// [`ThreadRandom`]: crate::ThreadRandom
+            #[cfg(feature = "thread_local")]
+            #[cfg_attr(not(feature = "thread_local"), doc(hidden))]
             pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
                 Self::from_datetime_and_rand(datetime, &$crate::ThreadRandom)
             }
@@ -212,6 +216,9 @@ macro_rules! define_ulid {
             /// number generator implementing [`RandSource`]
             ///
             /// [`RandSource`]: crate::RandSource
+            ///
+            #[cfg(feature = "std")]
+            #[cfg_attr(not(feature = "std"), doc(hidden))]
             pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
             where
                 R: $crate::RandSource<<Self as $crate::Id>::Ty>,
@@ -321,6 +328,7 @@ define_ulid!(
 mod tests {
     use super::*;
     use crate::RandSource;
+    use std::println;
 
     struct MockRand;
     impl RandSource<u128> for MockRand {

@@ -2,10 +2,12 @@ use crate::{
     AtomicSnowflakeGenerator, BasicSnowflakeGenerator, Id, IdGenStatus, LockSnowflakeGenerator,
     MonotonicClock, Snowflake, SnowflakeGenerator, SnowflakeTwitterId, TimeSource, ToU64,
 };
+use alloc::rc::Rc;
+use alloc::sync::Arc;
+use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use std::collections::HashSet;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::thread::scope;
 
 struct MockTime {

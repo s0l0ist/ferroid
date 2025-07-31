@@ -139,25 +139,24 @@ where
     ///
     ///     // If the reserved bit is set (e.g., 'F' = 0b01111 or 'Z' = 0b11111), the ID is invalid:
     ///     // 'F' = 0b01111 (top bit X, reserved bit 1, rest 111...).
-    ///     match SnowflakeTwitterId::decode("FZZZZZZZZZZZZ") {
-    ///         Ok(_) => panic!("Should not succeed!"),
-    ///         Err(Error::Base32Error(Base32Error::DecodeOverflow(bytes))) => {
-    ///             let prim = u64::from_be_bytes(bytes.try_into().unwrap());
-    ///             let invalid = SnowflakeTwitterId::from_raw(prim);
-    ///             assert!(!invalid.is_valid());
-    ///             let valid = invalid.into_valid(); // clears reserved bits
-    ///             assert!(valid.is_valid());
+    ///
+    ///     let id = SnowflakeTwitterId::decode("FZZZZZZZZZZZZ").or_else(|err| {
+    ///         match err {
+    ///             Error::Base32Error(Base32Error::DecodeOverflow(invalid)) => {
+    ///                 debug_assert!(!invalid.is_valid());
+    ///                 let valid = invalid.into_valid(); // clears reserved bits
+    ///                 debug_assert!(valid.is_valid());
+    ///                 Ok(valid)
+    ///             }
+    ///             other => Err(other),
     ///         }
-    ///         Err(e) => panic!("Unexpected error: {e:?}"),
-    ///     }
+    ///     }).expect("should produce a valid ID");
     /// }
     /// ```
-    fn decode(s: impl AsRef<str>) -> Result<Self> {
+    fn decode(s: impl AsRef<str>) -> Result<Self, Self> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow(
-                decoded.to_raw().to_be_bytes().as_ref().to_vec(),
-            )));
+            return Err(Error::Base32Error(Base32Error::DecodeOverflow(decoded)));
         }
         Ok(decoded)
     }
@@ -201,9 +200,11 @@ where
     }
 
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 
     /// Consumes the builder and returns the raw buffer.
@@ -239,11 +240,13 @@ where
     }
 }
 
-impl<T: Base32SnowExt> PartialEq<String> for Base32SnowFormatter<T>
+#[cfg(feature = "std")]
+#[cfg_attr(not(feature = "std"), doc(hidden))]
+impl<T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatter<T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }
@@ -278,9 +281,11 @@ where
     }
 
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 }
 
@@ -319,11 +324,13 @@ where
     }
 }
 
-impl<'a, T: Base32SnowExt> PartialEq<String> for Base32SnowFormatterRef<'a, T>
+#[cfg(feature = "alloc")]
+#[cfg_attr(not(feature = "alloc"), doc(hidden))]
+impl<'a, T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatterRef<'a, T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }

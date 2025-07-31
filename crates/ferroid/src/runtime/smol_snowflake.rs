@@ -51,6 +51,7 @@ mod tests {
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
+    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;

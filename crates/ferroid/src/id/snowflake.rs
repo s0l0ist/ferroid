@@ -405,6 +405,7 @@ define_snowflake_id!(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::println;
 
     #[test]
     fn test_snowflake_twitter_id_fields_and_bounds() {

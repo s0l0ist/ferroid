@@ -56,6 +56,9 @@ tracing = { version = "0.1", default-features = false }
 tracing-opentelemetry = { version = "0.31", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
 
+[profile.dev]
+panic = "abort"
+
 [profile.bin-release]
 inherits = "release"
 codegen-units = 1           # reduce size and help opt

@@ -2,10 +2,12 @@ use crate::{
     BasicUlidGenerator, Id, IdGenStatus, LockUlidGenerator, MonotonicClock, RandSource,
     ThreadRandom, TimeSource, ToU64, ULID, Ulid, UlidGenerator,
 };
+use alloc::rc::Rc;
+use alloc::sync::Arc;
+use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use std::collections::HashSet;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::thread::scope;
 
 struct MockTime {

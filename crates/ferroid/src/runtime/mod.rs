@@ -1,6 +1,6 @@
 #[cfg(feature = "async-smol")]
 mod smol;
-#[cfg(feature = "async-tokio")]
+#[cfg(all(feature = "alloc", feature = "async-tokio"))]
 mod tokio;
 
 #[cfg(all(feature = "async-smol", feature = "snowflake"))]
@@ -18,7 +18,7 @@ pub use smol::*;
 pub use smol_snowflake::*;
 #[cfg(all(feature = "async-smol", feature = "ulid"))]
 pub use smol_ulid::*;
-#[cfg(feature = "async-tokio")]
+#[cfg(all(feature = "alloc", feature = "async-tokio"))]
 pub use tokio::*;
 #[cfg(all(feature = "async-tokio", feature = "snowflake"))]
 pub use tokio_snowflake::*;

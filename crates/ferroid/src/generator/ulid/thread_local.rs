@@ -6,12 +6,12 @@
 //! In rare cases where the generator saturates within the same millisecond
 //! (monotonic overflow), it yields using the configured backoff strategy (e.g.,
 //! spin, yield, sleep). These overflows typically resolve within ~1ms.
-
 use crate::{
     BasicUlidGenerator, Id, IdGenStatus, MonotonicClock, RandSource, ThreadRandom, ToU64, ULID,
     UNIX_EPOCH,
 };
 use std::sync::LazyLock;
+use std::thread_local;
 
 /// A global clock returning milliseconds since the Unix epoch, guaranteed to be
 /// strictly monotonic.

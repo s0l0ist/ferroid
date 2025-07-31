@@ -53,6 +53,7 @@ mod tests {
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
+    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
@@ -172,9 +173,7 @@ mod tests {
     }
 
     // Helper to validate uniqueness - shared between test approaches
-    async fn validate_unique_ulid_ids(
-        tasks: Vec<Task<Result<Vec<impl Ulid>>>>,
-    ) -> Result<()> {
+    async fn validate_unique_ulid_ids(tasks: Vec<Task<Result<Vec<impl Ulid>>>>) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
