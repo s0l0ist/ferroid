@@ -22,8 +22,6 @@ use tonic::{
 #[derive(Clone, Copy, Debug)]
 enum Compression {
     None,
-    Deflate,
-    Gzip,
     Zstd,
 }
 
@@ -31,8 +29,6 @@ impl fmt::Display for Compression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::None => write!(f, "none"),
-            Self::Deflate => write!(f, "deflate"),
-            Self::Gzip => write!(f, "gzip"),
             Self::Zstd => write!(f, "zstd"),
         }
     }
@@ -42,8 +38,6 @@ impl From<Compression> for Option<CompressionEncoding> {
     fn from(value: Compression) -> Self {
         match value {
             Compression::None => None,
-            Compression::Deflate => Some(CompressionEncoding::Deflate),
-            Compression::Gzip => Some(CompressionEncoding::Gzip),
             Compression::Zstd => Some(CompressionEncoding::Zstd),
         }
     }
@@ -79,12 +73,7 @@ fn grpc_bench(c: &mut Criterion) {
 
     let ids_per_request_cases = [10_000, 100_000, 1_000_000];
     let concurrency_cases = [1, 2, 4, 8, 16, 32];
-    let compression_cases = [
-        Compression::None,
-        Compression::Zstd,
-        Compression::Gzip,
-        Compression::Deflate,
-    ];
+    let compression_cases = [Compression::None, Compression::Zstd];
 
     // Generate cartesian product of all param combinations
     let mut cases = Vec::new();
