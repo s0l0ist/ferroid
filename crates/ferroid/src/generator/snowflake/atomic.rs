@@ -166,6 +166,10 @@ where
     ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
+    /// # Errors
+    /// - This method currently does not return any errors and always returns
+    ///   `Ok`. It is marked as fallible to allow for future extensibility
+    ///
     /// # Example
     /// ```
     /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};

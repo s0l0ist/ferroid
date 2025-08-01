@@ -154,6 +154,9 @@ where
     ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
+    /// # Errors
+    /// - Returns an error if the underlying lock has been poisoned.
+    ///
     /// # Example
     /// ```
     /// use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};

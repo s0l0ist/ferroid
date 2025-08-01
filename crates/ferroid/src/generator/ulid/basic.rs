@@ -139,6 +139,10 @@ where
     ///   Snowflake API
     /// - Err(e) if the time source or rand source failed
     ///
+    /// # Errors
+    /// - This method currently does not return any errors and always returns
+    ///   `Ok`. It is marked as fallible to allow for future extensibility
+    ///
     /// # Example
     /// ```
     /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};

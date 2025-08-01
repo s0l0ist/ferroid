@@ -161,13 +161,13 @@ macro_rules! define_ulid {
                 (self.id >> Self::RANDOM_SHIFT) & Self::RANDOM_MASK
             }
             /// Returns the maximum representable timestamp value based on
-            /// Self::TIMESTAMP_BITS.
+            /// `Self::TIMESTAMP_BITS`.
             #[must_use]
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
             /// Returns the maximum representable randome value based on
-            /// Self::RANDOM_BITS.
+            /// `Self::RANDOM_BIT`.
             #[must_use]
             pub const fn max_random() -> $int {
                 (1 << Self::RANDOM_BITS) - 1

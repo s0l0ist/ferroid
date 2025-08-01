@@ -14,7 +14,7 @@ use std::{
 #[derive(Debug)]
 struct SharedTickerInner {
     current: AtomicU64,
-    _handle: OnceLock<JoinHandle<()>>,
+    handle: OnceLock<JoinHandle<()>>,
 }
 
 /// A monotonic time source that returns elapsed time since process start,
@@ -101,7 +101,7 @@ impl MonotonicClock {
 
         let inner = Arc::new(SharedTickerInner {
             current: AtomicU64::new(0),
-            _handle: OnceLock::new(),
+            handle: OnceLock::new(),
         });
 
         let weak_inner = Arc::downgrade(&inner);
@@ -135,7 +135,7 @@ impl MonotonicClock {
         });
 
         inner
-            ._handle
+            .handle
             .set(handle)
             .expect("failed to set thread handle");
 

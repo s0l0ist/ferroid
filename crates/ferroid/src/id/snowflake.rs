@@ -189,19 +189,19 @@ macro_rules! define_snowflake_id {
                 (self.id >> Self::SEQUENCE_SHIFT) & Self::SEQUENCE_MASK
             }
             /// Returns the maximum representable timestamp value based on
-            /// Self::TIMESTAMP_BITS.
+            /// `Self::TIMESTAMP_BITS`.
             #[must_use]
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
             /// Returns the maximum representable machine ID value based on
-            /// Self::MACHINE_ID_BITS.
+            /// `Self::MACHINE_ID_BITS`.
             #[must_use]
             pub const fn max_machine_id() -> $int {
                 (1 << Self::MACHINE_ID_BITS) - 1
             }
             /// Returns the maximum representable sequence value based on
-            /// Self::SEQUENCE_BITS.
+            /// `Self::SEQUENCE_BITS`.
             #[must_use]
             pub const fn max_sequence() -> $int {
                 (1 << Self::SEQUENCE_BITS) - 1

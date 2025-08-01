@@ -7,13 +7,13 @@ const BITS_PER_CHAR: usize = 5;
 /// Lookup table for Crockford base32 decoding
 const LOOKUP: [u8; 256] = {
     let mut lut = [NO_VALUE; 256];
-    let mut i = 0;
+    let mut i = 0_u8;
     // Main alphabet, allow lower-case
     while i < 32 {
-        let c = ALPHABET[i];
-        lut[c as usize] = i as u8;
+        let c = ALPHABET[i as usize];
+        lut[c as usize] = i;
         if c.is_ascii_uppercase() {
-            lut[(c + 32) as usize] = i as u8; // lowercase letter
+            lut[(c + 32) as usize] = i; // lowercase letter
         }
         i += 1;
     }

@@ -105,7 +105,7 @@ where
     }
 }
 
-fn run_id_sequence_increments_within_same_tick<G, ID, T, R>(generator: G)
+fn run_id_sequence_increments_within_same_tick<G, ID, T, R>(generator: &G)
 where
     G: UlidGenerator<ID, T, R>,
     ID: Ulid,
@@ -125,7 +125,7 @@ where
     assert!(id1 < id2 && id2 < id3);
 }
 
-fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T, R>(generator: G)
+fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T, R>(generator: &G)
 where
     G: UlidGenerator<ID, T, R>,
     ID: Ulid,
@@ -136,7 +136,7 @@ where
     assert_eq!(yield_for, ID::ONE);
 }
 
-fn run_generator_handles_rollover<G, ID, T, R>(generator: G, shared_time: SharedMockStepTime)
+fn run_generator_handles_rollover<G, ID, T, R>(generator: &G, shared_time: &SharedMockStepTime)
 where
     G: UlidGenerator<ID, T, R>,
     ID: Ulid,
@@ -155,7 +155,7 @@ where
     assert_eq!(id.timestamp().to_u64(), 43);
 }
 
-fn run_generator_monotonic<G, ID, T, R>(generator: G)
+fn run_generator_monotonic<G, ID, T, R>(generator: &G)
 where
     G: UlidGenerator<ID, T, R>,
     ID: Ulid,
@@ -234,7 +234,7 @@ fn basic_generator_sequence_test() {
     let mock_time = MockTime { millis: 42 };
     let mock_rand = MockRand { rand: 42 };
     let generator: BasicUlidGenerator<ULID, _, _> = BasicUlidGenerator::new(mock_time, mock_rand);
-    run_id_sequence_increments_within_same_tick(generator);
+    run_id_sequence_increments_within_same_tick(&generator);
 }
 
 #[test]
@@ -243,21 +243,21 @@ fn lock_generator_sequence_test() {
     let mock_rand = MockRand { rand: 42 };
 
     let generator: LockUlidGenerator<ULID, _, _> = LockUlidGenerator::new(mock_time, mock_rand);
-    run_id_sequence_increments_within_same_tick(generator);
+    run_id_sequence_increments_within_same_tick(&generator);
 }
 
 #[test]
 fn basic_generator_pending_test() {
     let generator: BasicUlidGenerator<ULID, _, _> =
         BasicUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
-    run_generator_returns_pending_when_sequence_exhausted(generator);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
 #[test]
 fn lock_generator_pending_test() {
     let generator: LockUlidGenerator<ULID, _, _> =
         LockUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
-    run_generator_returns_pending_when_sequence_exhausted(generator);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn basic_generator_rollover_test() {
     let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
     let generator: BasicUlidGenerator<ULID, _, _> =
         BasicUlidGenerator::new(shared_time.clone(), MaxRand);
-    run_generator_handles_rollover(generator, shared_time);
+    run_generator_handles_rollover(&generator, &shared_time);
 }
 
 #[test]
@@ -273,7 +273,7 @@ fn lock_generator_rollover_test() {
     let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
     let generator: LockUlidGenerator<ULID, _, _> =
         LockUlidGenerator::new(shared_time.clone(), MaxRand);
-    run_generator_handles_rollover(generator, shared_time);
+    run_generator_handles_rollover(&generator, &shared_time);
 }
 
 #[test]
@@ -281,7 +281,7 @@ fn basic_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
     let generator: BasicUlidGenerator<ULID, _, _> = BasicUlidGenerator::new(clock, rand);
-    run_generator_monotonic(generator);
+    run_generator_monotonic(&generator);
 }
 
 #[test]
@@ -289,7 +289,7 @@ fn lock_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
     let generator: LockUlidGenerator<ULID, _, _> = LockUlidGenerator::new(clock, rand);
-    run_generator_monotonic(generator);
+    run_generator_monotonic(&generator);
 }
 
 #[test]

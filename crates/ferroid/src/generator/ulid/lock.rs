@@ -140,6 +140,9 @@ where
     ///   Snowflake API
     /// - Err(e) if the time source or rand source failed
     ///
+    /// # Errors
+    /// - Returns an error if the underlying lock has been poisoned.
+    ///
     /// # Example
     /// ```
     /// use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};

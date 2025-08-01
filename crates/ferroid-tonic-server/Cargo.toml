@@ -7,6 +7,12 @@ authors.workspace = true
 readme = "README.md"
 description = "A high-performance gRPC server for streaming ID generation"
 repository = "https://github.com/s0l0ist/ferroid/blob/main/crates/ferroid-tonic-server"
+categories = [
+  "network-programming",     # gRPC server for ID generation
+  "asynchronous",            # Uses async runtimes like Tokio
+  "development-tools",       # Infrastructure tooling for distributed systems
+  "concurrency",             # Threaded workers / mpsc / stream batching
+]
 documentation.workspace = true
 keywords.workspace = true
 publish = true
