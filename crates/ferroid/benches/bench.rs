@@ -520,7 +520,7 @@ where
     group.bench_function("encode/buffer/format", |b| {
         b.iter(|| {
             let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(format!("{}", b));
+            black_box(format!("{b}"));
         });
     });
 
@@ -587,7 +587,7 @@ where
     group.bench_function("encode/buffer/format", |b| {
         b.iter(|| {
             let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(format!("{}", b));
+            black_box(format!("{b}"));
         });
     });
 
