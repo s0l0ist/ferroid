@@ -8,7 +8,6 @@ readme = "README.md"
 description = "Flexible ID generators for producing unique, monotonic, and lexicographically sortable IDs."
 repository = "https://github.com/s0l0ist/ferroid/blob/main/crates/ferroid"
 categories = [
-  "algorithms",         # Implements time-sortable ID generation algorithms
   "data-structures",    # Exposes structured types like ULID, SnowflakeId, etc.
   "encoding",           # Optional Base32 support (Crockford-style)
   "asynchronous",       # If using async stream generation features
