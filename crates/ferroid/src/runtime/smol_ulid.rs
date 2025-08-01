@@ -35,13 +35,14 @@ where
 
 impl<G, ID, T, R> UlidGeneratorAsyncSmolExt<ID, T, R> for G
 where
-    G: UlidGenerator<ID, T, R> + Sync,
-    ID: Ulid + Send,
-    T: TimeSource<ID::Ty> + Send,
-    R: RandSource<ID::Ty> + Send,
+    G: UlidGenerator<ID, T, R>,
+    ID: Ulid,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
 {
     type Err = G::Err;
 
+    #[allow(clippy::future_not_send)]
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<SmolSleep>(self)
     }

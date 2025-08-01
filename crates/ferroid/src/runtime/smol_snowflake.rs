@@ -32,12 +32,13 @@ where
 
 impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
 where
-    G: SnowflakeGenerator<ID, T> + Sync,
-    ID: Snowflake + Send,
-    T: TimeSource<ID::Ty> + Send,
+    G: SnowflakeGenerator<ID, T>,
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
     type Err = G::Err;
 
+    #[allow(clippy::future_not_send)]
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<SmolSleep>(self)
     }

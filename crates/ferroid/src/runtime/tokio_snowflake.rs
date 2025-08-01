@@ -125,7 +125,7 @@ mod tests {
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
         ID: Snowflake + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
-        S: SleepProvider + Send,
+        S: SleepProvider,
     {
         let clock = clock_factory();
         let generators: Vec<_> = (0..NUM_GENERATORS)
