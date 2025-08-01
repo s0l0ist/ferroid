@@ -7,7 +7,7 @@ use core::{fmt, hash::Hash};
 /// over a fixed-size integer (e.g., `u128`) used for high-entropy time-sortable
 /// ID generation.
 ///
-/// Types implementing `Ulid` expose methods for construction, encoding, and
+/// Types implementing `UlidId` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
 pub trait UlidId:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug

@@ -76,7 +76,7 @@ generator that can produce both non-monotonic and monotonic ULIDs:
 }
 ```
 
-Thread-local generators are not currently available for `Snowflake`-style IDs
+Thread-local generators are not currently available for `SnowflakeId`-style IDs
 because they rely on a valid `machine_id` to avoid collisions. Mapping unique
 `machine_id`s across threads requires coordination beyond what `thread_local!`
 alone can guarantee.
@@ -400,7 +400,7 @@ Use `.encode()` or `.encode_to_buf()` for sortable string representations:
 
 #[cfg(all(feature = "base32", feature = "ulid"))]
 {
-    use ferroid::{Base32UlidExt, Ulid, ULID};
+    use ferroid::{Base32UlidExt, UlidId, ULID};
 
     let id = ULID::from(123456, 42);
     assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");

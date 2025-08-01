@@ -11,7 +11,7 @@ use tracing::instrument;
 /// ## Features
 ///
 /// - ❌ Not thread-safe
-/// - ✅ Safely implement any [`Snowflake`] layout
+/// - ✅ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Recommended When
 /// - You're in a single-threaded environment (no shared access)

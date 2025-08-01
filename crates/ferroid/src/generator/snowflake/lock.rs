@@ -1,4 +1,4 @@
-use crate::{Error, IdGenStatus, Result, SnowflakeId, SnowflakeGenerator, TimeSource};
+use crate::{Error, IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
 use std::sync::Mutex;
@@ -14,7 +14,7 @@ use tracing::instrument;
 /// ## Features
 ///
 /// - ✅ Thread-safe
-/// - ✅ Safely implement any [`Snowflake`] layout
+/// - ✅ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment

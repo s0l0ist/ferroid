@@ -15,7 +15,7 @@ use tracing::instrument;
 /// ## Features
 ///
 /// - ✅ Thread-safe
-/// - ❌ Safely implement any [`Snowflake`] layout
+/// - ❌ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Caveats
 /// This implementation uses an `AtomicU64` internally, so it only supports ID
