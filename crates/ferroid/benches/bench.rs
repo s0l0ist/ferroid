@@ -650,9 +650,9 @@ where
 fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str) {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
-    group.bench_function("new", |b| {
+    group.bench_function("new_ulid", |b| {
         b.iter(|| {
-            black_box(UlidMono::new());
+            black_box(UlidMono::new_ulid());
         });
     });
     group.bench_function("from_timestamp", |b| {
@@ -686,7 +686,7 @@ pub fn bench_thread_local_ulid_threaded(c: &mut Criterion, group_name: &str) {
                         for _ in 0..thread_count {
                             s.spawn(|| {
                                 for _ in 0..TOTAL_IDS {
-                                    black_box(UlidMono::new());
+                                    black_box(UlidMono::new_ulid());
                                 }
                             });
                         }

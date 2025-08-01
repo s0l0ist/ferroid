@@ -94,10 +94,10 @@ impl UlidMono {
     /// #[cfg(feature = "ulid")]
     /// {
     ///     use ferroid::UlidMono;
-    ///     let id = UlidMono::new();
+    ///     let id = UlidMono::new_ulid();
     /// }
     /// ```
-    pub fn new() -> ULID {
+    pub fn new_ulid() -> ULID {
         Self::with_backoff(Backoff::Yield)
     }
 
