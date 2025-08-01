@@ -7,15 +7,6 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[cfg(not(feature = "std"))]
-use core::panic::PanicInfo;
-
-#[cfg(not(feature = "std"))]
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {}
-}
-
 #[cfg(feature = "base32")]
 mod base32;
 mod error;
