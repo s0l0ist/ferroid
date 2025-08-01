@@ -7,9 +7,9 @@ use core::{fmt, hash::Hash};
 /// over a fixed-size integer (e.g., `u128`) used for high-entropy time-sortable
 /// ID generation.
 ///
-/// Types implementing `Ulid` expose methods for construction, encoding, and
+/// Types implementing `UlidId` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
-pub trait Ulid:
+pub trait UlidId:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
     /// Returns the timestamp portion of the ID.
@@ -25,6 +25,7 @@ pub trait Ulid:
     fn max_random() -> Self::Ty;
 
     /// Constructs a new ULID from its components.
+    #[must_use]
     fn from_components(timestamp: Self::Ty, random: Self::Ty) -> Self;
 
     /// Returns true if the current sequence value can be incremented.
@@ -38,11 +39,13 @@ pub trait Ulid:
     }
 
     /// Returns a new ID with the random portion incremented.
+    #[must_use]
     fn increment_random(&self) -> Self {
         Self::from_components(self.timestamp(), self.next_random())
     }
 
     /// Returns a new ID for a newer timestamp with sequence reset to zero.
+    #[must_use]
     fn rollover_to_timestamp(&self, ts: Self::Ty, rand: Self::Ty) -> Self {
         Self::from_components(ts, rand)
     }
@@ -53,6 +56,7 @@ pub trait Ulid:
 
     /// Returns a normalized version of the ID with any invalid or reserved bits
     /// cleared. This guarantees a valid, canonical representation.
+    #[must_use]
     fn into_valid(self) -> Self;
 }
 
@@ -143,6 +147,7 @@ macro_rules! define_ulid {
                 (Self::RANDOM_MASK << Self::RANDOM_SHIFT)
             }
 
+            #[must_use]
             pub const fn from(timestamp: $int, random: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let r = (random & Self::RANDOM_MASK) << Self::RANDOM_SHIFT;
@@ -150,30 +155,36 @@ macro_rules! define_ulid {
             }
 
             /// Extracts the timestamp from the packed ID.
+            #[must_use]
             pub const fn timestamp(&self) -> $int {
                 (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
             }
             /// Extracts the random number from the packed ID.
+            #[must_use]
             pub const fn random(&self) -> $int {
                 (self.id >> Self::RANDOM_SHIFT) & Self::RANDOM_MASK
             }
             /// Returns the maximum representable timestamp value based on
-            /// Self::TIMESTAMP_BITS.
+            /// `Self::TIMESTAMP_BITS`.
+            #[must_use]
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
             /// Returns the maximum representable randome value based on
-            /// Self::RANDOM_BITS.
+            /// `Self::RANDOM_BIT`.
+            #[must_use]
             pub const fn max_random() -> $int {
                 (1 << Self::RANDOM_BITS) - 1
             }
 
             /// Converts this type into its raw type representation
+            #[must_use]
             pub const fn to_raw(&self) -> $int {
                 self.id
             }
 
             /// Converts a raw type into this type
+            #[must_use]
             pub const fn from_raw(raw: $int) -> Self {
                 Self { id: raw }
             }
@@ -183,6 +194,9 @@ macro_rules! define_ulid {
             /// generator.
             ///
             /// [`ThreadRandom`]: crate::ThreadRandom
+            #[cfg(feature = "std")]
+            #[cfg_attr(not(feature = "std"), doc(hidden))]
+            #[must_use]
             pub fn from_timestamp(timestamp: <Self as $crate::Id>::Ty) -> Self {
                 Self::from_timestamp_and_rand(timestamp, &$crate::ThreadRandom)
             }
@@ -192,6 +206,7 @@ macro_rules! define_ulid {
             /// [`RandSource`]
             ///
             /// [`RandSource`]: crate::RandSource
+            #[must_use]
             pub fn from_timestamp_and_rand<R>(timestamp:  <Self as $crate::Id>::Ty, rng: &R) -> Self
             where
                 R: $crate::RandSource<<Self as $crate::Id>::Ty>,
@@ -204,6 +219,9 @@ macro_rules! define_ulid {
             /// [`ThreadRandom`] random generator.
             ///
             /// [`ThreadRandom`]: crate::ThreadRandom
+            #[cfg(feature = "std")]
+            #[cfg_attr(not(feature = "std"), doc(hidden))]
+            #[must_use]
             pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
                 Self::from_datetime_and_rand(datetime, &$crate::ThreadRandom)
             }
@@ -212,6 +230,10 @@ macro_rules! define_ulid {
             /// number generator implementing [`RandSource`]
             ///
             /// [`RandSource`]: crate::RandSource
+            ///
+            #[cfg(feature = "std")]
+            #[cfg_attr(not(feature = "std"), doc(hidden))]
+            #[must_use]
             pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
             where
                 R: $crate::RandSource<<Self as $crate::Id>::Ty>,
@@ -241,7 +263,7 @@ macro_rules! define_ulid {
             }
         }
 
-        impl $crate::Ulid for $name {
+        impl $crate::UlidId for $name {
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
@@ -317,10 +339,11 @@ define_ulid!(
     random: 80
 );
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
     use crate::RandSource;
+    use std::println;
 
     struct MockRand;
     impl RandSource<u128> for MockRand {

@@ -1,27 +1,36 @@
 use core::fmt;
-use std::sync::{MutexGuard, PoisonError};
 
-pub type Result<T> = core::result::Result<T, Error>;
+/// A Result type that is infallible by default
+pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, E>;
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]
-pub enum Error {
-    LockPoisoned,
+pub enum Error<E = core::convert::Infallible> {
+    #[cfg(feature = "std")]
+    LockPoisoned(core::marker::PhantomData<E>),
     #[cfg(feature = "base32")]
-    Base32Error(crate::Base32Error),
+    Base32Error(crate::Base32Error<E>),
+    // If no_std and no base32, use a dummy `Infallible` variant. This keeps the
+    // API the same, but the user should never see this error surface in
+    // practice.
+    #[cfg(not(all(feature = "std", feature = "base32")))]
+    Infallible(core::marker::PhantomData<E>),
 }
 
-impl fmt::Display for Error {
+impl<E: fmt::Debug> fmt::Display for Error<E> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{self:?}")
     }
 }
 
-impl core::error::Error for Error {}
+impl<E: fmt::Debug> core::error::Error for Error<E> {}
 
+#[cfg(feature = "std")]
+use std::sync::{MutexGuard, PoisonError};
+#[cfg(feature = "std")]
 // Convert all poisoned lock errors to a simplified `LockPoisoned`
-impl<T> From<PoisonError<MutexGuard<'_, T>>> for Error {
+impl<T, E: fmt::Debug> From<PoisonError<MutexGuard<'_, T>>> for Error<E> {
     fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {
-        Error::LockPoisoned
+        Self::LockPoisoned(core::marker::PhantomData)
     }
 }

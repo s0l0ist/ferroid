@@ -17,7 +17,7 @@ use crate::{Base32Error, BeBytes, Error, Id, Result};
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub(crate) trait Base32Ext: Id
+pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
@@ -63,7 +63,7 @@ where
     /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
     ///   alphabet)
     #[inline]
-    fn inner_decode(s: impl AsRef<str>) -> Result<Self> {
+    fn inner_decode<E>(s: impl AsRef<str>) -> Result<Self, Error<E>> {
         let s_ref = s.as_ref();
         if s_ref.len() != Self::Ty::BASE32_SIZE {
             return Err(Error::Base32Error(Base32Error::DecodeInvalidLen(

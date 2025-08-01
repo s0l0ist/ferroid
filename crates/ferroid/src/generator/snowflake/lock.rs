@@ -1,6 +1,7 @@
-use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{Error, IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
+use alloc::sync::Arc;
 use core::cmp::Ordering;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -13,7 +14,7 @@ use tracing::instrument;
 /// ## Features
 ///
 /// - ✅ Thread-safe
-/// - ✅ Safely implement any [`Snowflake`] layout
+/// - ✅ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
@@ -27,7 +28,7 @@ use tracing::instrument;
 /// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
 pub struct LockSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     state: Arc<Mutex<ID>>,
@@ -36,7 +37,7 @@ where
 
 impl<ID, T> LockSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`LockSnowflakeGenerator`] initialized with the current
@@ -62,10 +63,13 @@ where
     /// # Example
     ///
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
     ///
-    /// let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
-    /// let id = generator.next_id();
+    ///     let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
+    ///     let id = generator.next_id();
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -118,20 +122,23 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
     ///
-    /// // Create a clock and a generator with machine_id = 0
-    /// let clock = MonotonicClock::default();
-    /// let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    ///     // Create a clock and a generator with machine_id = 0
+    ///     let clock = MonotonicClock::default();
+    ///     let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.next_id() {
-    ///     IdGenStatus::Ready { id } => {
-    ///         println!("ID: {}", id);
-    ///         assert_eq!(id.machine_id(), 0);
-    ///     }
-    ///     IdGenStatus::Pending { yield_for } => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
+    ///     // Attempt to generate a new ID
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => {
+    ///             println!("ID: {}", id);
+    ///             assert_eq!(id.machine_id(), 0);
+    ///         }
+    ///         IdGenStatus::Pending { yield_for } => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
     ///     }
     /// }
     /// ```
@@ -153,28 +160,34 @@ where
     ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
+    /// # Errors
+    /// - Returns an error if the underlying lock has been poisoned.
+    ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
     ///
-    /// // Create a clock and a generator with machine_id = 0
-    /// let clock = MonotonicClock::default();
-    /// let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    ///     // Create a clock and a generator with machine_id = 0
+    ///     let clock = MonotonicClock::default();
+    ///     let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.try_next_id() {
-    ///     Ok(IdGenStatus::Ready { id }) => {
-    ///         println!("ID: {}", id);
-    ///         assert_eq!(id.machine_id(), 0);
+    ///     // Attempt to generate a new ID
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => {
+    ///             println!("ID: {}", id);
+    ///             assert_eq!(id.machine_id(), 0);
+    ///         }
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
+    ///         Err(e) => eprintln!("Generator error: {}", e),
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
-    ///     }
-    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
         let now = self.time.current_millis();
         let mut id = self.state.lock()?;
         let current_ts = id.timestamp();
@@ -205,9 +218,11 @@ where
 
 impl<ID, T> SnowflakeGenerator<ID, T> for LockSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
+    type Err = Error;
+
     fn new(machine_id: ID::Ty, clock: T) -> Self {
         Self::new(machine_id, clock)
     }
@@ -216,7 +231,7 @@ where
         self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
         self.try_next_id()
     }
 }

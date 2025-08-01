@@ -1,4 +1,6 @@
-use crate::{RandSource, Result, TimeSource, TokioSleep, Ulid, UlidGenerator};
+use core::fmt;
+
+use crate::{RandSource, Result, TimeSource, TokioSleep, UlidId, UlidGenerator};
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
@@ -10,10 +12,12 @@ use crate::{RandSource, Result, TimeSource, TokioSleep, Ulid, UlidGenerator};
 /// [`SleepProvider`]: crate::SleepProvider
 pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err: fmt::Debug;
+
     /// Returns a future that resolves to the next available ULID using
     /// the [`TokioSleep`] provider.
     ///
@@ -27,17 +31,20 @@ where
     ///
     /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::UlidGeneratorAsyncExt::try_next_id_async
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
 impl<G, ID, T, R> UlidGeneratorAsyncTokioExt<ID, T, R> for G
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+    type Err = G::Err;
+
+    #[allow(clippy::future_not_send)]
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<TokioSleep>(self)
     }
 }
@@ -46,12 +53,13 @@ where
 mod tests {
     use super::*;
     use crate::{
-        LockUlidGenerator, MonotonicClock, Result, SleepProvider, ThreadRandom, TimeSource,
+        LockMonoUlidGenerator, MonotonicClock, Result, SleepProvider, ThreadRandom, TimeSource,
         TokioYield, ULID,
     };
     use core::fmt;
     use futures::future::try_join_all;
     use std::collections::HashSet;
+    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
@@ -61,7 +69,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_basic_sleep() -> Result<()> {
         test_many_ulid_unique_ids_explicit::<ULID, _, _, _, TokioSleep>(
-            LockUlidGenerator::new,
+            LockMonoUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
@@ -71,7 +79,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_basic_yield() -> Result<()> {
         test_many_ulid_unique_ids_explicit::<ULID, _, _, _, TokioYield>(
-            LockUlidGenerator::new,
+            LockMonoUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
@@ -81,7 +89,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_basic_convience() -> Result<()> {
         test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
-            LockUlidGenerator::new,
+            LockMonoUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
@@ -97,7 +105,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: Ulid + Send + 'static,
+        ID: UlidId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
@@ -115,7 +123,9 @@ mod tests {
                 tokio::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = crate::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g).await?;
+                        let id = crate::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g)
+                            .await
+                            .unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -134,7 +144,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: Ulid + fmt::Debug + Send + 'static,
+        ID: UlidId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
     {
@@ -153,7 +163,7 @@ mod tests {
                     for _ in 0..IDS_PER_GENERATOR {
                         // This uses the convenience method - no explicit
                         // SleepProvider type!
-                        let id = g.try_next_id_async().await?;
+                        let id = g.try_next_id_async().await.unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -166,7 +176,7 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_ulid_ids(
-        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl Ulid>>>>,
+        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl UlidId>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks)
             .await
@@ -175,6 +185,7 @@ mod tests {
             .flat_map(Result::unwrap)
             .collect();
 
+        #[allow(clippy::cast_possible_truncation)]
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
         assert_eq!(
             all_ids.len(),

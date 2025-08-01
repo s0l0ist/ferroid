@@ -1,6 +1,7 @@
 use super::SleepProvider;
-use crate::{IdGenStatus, RandSource, Result, TimeSource, ToU64, Ulid, UlidGenerator};
+use crate::{IdGenStatus, RandSource, Result, TimeSource, ToU64, UlidGenerator, UlidId};
 use core::{
+    fmt,
     future::Future,
     marker::PhantomData,
     pin::Pin,
@@ -18,10 +19,12 @@ use pin_project_lite::pin_project;
 /// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait UlidGeneratorAsyncExt<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err: fmt::Debug;
+
     /// Returns a future that resolves to the next available Snowflake ID.
     ///
     /// If the generator is not ready to issue a new ID immediately, the future
@@ -30,7 +33,7 @@ where
     /// # Errors
     ///
     /// This future may return an error if the generator encounters one.
-    fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID>>
+    fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID, Self::Err>>
     where
         S: SleepProvider;
 }
@@ -38,11 +41,14 @@ where
 impl<G, ID, T, R> UlidGeneratorAsyncExt<ID, T, R> for G
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>>
+    type Err = G::Err;
+
+    #[allow(clippy::future_not_send)]
+    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID, Self::Err>>
     where
         S: SleepProvider,
     {
@@ -60,7 +66,7 @@ pin_project! {
     pub struct UlidGeneratorFuture<'a, G, ID, T, R, S>
     where
         G: UlidGenerator<ID, T, R>,
-        ID: Ulid,
+        ID: UlidId,
         T: TimeSource<ID::Ty>,
         R: RandSource<ID::Ty>,
         S: SleepProvider,
@@ -75,7 +81,7 @@ pin_project! {
 impl<'a, G, ID, T, R, S> UlidGeneratorFuture<'a, G, ID, T, R, S>
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
     S: SleepProvider,
@@ -84,7 +90,7 @@ where
     ///
     /// This does not immediately begin polling the generator; instead, it will
     /// attempt to produce an ID when `.poll()` is called.
-    pub fn new(generator: &'a G) -> Self {
+    pub const fn new(generator: &'a G) -> Self {
         Self {
             generator,
             sleep: None,
@@ -93,15 +99,15 @@ where
     }
 }
 
-impl<'a, G, ID, T, R, S> Future for UlidGeneratorFuture<'a, G, ID, T, R, S>
+impl<G, ID, T, R, S> Future for UlidGeneratorFuture<'_, G, ID, T, R, S>
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
     S: SleepProvider,
 {
-    type Output = Result<ID>;
+    type Output = Result<ID, G::Err>;
 
     /// Polls the generator for a new ID.
     ///
@@ -119,7 +125,7 @@ where
                     this.sleep.set(None);
                 }
             }
-        };
+        }
         match this.generator.try_next_id()? {
             IdGenStatus::Ready { id } => Poll::Ready(Ok(id)),
             IdGenStatus::Pending { yield_for } => {

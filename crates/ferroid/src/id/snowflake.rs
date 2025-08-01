@@ -11,14 +11,14 @@ use core::{fmt, hash::Hash};
 /// # Example
 ///
 /// ```
-/// use ferroid::{Snowflake, SnowflakeTwitterId};
+/// use ferroid::{SnowflakeId, SnowflakeTwitterId};
 ///
 /// let id = SnowflakeTwitterId::from(1000, 2, 1);
 /// assert_eq!(id.timestamp(), 1000);
 /// assert_eq!(id.machine_id(), 2);
 /// assert_eq!(id.sequence(), 1);
 /// ```
-pub trait Snowflake:
+pub trait SnowflakeId:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
     /// Returns the timestamp portion of the ID.
@@ -30,7 +30,7 @@ pub trait Snowflake:
     /// Returns the machine ID portion of the ID.
     fn machine_id(&self) -> Self::Ty;
 
-    /// Returns the maximum possible value for the machine_id field.
+    /// Returns the maximum possible value for the `machine_id` field.
     fn max_machine_id() -> Self::Ty;
 
     /// Returns the sequence portion of the ID.
@@ -40,6 +40,7 @@ pub trait Snowflake:
     fn max_sequence() -> Self::Ty;
 
     /// Constructs a new Snowflake ID from its components.
+    #[must_use]
     fn from_components(timestamp: Self::Ty, machine_id: Self::Ty, sequence: Self::Ty) -> Self;
 
     /// Returns true if the current sequence value can be incremented.
@@ -53,11 +54,13 @@ pub trait Snowflake:
     }
 
     /// Returns a new ID with the sequence incremented.
+    #[must_use]
     fn increment_sequence(&self) -> Self {
         Self::from_components(self.timestamp(), self.machine_id(), self.next_sequence())
     }
 
     /// Returns a new ID for a newer timestamp with sequence reset to zero.
+    #[must_use]
     fn rollover_to_timestamp(&self, ts: Self::Ty) -> Self {
         Self::from_components(ts, self.machine_id(), Self::ZERO)
     }
@@ -68,6 +71,7 @@ pub trait Snowflake:
 
     /// Returns a normalized version of the ID with any invalid or reserved bits
     /// cleared. This guarantees a valid, canonical representation.
+    #[must_use]
     fn into_valid(self) -> Self;
 }
 
@@ -165,6 +169,7 @@ macro_rules! define_snowflake_id {
                 (Self::SEQUENCE_MASK << Self::SEQUENCE_SHIFT)
             }
 
+            #[must_use]
             pub const fn from(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let m = (machine_id & Self::MACHINE_ID_MASK) << Self::MACHINE_ID_SHIFT;
@@ -173,39 +178,47 @@ macro_rules! define_snowflake_id {
             }
 
             /// Extracts the timestamp from the packed ID.
+            #[must_use]
             pub const fn timestamp(&self) -> $int {
                 (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
             }
             /// Extracts the machine ID from the packed ID.
+            #[must_use]
             pub const fn machine_id(&self) -> $int {
                 (self.id >> Self::MACHINE_ID_SHIFT) & Self::MACHINE_ID_MASK
             }
             /// Extracts the sequence number from the packed ID.
+            #[must_use]
             pub const fn sequence(&self) -> $int {
                 (self.id >> Self::SEQUENCE_SHIFT) & Self::SEQUENCE_MASK
             }
             /// Returns the maximum representable timestamp value based on
-            /// Self::TIMESTAMP_BITS.
+            /// `Self::TIMESTAMP_BITS`.
+            #[must_use]
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
             /// Returns the maximum representable machine ID value based on
-            /// Self::MACHINE_ID_BITS.
+            /// `Self::MACHINE_ID_BITS`.
+            #[must_use]
             pub const fn max_machine_id() -> $int {
                 (1 << Self::MACHINE_ID_BITS) - 1
             }
             /// Returns the maximum representable sequence value based on
-            /// Self::SEQUENCE_BITS.
+            /// `Self::SEQUENCE_BITS`.
+            #[must_use]
             pub const fn max_sequence() -> $int {
                 (1 << Self::SEQUENCE_BITS) - 1
             }
 
             /// Converts this type into its raw type representation
+            #[must_use]
             pub const fn to_raw(&self) -> $int {
                 self.id
             }
 
             /// Converts a raw type into this type
+            #[must_use]
             pub const fn from_raw(raw: $int) -> Self {
                 Self { id: raw }
             }
@@ -227,7 +240,7 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl $crate::Snowflake for $name {
+        impl $crate::SnowflakeId for $name {
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
@@ -402,9 +415,10 @@ define_snowflake_id!(
     sequence: 20
 );
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
+    use std::println;
 
     #[test]
     fn test_snowflake_twitter_id_fields_and_bounds() {
@@ -480,105 +494,105 @@ mod tests {
     #[should_panic(expected = "timestamp overflow")]
     fn twitter_timestamp_overflow_panics() {
         let ts = SnowflakeTwitterId::max_timestamp() + 1;
-        SnowflakeTwitterId::from_components(ts, 0, 0);
+        let _ = SnowflakeTwitterId::from_components(ts, 0, 0);
     }
 
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn twitter_machine_id_overflow_panics() {
         let mid = SnowflakeTwitterId::max_machine_id() + 1;
-        SnowflakeTwitterId::from_components(0, mid, 0);
+        let _ = SnowflakeTwitterId::from_components(0, mid, 0);
     }
 
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn twitter_sequence_overflow_panics() {
         let seq = SnowflakeTwitterId::max_sequence() + 1;
-        SnowflakeTwitterId::from_components(0, 0, seq);
+        let _ = SnowflakeTwitterId::from_components(0, 0, seq);
     }
 
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn discord_timestamp_overflow_panics() {
         let ts = SnowflakeDiscordId::max_timestamp() + 1;
-        SnowflakeDiscordId::from_components(ts, 0, 0);
+        let _ = SnowflakeDiscordId::from_components(ts, 0, 0);
     }
 
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn discord_machine_id_overflow_panics() {
         let mid = SnowflakeDiscordId::max_machine_id() + 1;
-        SnowflakeDiscordId::from_components(0, mid, 0);
+        let _ = SnowflakeDiscordId::from_components(0, mid, 0);
     }
 
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn discord_sequence_overflow_panics() {
         let seq = SnowflakeDiscordId::max_sequence() + 1;
-        SnowflakeDiscordId::from_components(0, 0, seq);
+        let _ = SnowflakeDiscordId::from_components(0, 0, seq);
     }
 
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn mastodon_timestamp_overflow_panics() {
         let ts = SnowflakeMastodonId::max_timestamp() + 1;
-        SnowflakeMastodonId::from_components(ts, 0, 0);
+        let _ = SnowflakeMastodonId::from_components(ts, 0, 0);
     }
 
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn mastodon_machine_id_overflow_panics() {
         let mid = SnowflakeMastodonId::max_machine_id() + 1;
-        SnowflakeMastodonId::from_components(0, mid, 0);
+        let _ = SnowflakeMastodonId::from_components(0, mid, 0);
     }
 
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn mastodon_sequence_overflow_panics() {
         let seq = SnowflakeMastodonId::max_sequence() + 1;
-        SnowflakeMastodonId::from_components(0, 0, seq);
+        let _ = SnowflakeMastodonId::from_components(0, 0, seq);
     }
 
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn instagram_timestamp_overflow_panics() {
         let ts = SnowflakeInstagramId::max_timestamp() + 1;
-        SnowflakeInstagramId::from_components(ts, 0, 0);
+        let _ = SnowflakeInstagramId::from_components(ts, 0, 0);
     }
 
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn instagram_machine_id_overflow_panics() {
         let mid = SnowflakeInstagramId::max_machine_id() + 1;
-        SnowflakeInstagramId::from_components(0, mid, 0);
+        let _ = SnowflakeInstagramId::from_components(0, mid, 0);
     }
 
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn instagram_sequence_overflow_panics() {
         let seq = SnowflakeInstagramId::max_sequence() + 1;
-        SnowflakeInstagramId::from_components(0, 0, seq);
+        let _ = SnowflakeInstagramId::from_components(0, 0, seq);
     }
 
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn long_timestamp_overflow_panics() {
         let ts = SnowflakeLongId::max_timestamp() + 1;
-        SnowflakeLongId::from_components(ts, 0, 0);
+        let _ = SnowflakeLongId::from_components(ts, 0, 0);
     }
 
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn long_machine_id_overflow_panics() {
         let mid = SnowflakeLongId::max_machine_id() + 1;
-        SnowflakeLongId::from_components(0, mid, 0);
+        let _ = SnowflakeLongId::from_components(0, mid, 0);
     }
 
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn long_sequence_overflow_panics() {
         let seq = SnowflakeLongId::max_sequence() + 1;
-        SnowflakeLongId::from_components(0, 0, seq);
+        let _ = SnowflakeLongId::from_components(0, 0, seq);
     }
 
     #[test]

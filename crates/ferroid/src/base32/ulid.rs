@@ -1,5 +1,5 @@
 use super::interface::Base32Ext;
-use crate::{Base32Error, BeBytes, Error, Id, Result, Ulid};
+use crate::{Base32Error, BeBytes, Error, Id, Result, UlidId};
 use core::fmt;
 use core::marker::PhantomData;
 
@@ -20,7 +20,7 @@ use core::marker::PhantomData;
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub trait Base32UlidExt: Ulid
+pub trait Base32UlidExt: UlidId
 where
     Self::Ty: BeBytes,
 {
@@ -33,6 +33,7 @@ where
     /// integer type.
     ///
     /// See also: [`Base32UlidExt::encode_to_buf`] for usage.
+    #[must_use]
     fn buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
         <Self as Base32Ext>::inner_buf()
     }
@@ -89,7 +90,7 @@ where
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
-    /// ⚠️ **Note:**  
+    /// ⚠️ **Note:**\
     /// This method structurally decodes a Crockford base32 string into an
     /// integer representing a ULID, regardless of whether the input is a
     /// canonical ULID.
@@ -122,7 +123,7 @@ where
     /// ```
     /// #[cfg(all(feature = "base32", feature = "ulid"))]
     /// {
-    ///     use ferroid::{Base32UlidExt, Ulid, ULID};
+    ///     use ferroid::{Base32UlidExt, UlidId, ULID};
     ///     // Crockford base32 encodes in 5-bit chunks, so encoding a 128-bit ULID
     ///     // requires 26 characters (26 * 5 = 130 bits). The two highest (leftmost)
     ///     // bits from base32 encoding are always truncated (ignored) for performance.
@@ -136,12 +137,10 @@ where
     ///     assert!(ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
     /// }
     /// ```
-    fn decode(s: impl AsRef<str>) -> Result<Self> {
+    fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow(
-                decoded.to_raw().to_be_bytes().as_ref().to_vec(),
-            )));
+            return Err(Error::Base32Error(Base32Error::DecodeOverflow(decoded)));
         }
         Ok(decoded)
     }
@@ -149,7 +148,7 @@ where
 
 impl<ID> Base32UlidExt for ID
 where
-    ID: Ulid,
+    ID: UlidId,
     ID::Ty: BeBytes,
 {
 }
@@ -179,19 +178,24 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
+    #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 
     /// Consumes the builder and returns the raw buffer.
-    pub fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
+    pub const fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
         self.buf
     }
 }
@@ -223,11 +227,13 @@ where
     }
 }
 
-impl<T: Base32UlidExt> PartialEq<String> for Base32UlidFormatter<T>
+#[cfg(feature = "alloc")]
+#[cfg_attr(not(feature = "alloc"), doc(hidden))]
+impl<T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatter<T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }
@@ -256,19 +262,24 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
+    #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 }
 
-impl<'a, T: Base32UlidExt> fmt::Display for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> fmt::Display for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -277,7 +288,7 @@ where
     }
 }
 
-impl<'a, T: Base32UlidExt> AsRef<str> for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> AsRef<str> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -286,7 +297,7 @@ where
     }
 }
 
-impl<'a, T: Base32UlidExt> PartialEq<str> for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> PartialEq<str> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -294,7 +305,7 @@ where
         self.as_str() == other
     }
 }
-impl<'a, T: Base32UlidExt> PartialEq<&str> for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> PartialEq<&str> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -303,18 +314,20 @@ where
     }
 }
 
-impl<'a, T: Base32UlidExt> PartialEq<String> for Base32UlidFormatterRef<'a, T>
+#[cfg(feature = "alloc")]
+#[cfg_attr(not(feature = "alloc"), doc(hidden))]
+impl<T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }
 
 #[cfg(all(test, feature = "ulid"))]
 mod test {
-    use crate::{Base32UlidExt, ULID, Ulid};
+    use crate::{Base32UlidExt, ULID, UlidId};
 
     #[test]
     fn ulid_max() {
@@ -333,28 +346,28 @@ mod test {
 
     #[test]
     fn ulid_known() {
-        let id = ULID::from_components(1469922850259, 1012768647078601740696923);
-        assert_eq!(id.timestamp(), 1469922850259);
-        assert_eq!(id.random(), 1012768647078601740696923);
+        let id = ULID::from_components(1_469_922_850_259, 1_012_768_647_078_601_740_696_923);
+        assert_eq!(id.timestamp(), 1_469_922_850_259);
+        assert_eq!(id.random(), 1_012_768_647_078_601_740_696_923);
 
         let encoded = id.encode();
         assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
         let decoded = ULID::decode(encoded).unwrap();
 
-        assert_eq!(decoded.timestamp(), 1469922850259);
-        assert_eq!(decoded.random(), 1012768647078601740696923);
+        assert_eq!(decoded.timestamp(), 1_469_922_850_259);
+        assert_eq!(decoded.random(), 1_012_768_647_078_601_740_696_923);
         assert_eq!(id, decoded);
 
-        let id = ULID::from_components(1611559180765, 885339478614498720052741);
-        assert_eq!(id.timestamp(), 1611559180765);
-        assert_eq!(id.random(), 885339478614498720052741);
+        let id = ULID::from_components(1_611_559_180_765, 885_339_478_614_498_720_052_741);
+        assert_eq!(id.timestamp(), 1_611_559_180_765);
+        assert_eq!(id.random(), 885_339_478_614_498_720_052_741);
 
         let encoded = id.encode();
         assert_eq!(encoded, "01EWW6K6EXQDX5JV0E9CAHPXG5");
         let decoded = ULID::decode(encoded).unwrap();
 
-        assert_eq!(decoded.timestamp(), 1611559180765);
-        assert_eq!(decoded.random(), 885339478614498720052741);
+        assert_eq!(decoded.timestamp(), 1_611_559_180_765);
+        assert_eq!(decoded.random(), 885_339_478_614_498_720_052_741);
         assert_eq!(id, decoded);
     }
 

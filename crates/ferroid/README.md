@@ -48,24 +48,104 @@ and parsing **Snowflake** and **ULID** identifiers.
 | `LockSnowflakeGenerator`   | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
 | `AtomicSnowflakeGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation (less fair)  |
 
-| Ulid Generator       | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
-| -------------------- | --------- | ----------- | --------- | ---------- | --------------------------------------- |
-| `BasicUlidGenerator` | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
-| `LockUlidGenerator`  | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
+| Ulid Generator           | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
+| ------------------------ | --------- | ----------- | --------- | ---------- | --------------------------------------- |
+| `BasicUlidGenerator`     | ❌        | ✅          | ❌        | Slow       | Thread-safe, always random, but slow    |
+| `BasicMonoUlidGenerator` | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
+| `LockMonoUlidGenerator`  | ✅        | ✅          | ❌        | High       | Fair multithreaded access               |
 
 ## 🚀 Usage
 
+### Thread Locals
+
+The simplest way to generate a ULID is via `Ulid`, which provides a thread-local
+generator that can produce both non-monotonic and monotonic ULIDs:
+
+```rust
+#[cfg(all(feature = "ulid", feature = "thread_local"))]
+{
+    use ferroid::{ULID, Ulid};
+
+    // A ULID (slower, always random within the same millisecond)
+    let id: ULID = Ulid::new_ulid();
+
+    // A monotonic ULID (faster, increments within the same millisecond)
+    let id: ULID = Ulid::new_mono_ulid();
+}
+```
+
+Thread-local generators are not currently available for `SnowflakeId`-style IDs
+because they rely on a valid `machine_id` to avoid collisions. Mapping unique
+`machine_id`s across threads requires coordination beyond what `thread_local!`
+alone can guarantee.
+
+### Crockford Base32
+
+Enable the `base32` feature to support Crockford Base32 encoding and decoding
+IDs.
+
+By default, printing an ID returns its raw integer representation. If you need
+fixed-width, URL-safe, and lexicographically sortable strings (e.g. for use in
+databases, logs, or URLs), use `.encode()` to obtain a lightweight formatter. It
+avoids heap allocation and can be passed freely without committing to any
+specific string primitive, letting the consumer choose how and when to render
+it.
+
+This feature avoids heap allocation by default and supports both owned and
+borrowed encoding buffers. For full `String` support, enable the `alloc`
+feature.
+
+```rust
+#[cfg(all(feature = "base32", feature = "snowflake"))]
+{
+    use ferroid::{Base32SnowExt, SnowflakeId, SnowflakeTwitterId};
+
+    let id = SnowflakeTwitterId::from(123456, 1, 42);
+    assert_eq!(format!("default: {id}"), "default: 517811998762");
+
+    let encoded = id.encode();
+    assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
+
+    let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
+    assert_eq!(id, decoded);
+
+    let decoded = SnowflakeTwitterId::decode("00000F280041A").expect("decode should succeed");
+    assert_eq!(id, decoded);
+}
+
+#[cfg(all(feature = "base32", feature = "ulid"))]
+{
+    use ferroid::{Base32UlidExt, UlidId, ULID};
+
+    let id = ULID::from(123456, 42);
+    assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");
+
+    let encoded = id.encode();
+    assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
+
+    let decoded = ULID::decode(&encoded).expect("decode should succeed");
+    assert_eq!(decoded.timestamp(), 123456);
+    assert_eq!(decoded.random(), 42);
+    assert_eq!(id, decoded);
+
+    let decoded = ULID::decode("0000003RJ0000000000000001A").unwrap();
+    assert_eq!(decoded.timestamp(), 123456);
+    assert_eq!(decoded.random(), 42);
+    assert_eq!(id, decoded);
+}
+```
+
 ### Generate an ID
 
-#### Synchronous
+#### Synchronous Generators
 
 Calling `next_id()` may yield `Pending` if the current sequence is exhausted. In
 that case, you can spin, yield, or sleep depending on your environment:
 
 ```rust
-#[cfg(feature = "snowflake")]
+#[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
 {
-    use ferroid::{MonotonicClock, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+    use ferroid::{MonotonicClock, IdGenStatus, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId};
 
     let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
     let generator = BasicSnowflakeGenerator::new(0, clock);
@@ -85,7 +165,7 @@ that case, you can spin, yield, or sleep depending on your environment:
     };
 }
 
-#[cfg(feature = "ulid")]
+#[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
 {
     use ferroid::{MonotonicClock, IdGenStatus, UNIX_EPOCH, ThreadRandom, BasicUlidGenerator, ULID};
 
@@ -111,11 +191,11 @@ that case, you can spin, yield, or sleep depending on your environment:
 }
 ```
 
-#### Asynchronous
+#### Asynchronous Generators
 
 If you're in an async context (e.g., using [Tokio](https://tokio.rs/) or
 [Smol](https://github.com/smol-rs/smol)), you can enable one of the following
-features:
+features to prevent blocking behavior:
 
 - `async-tokio`
 - `async-smol`
@@ -130,12 +210,12 @@ features:
         #[cfg(feature = "snowflake")]
         {
             use ferroid::{
-                AtomicSnowflakeGenerator, SnowflakeMastodonId,
+                BasicSnowflakeGenerator, SnowflakeMastodonId,
                 SnowflakeGeneratorAsyncTokioExt
             };
 
             let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-            let generator = AtomicSnowflakeGenerator::new(0, clock);
+            let generator = BasicSnowflakeGenerator::new(0, clock);
 
             let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
             println!("Generated ID: {}", id);
@@ -166,12 +246,12 @@ features:
             #[cfg(feature = "snowflake")]
             {
                 use ferroid::{
-                    AtomicSnowflakeGenerator, SnowflakeMastodonId,
+                    BasicSnowflakeGenerator, SnowflakeMastodonId,
                     SnowflakeGeneratorAsyncSmolExt, CUSTOM_EPOCH
                 };
 
                 let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
-                let generator = AtomicSnowflakeGenerator::new(0, clock);
+                let generator = BasicSnowflakeGenerator::new(0, clock);
 
                 let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
                 println!("Generated ID: {}", id);
@@ -310,19 +390,23 @@ Where:
 - $r$ = number of random bits per ID
 - $P_\text{collision}$ = probability of at least one collision
 
-> Note:
-> The formula above uses the approximate (birthday bound) model, which assumes that:
+> Note: The formula above uses the approximate (birthday bound) model, which
+> assumes that:
 >
 > - $k \ll 2^r$ and $g \ll 2^r$
-> - Each generator's range of $k$ IDs starts at a uniformly random position within the $r$-bit space
+> - Each generator's range of $k$ IDs starts at a uniformly random position
+>   within the $r$-bit space
 
 #### Estimating Time Until a Collision Occurs
 
-While collisions only happen within a single millisecond, we often want to know how long it takes before **any** collision happens, given continuous generation over time.
+While collisions only happen within a single millisecond, we often want to know
+how long it takes before **any** collision happens, given continuous generation
+over time.
 
 The expected time in milliseconds to reach a 50% chance of collision is:
 
-$T_{\text{50\%}} \approx \frac{\ln 2}{P_\text{collision}} = \frac{0.6931 \cdot 2 \cdot 2^r}{g(g - 1)(2k - 1)}$
+$T_{\text{50\%}} \approx \frac{\ln 2}{P_\text{collision}} = \frac{0.6931 \cdot 2
+\cdot 2^r}{g(g - 1)(2k - 1)}$
 
 This is derived from the cumulative probability formula:
 
@@ -334,11 +418,13 @@ $(1 - P_\text{collision})^T = 0.5$
 
 $\Rightarrow T \approx \frac{\ln(0.5)}{\ln(1 - P_\text{collision})}$
 
-Using the approximation $\ln(1 - x) \approx -x$ for small $x$, this simplifies to:
+Using the approximation $\ln(1 - x) \approx -x$ for small $x$, this simplifies
+to:
 
 $\Rightarrow T \approx \frac{\ln 2}{P_\text{collision}}$
 
-The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$ milliseconds, there's a 50% chance that at least one collision has occurred.
+The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$
+milliseconds, there's a 50% chance that at least one collision has occurred.
 
 | Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{\text{50\%}}$)         |
 | ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -348,46 +434,6 @@ The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$ milli
 | 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         | $\approx 6.41 \times 10^{18} \text{ ms}$                    |
 | 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999 \times 1}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$         | $\approx 1.68 \times 10^{18} \text{ ms}$                    |
 | 1,000            | 65,536                         | $\displaystyle \frac{1{,}000 \times 999 \times 131{,}071}{2 \cdot 2^{80}} \approx 5.42 \times 10^{-14}$ | $\approx 1.28 \times 10^{13} \text{ ms} \approx 406\ years$ |
-
-### Serialize as padded string
-
-Use `.encode()` or `.encode_to_buf()` for sortable string representations:
-
-```rust
-#[cfg(all(feature = "base32", feature = "snowflake"))]
-{
-    use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId};
-
-    let id = SnowflakeTwitterId::from(123456, 1, 42);
-    assert_eq!(format!("default: {id}"), "default: 517811998762");
-
-    let encoded = id.encode();
-    assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
-
-    let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
-    assert_eq!(id, decoded);
-}
-
-#[cfg(all(feature = "base32", feature = "ulid"))]
-{
-    use ferroid::{Base32UlidExt, Ulid, ULID};
-
-    let id = ULID::from(123456, 42);
-    assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");
-
-    let encoded = id.encode();
-    assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
-
-    let decoded = ULID::decode(&encoded).expect("decode should succeed");
-    assert_eq!(decoded.timestamp(), 123456);
-    assert_eq!(decoded.random(), 42);
-    assert_eq!(id, decoded);
-
-    let decoded = ULID::decode("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
-    assert_eq!(decoded.timestamp(), 1469922850259);
-    assert_eq!(decoded.random(), 1012768647078601740696923);
-}
-```
 
 ## 📈 Benchmarks
 
@@ -437,29 +483,30 @@ efficiency).
 
 #### Synchronous Generators
 
-| Generator                | Time per ID | Throughput    |
-| ------------------------ | ----------- | ------------- |
-| BasicSnowflakeGenerator  | **~2.8 ns** | ~353M IDs/sec |
-| LockSnowflakeGenerator   | **~8.9 ns** | ~111M IDs/sec |
-| AtomicSnowflakeGenerator | **~3.1 ns** | ~320M IDs/sec |
-| BasicUlidGenerator       | **~3.4 ns** | ~288M IDs/sec |
-| LockUlidGenerator        | **~9.2 ns** | ~109M IDs/sec |
+| Generator                  | Time per ID | Throughput    |
+| -------------------------- | ----------- | ------------- |
+| `BasicSnowflakeGenerator`  | **~2.8 ns** | ~353M IDs/sec |
+| `LockSnowflakeGenerator`   | **~8.9 ns** | ~111M IDs/sec |
+| `AtomicSnowflakeGenerator` | **~3.1 ns** | ~320M IDs/sec |
+| `BasicUlidGenerator`       | **~3.4 ns** | ~288M IDs/sec |
+| `BasicMonoUlidGenerator`   | **~3.4 ns** | ~44M IDs/sec  |
+| `LockMonoUlidGenerator`    | **~9.2 ns** | ~109M IDs/sec |
 
 #### Async (Tokio Runtime) - Peak throughput
 
-| Generator                | Generators | Time per ID  | Throughput     |
-| ------------------------ | ---------- | ------------ | -------------- |
-| LockSnowflakeGenerator   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
-| AtomicSnowflakeGenerator | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
-| LockUlidGenerator        | 1024       | **~1.57 ns** | ~635M IDs/sec  |
+| Generator                  | Generators | Time per ID  | Throughput     |
+| -------------------------- | ---------- | ------------ | -------------- |
+| `LockSnowflakeGenerator`   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
+| `LockMonoUlidGenerator`    | 1024       | **~1.57 ns** | ~635M IDs/sec  |
 
 #### Async (Smol Runtime) - Peak throughput
 
-| Generator                | Generators | Time per ID  | Throughput     |
-| ------------------------ | ---------- | ------------ | -------------- |
-| LockSnowflakeGenerator   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
-| AtomicSnowflakeGenerator | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
-| LockUlidGenerator        | 1024       | **~1.32 ns** | ~756M IDs/sec  |
+| Generator                  | Generators | Time per ID  | Throughput     |
+| -------------------------- | ---------- | ------------ | -------------- |
+| `LockSnowflakeGenerator`   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
+| `LockMonoUlidGenerator`    | 1024       | **~1.32 ns** | ~756M IDs/sec  |
 
 To run all benchmarks:
 

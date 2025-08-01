@@ -18,19 +18,19 @@ pub trait ToU64 {
 
 impl ToU64 for u8 {
     fn to_u64(self) -> u64 {
-        self as u64
+        u64::from(self)
     }
 }
 
 impl ToU64 for u16 {
     fn to_u64(self) -> u64 {
-        self as u64
+        u64::from(self)
     }
 }
 
 impl ToU64 for u32 {
     fn to_u64(self) -> u64 {
-        self as u64
+        u64::from(self)
     }
 }
 

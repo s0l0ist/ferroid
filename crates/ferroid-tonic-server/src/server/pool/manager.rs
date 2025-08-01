@@ -36,7 +36,7 @@ pub struct WorkerPool {
 impl WorkerPool {
     /// Constructs a new [`WorkerPool`] from initialized worker channels and a
     /// shared cancellation token.
-    pub fn new(
+    pub const fn new(
         workers: Vec<mpsc::Sender<WorkRequest>>,
         shutdown_token: CancellationToken,
         shutdown_timeout: usize,
@@ -106,7 +106,7 @@ impl WorkerPool {
         .await;
 
         match drain_result {
-            Ok(_) => {
+            Ok(()) => {
                 #[cfg(feature = "tracing")]
                 tracing::debug!("All in-flight streams drained successfully");
             }

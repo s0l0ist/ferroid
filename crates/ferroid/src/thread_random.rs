@@ -1,7 +1,7 @@
 use crate::RandSource;
 use rand::{Rng, rng};
 
-/// A `RandSource` that uses the thread-local RNG (`rand::thread_rng()`).
+/// A `RandSource` that uses the thread-local RNG (`rand::thread_local()`).
 ///
 /// This RNG is fast, cryptographically secure (ChaCha-based), and automatically
 /// reseeded periodically.

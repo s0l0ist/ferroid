@@ -1,4 +1,6 @@
-use crate::{RandSource, Result, SmolSleep, TimeSource, Ulid, UlidGenerator};
+use core::fmt;
+
+use crate::{RandSource, Result, SmolSleep, TimeSource, UlidGenerator, UlidId};
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
@@ -10,10 +12,11 @@ use crate::{RandSource, Result, SmolSleep, TimeSource, Ulid, UlidGenerator};
 /// [`SleepProvider`]: crate::SleepProvider
 pub trait UlidGeneratorAsyncSmolExt<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err: fmt::Debug;
     /// Returns a future that resolves to the next available Ulid using
     /// the [`SmolSleep`] provider.
     ///
@@ -27,17 +30,20 @@ where
     ///
     /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::UlidGeneratorAsyncExt::try_next_id_async
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
 impl<G, ID, T, R> UlidGeneratorAsyncSmolExt<ID, T, R> for G
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+    type Err = G::Err;
+
+    #[allow(clippy::future_not_send)]
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<SmolSleep>(self)
     }
 }
@@ -46,13 +52,14 @@ where
 mod tests {
     use super::*;
     use crate::{
-        LockUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
-        ThreadRandom, TimeSource, ULID, Ulid, UlidGenerator,
+        LockMonoUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
+        ThreadRandom, TimeSource, ULID, UlidGenerator, UlidId,
     };
     use core::fmt;
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
+    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
@@ -63,7 +70,7 @@ mod tests {
     fn generates_many_unique_ids_basic_smol_sleep() {
         smol::block_on(async {
             test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolSleep>(
-                LockUlidGenerator::new,
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
@@ -75,7 +82,7 @@ mod tests {
     fn generates_many_unique_ids_basic_smol_yield() {
         smol::block_on(async {
             test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolYield>(
-                LockUlidGenerator::new,
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
@@ -87,7 +94,7 @@ mod tests {
     fn generates_many_unique_ids_basic_smol_convience() {
         smol::block_on(async {
             test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
-                LockUlidGenerator::new,
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
@@ -104,7 +111,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: Ulid + fmt::Debug + Send + 'static,
+        ID: UlidId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
@@ -122,7 +129,9 @@ mod tests {
                 smol::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = crate::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g).await?;
+                        let id = crate::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g)
+                            .await
+                            .unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -141,7 +150,8 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: Ulid + fmt::Debug + Send + 'static,
+        G::Err: Send + Sync + 'static,
+        ID: UlidId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
     {
@@ -160,7 +170,7 @@ mod tests {
                     for _ in 0..IDS_PER_GENERATOR {
                         // This uses the convenience method - no explicit
                         // SleepProvider type!
-                        let id = g.try_next_id_async().await?;
+                        let id = g.try_next_id_async().await.unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -172,11 +182,10 @@ mod tests {
     }
 
     // Helper to validate uniqueness - shared between test approaches
-    async fn validate_unique_ulid_ids(
-        tasks: Vec<Task<Result<Vec<impl Ulid>>>>,
-    ) -> Result<()> {
+    async fn validate_unique_ulid_ids(tasks: Vec<Task<Result<Vec<impl UlidId>>>>) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
+        #[allow(clippy::cast_possible_truncation)]
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
         assert_eq!(
             all_ids.len(),

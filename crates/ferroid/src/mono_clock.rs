@@ -1,18 +1,20 @@
 use crate::{CUSTOM_EPOCH, TimeSource};
+use alloc::sync::Arc;
 use core::time::Duration;
 use std::{
     sync::{
-        Arc, OnceLock,
+        OnceLock,
         atomic::{AtomicU64, Ordering},
     },
     thread::{self, JoinHandle},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
+
 /// Shared ticker thread that updates every millisecond.
 #[derive(Debug)]
 struct SharedTickerInner {
     current: AtomicU64,
-    _handle: OnceLock<JoinHandle<()>>,
+    handle: OnceLock<JoinHandle<()>>,
 }
 
 /// A monotonic time source that returns elapsed time since process start,
@@ -88,17 +90,24 @@ impl MonotonicClock {
     /// This allows you to control the timestamp layout by anchoring all
     /// generated times to a custom epoch of your choosing.
     ///
+    /// # Panics
+    /// - Panics if the background thread handle has already been set on the
+    ///   internal ticker. This happens if `with_epoch` is called more than once
+    ///   on the same `MonotonicClock` instance.
+    ///
     /// [`current_millis`]: TimeSource::current_millis
+    #[must_use]
     pub fn with_epoch(epoch: Duration) -> Self {
         let start = Instant::now();
         let system_now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or(core::time::Duration::ZERO);
+        #[allow(clippy::cast_possible_truncation)]
         let offset = system_now.saturating_sub(epoch).as_millis() as u64;
 
         let inner = Arc::new(SharedTickerInner {
             current: AtomicU64::new(0),
-            _handle: OnceLock::new(),
+            handle: OnceLock::new(),
         });
 
         let weak_inner = Arc::downgrade(&inner);
@@ -121,6 +130,7 @@ impl MonotonicClock {
 
                 // After waking, recompute how far we actually are from the
                 // start
+                #[allow(clippy::cast_possible_truncation)]
                 let now_ms = start.elapsed().as_millis() as u64;
 
                 // Monotonic store, aligned to elapsed milliseconds since start
@@ -132,7 +142,7 @@ impl MonotonicClock {
         });
 
         inner
-            ._handle
+            .handle
             .set(handle)
             .expect("failed to set thread handle");
 
@@ -155,6 +165,6 @@ impl TimeSource<u128> for MonotonicClock {
     /// Returns the number of milliseconds since the configured epoch, based on
     /// the elapsed monotonic time since construction.
     fn current_millis(&self) -> u128 {
-        <Self as TimeSource<u64>>::current_millis(self) as u128
+        u128::from(<Self as TimeSource<u64>>::current_millis(self))
     }
 }

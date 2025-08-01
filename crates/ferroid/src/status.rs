@@ -15,7 +15,7 @@ use crate::Id;
 /// ```
 /// #[cfg(feature = "snowflake")]
 /// {
-///     use ferroid::{Snowflake, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+///     use ferroid::{SnowflakeId, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
 ///
 ///     struct FixedTime;
 ///     impl ferroid::TimeSource<u64> for FixedTime {

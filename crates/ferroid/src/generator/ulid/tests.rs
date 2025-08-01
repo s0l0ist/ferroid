@@ -1,11 +1,13 @@
 use crate::{
-    BasicUlidGenerator, Id, IdGenStatus, LockUlidGenerator, MonotonicClock, RandSource,
-    ThreadRandom, TimeSource, ToU64, ULID, Ulid, UlidGenerator,
+    BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus, LockMonoUlidGenerator,
+    MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64, ULID, UlidId, UlidGenerator,
 };
+use alloc::rc::Rc;
+use alloc::sync::Arc;
+use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use std::collections::HashSet;
-use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::thread::scope;
 
 struct MockTime {
@@ -45,7 +47,7 @@ impl SharedMockStepTime {
 
 impl TimeSource<u128> for SharedMockStepTime {
     fn current_millis(&self) -> u128 {
-        self.clock.values[self.clock.index.get()] as u128
+        u128::from(self.clock.values[self.clock.index.get()])
     }
 }
 struct MockStepTime {
@@ -88,8 +90,8 @@ where
 {
     fn unwrap_ready(self) -> T {
         match self {
-            IdGenStatus::Ready { id } => id,
-            IdGenStatus::Pending { yield_for } => {
+            Self::Ready { id } => id,
+            Self::Pending { yield_for } => {
                 panic!("unexpected pending (yield for: {yield_for})")
             }
         }
@@ -97,16 +99,16 @@ where
 
     fn unwrap_pending(self) -> T::Ty {
         match self {
-            IdGenStatus::Ready { id } => panic!("unexpected ready ({id})"),
-            IdGenStatus::Pending { yield_for } => yield_for,
+            Self::Ready { id } => panic!("unexpected ready ({id})"),
+            Self::Pending { yield_for } => yield_for,
         }
     }
 }
 
-fn run_id_sequence_increments_within_same_tick<G, ID, T, R>(generator: G)
+fn run_id_sequence_increments_within_same_tick<G, ID, T, R>(generator: &G)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -123,10 +125,10 @@ where
     assert!(id1 < id2 && id2 < id3);
 }
 
-fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T, R>(generator: G)
+fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T, R>(generator: &G)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -134,10 +136,10 @@ where
     assert_eq!(yield_for, ID::ONE);
 }
 
-fn run_generator_handles_rollover<G, ID, T, R>(generator: G, shared_time: SharedMockStepTime)
+fn run_generator_handles_rollover<G, ID, T, R>(generator: &G, shared_time: &SharedMockStepTime)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -153,15 +155,16 @@ where
     assert_eq!(id.timestamp().to_u64(), 43);
 }
 
-fn run_generator_monotonic<G, ID, T, R>(generator: G)
+fn run_generator_monotonic<G, ID, T, R>(generator: &G)
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
     let mut last_timestamp = ID::ZERO;
     let mut random = None;
+    #[allow(clippy::items_after_statements)]
     const TOTAL_IDS: usize = 4096 * 256;
 
     for _ in 0..TOTAL_IDS {
@@ -191,7 +194,7 @@ where
 fn run_generator_monotonic_threaded<G, ID, T, R>(make_generator: impl Fn() -> G)
 where
     G: UlidGenerator<ID, T, R> + Send + Sync,
-    ID: Ulid + Send,
+    ID: UlidId + Send,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -212,8 +215,7 @@ where
                     loop {
                         match generator.next_id() {
                             IdGenStatus::Ready { id } => {
-                                let mut set = seen_ids.lock().unwrap();
-                                assert!(set.insert(id));
+                                assert!(seen_ids.lock().unwrap().insert(id));
                                 break;
                             }
                             IdGenStatus::Pending { .. } => std::thread::yield_now(),
@@ -229,66 +231,78 @@ where
 }
 
 #[test]
-fn basic_generator_sequence_test() {
+fn basic_generator() {
     let mock_time = MockTime { millis: 42 };
-    let mock_rand = MockRand { rand: 42 };
+    let mock_rand = MockRand { rand: 43 };
     let generator: BasicUlidGenerator<ULID, _, _> = BasicUlidGenerator::new(mock_time, mock_rand);
-    run_id_sequence_increments_within_same_tick(generator);
+    let id = generator.next_id().unwrap_ready();
+    assert_eq!(id.timestamp(), 42);
+    assert_eq!(id.random(), 43);
 }
 
 #[test]
-fn lock_generator_sequence_test() {
+fn basic_generator_mono_sequence_test() {
+    let mock_time = MockTime { millis: 42 };
+    let mock_rand = MockRand { rand: 42 };
+    let generator: BasicMonoUlidGenerator<ULID, _, _> =
+        BasicMonoUlidGenerator::new(mock_time, mock_rand);
+    run_id_sequence_increments_within_same_tick(&generator);
+}
+
+#[test]
+fn lock_generator_mono_sequence_test() {
     let mock_time = MockTime { millis: 42 };
     let mock_rand = MockRand { rand: 42 };
 
-    let generator: LockUlidGenerator<ULID, _, _> = LockUlidGenerator::new(mock_time, mock_rand);
-    run_id_sequence_increments_within_same_tick(generator);
+    let generator: LockMonoUlidGenerator<ULID, _, _> =
+        LockMonoUlidGenerator::new(mock_time, mock_rand);
+    run_id_sequence_increments_within_same_tick(&generator);
 }
 
 #[test]
-fn basic_generator_pending_test() {
-    let generator: BasicUlidGenerator<ULID, _, _> =
-        BasicUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
-    run_generator_returns_pending_when_sequence_exhausted(generator);
+fn basic_generator_mono_pending_test() {
+    let generator: BasicMonoUlidGenerator<ULID, _, _> =
+        BasicMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
 #[test]
-fn lock_generator_pending_test() {
-    let generator: LockUlidGenerator<ULID, _, _> =
-        LockUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
-    run_generator_returns_pending_when_sequence_exhausted(generator);
+fn lock_generator_mono_pending_test() {
+    let generator: LockMonoUlidGenerator<ULID, _, _> =
+        LockMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
 #[test]
-fn basic_generator_rollover_test() {
+fn basic_generator_mono_rollover_test() {
     let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
-    let generator: BasicUlidGenerator<ULID, _, _> =
-        BasicUlidGenerator::new(shared_time.clone(), MaxRand);
-    run_generator_handles_rollover(generator, shared_time);
+    let generator: BasicMonoUlidGenerator<ULID, _, _> =
+        BasicMonoUlidGenerator::new(shared_time.clone(), MaxRand);
+    run_generator_handles_rollover(&generator, &shared_time);
 }
 
 #[test]
-fn lock_generator_rollover_test() {
+fn lock_generator_mono_rollover_test() {
     let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
-    let generator: LockUlidGenerator<ULID, _, _> =
-        LockUlidGenerator::new(shared_time.clone(), MaxRand);
-    run_generator_handles_rollover(generator, shared_time);
+    let generator: LockMonoUlidGenerator<ULID, _, _> =
+        LockMonoUlidGenerator::new(shared_time.clone(), MaxRand);
+    run_generator_handles_rollover(&generator, &shared_time);
 }
 
 #[test]
 fn basic_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
-    let generator: BasicUlidGenerator<ULID, _, _> = BasicUlidGenerator::new(clock, rand);
-    run_generator_monotonic(generator);
+    let generator: BasicMonoUlidGenerator<ULID, _, _> = BasicMonoUlidGenerator::new(clock, rand);
+    run_generator_monotonic(&generator);
 }
 
 #[test]
 fn lock_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
-    let generator: LockUlidGenerator<ULID, _, _> = LockUlidGenerator::new(clock, rand);
-    run_generator_monotonic(generator);
+    let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
+    run_generator_monotonic(&generator);
 }
 
 #[test]
@@ -296,6 +310,6 @@ fn lock_generator_threaded_monotonic() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
     run_generator_monotonic_threaded(move || {
-        LockUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
+        LockMonoUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
     });
 }

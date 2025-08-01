@@ -25,9 +25,10 @@ pub enum Error {
     #[error("Channel error: {context}")]
     ChannelError { context: String },
 
-    /// Underlying Snowflake ID generation failed.
+    /// Underlying Snowflake ID generation failed. This is currently infallible,
+    /// but kept as a placeholder if the generator type yields an error.
     #[error("ID error: {0:?}")]
-    IdGeneration(#[from] ferroid::Error),
+    IdGeneration(#[from] core::convert::Infallible),
 
     /// The client aborted the request.
     #[error("Request cancelled by client")]
@@ -45,13 +46,11 @@ pub enum Error {
 impl From<Error> for Status {
     fn from(err: Error) -> Self {
         match err {
-            Error::ChannelError { context } => {
-                Status::internal(format!("Channel error: {context}"))
-            }
-            Error::IdGeneration(e) => Status::internal(format!("ID generation error: {e:?}")),
-            Error::RequestCancelled => Status::cancelled("Request was cancelled"),
-            Error::InvalidRequest { reason } => Status::invalid_argument(reason),
-            Error::ServiceShutdown => Status::unavailable("Service is shutting down"),
+            Error::ChannelError { context } => Self::internal(format!("Channel error: {context}")),
+            Error::IdGeneration(e) => Self::internal(format!("ID generation error: {e:?}")),
+            Error::RequestCancelled => Self::cancelled("Request was cancelled"),
+            Error::InvalidRequest { reason } => Self::invalid_argument(reason),
+            Error::ServiceShutdown => Self::unavailable("Service is shutting down"),
         }
     }
 }

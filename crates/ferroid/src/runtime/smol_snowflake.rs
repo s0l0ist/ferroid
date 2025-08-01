@@ -1,4 +1,4 @@
-use crate::{Result, SmolSleep, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{Result, SmolSleep, SnowflakeGenerator, SnowflakeId, TimeSource};
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
@@ -10,9 +10,10 @@ use crate::{Result, SmolSleep, Snowflake, SnowflakeGenerator, TimeSource};
 /// [`SleepProvider`]: crate::SleepProvider
 pub trait SnowflakeGeneratorAsyncSmolExt<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
+    type Err;
     /// Returns a future that resolves to the next available Snowflake ID using
     /// the [`SmolSleep`] provider.
     ///
@@ -26,16 +27,19 @@ where
     ///
     /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
 impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+    type Err = G::Err;
+
+    #[allow(clippy::future_not_send)]
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<SmolSleep>(self)
     }
 }
@@ -45,12 +49,13 @@ mod tests {
     use super::*;
     use crate::{
         AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, SleepProvider,
-        SmolYield, Snowflake, SnowflakeGenerator, SnowflakeTwitterId, TimeSource,
+        SmolYield, SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource,
     };
     use core::fmt;
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
+    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
@@ -131,7 +136,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: Snowflake + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
     {
@@ -147,8 +152,9 @@ mod tests {
                 smol::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id =
-                            crate::SnowflakeGeneratorAsyncExt::try_next_id_async::<S>(&g).await?;
+                        let id = crate::SnowflakeGeneratorAsyncExt::try_next_id_async::<S>(&g)
+                            .await
+                            .unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -166,7 +172,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: Snowflake + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
     {
         let clock = clock_factory();
@@ -183,7 +189,7 @@ mod tests {
                     for _ in 0..IDS_PER_GENERATOR {
                         // This uses the convenience method - no explicit
                         // SleepProvider type!
-                        let id = g.try_next_id_async().await?;
+                        let id = g.try_next_id_async().await.unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -196,10 +202,11 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_snow_ids(
-        tasks: Vec<Task<Result<Vec<impl Snowflake + fmt::Debug>>>>,
+        tasks: Vec<Task<Result<Vec<impl SnowflakeId + fmt::Debug>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
+        #[allow(clippy::cast_possible_truncation)]
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
         assert_eq!(
             all_ids.len(),

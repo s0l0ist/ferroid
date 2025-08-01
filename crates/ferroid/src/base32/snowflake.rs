@@ -1,5 +1,5 @@
 use super::interface::Base32Ext;
-use crate::{Base32Error, BeBytes, Error, Id, Result, Snowflake};
+use crate::{Base32Error, BeBytes, Error, Id, Result, SnowflakeId};
 use core::fmt;
 use core::marker::PhantomData;
 
@@ -20,7 +20,7 @@ use core::marker::PhantomData;
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub trait Base32SnowExt: Snowflake
+pub trait Base32SnowExt: SnowflakeId
 where
     Self::Ty: BeBytes,
 {
@@ -33,6 +33,7 @@ where
     /// integer type.
     ///
     /// See also: [`Base32SnowExt::encode_to_buf`] for usage.
+    #[must_use]
     fn buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
         <Self as Base32Ext>::inner_buf()
     }
@@ -89,7 +90,7 @@ where
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
-    /// ⚠️ **Note:**  
+    /// ⚠️ **Note:**\
     /// This method structurally decodes a Crockford base32 string into an
     /// integer representing a Snowflake ID, regardless of whether the input is
     /// a canonical Snowflake ID.
@@ -121,7 +122,7 @@ where
     /// ```
     /// #[cfg(all(feature = "base32", feature = "snowflake"))]
     /// {
-    ///     use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId, Error, Base32Error, Id};
+    ///     use ferroid::{Base32SnowExt, SnowflakeId, SnowflakeTwitterId, Error, Base32Error, Id};
     ///
     ///     // Crockford base32 encodes in 5-bit chunks, so encoding a u64 (64 bits)
     ///     // requires 13 characters (13 * 5 = 65 bits). The highest (leftmost) bit
@@ -139,25 +140,24 @@ where
     ///
     ///     // If the reserved bit is set (e.g., 'F' = 0b01111 or 'Z' = 0b11111), the ID is invalid:
     ///     // 'F' = 0b01111 (top bit X, reserved bit 1, rest 111...).
-    ///     match SnowflakeTwitterId::decode("FZZZZZZZZZZZZ") {
-    ///         Ok(_) => panic!("Should not succeed!"),
-    ///         Err(Error::Base32Error(Base32Error::DecodeOverflow(bytes))) => {
-    ///             let prim = u64::from_be_bytes(bytes.try_into().unwrap());
-    ///             let invalid = SnowflakeTwitterId::from_raw(prim);
-    ///             assert!(!invalid.is_valid());
-    ///             let valid = invalid.into_valid(); // clears reserved bits
-    ///             assert!(valid.is_valid());
+    ///
+    ///     let id = SnowflakeTwitterId::decode("FZZZZZZZZZZZZ").or_else(|err| {
+    ///         match err {
+    ///             Error::Base32Error(Base32Error::DecodeOverflow(invalid)) => {
+    ///                 debug_assert!(!invalid.is_valid());
+    ///                 let valid = invalid.into_valid(); // clears reserved bits
+    ///                 debug_assert!(valid.is_valid());
+    ///                 Ok(valid)
+    ///             }
+    ///             other => Err(other),
     ///         }
-    ///         Err(e) => panic!("Unexpected error: {e:?}"),
-    ///     }
+    ///     }).expect("should produce a valid ID");
     /// }
     /// ```
-    fn decode(s: impl AsRef<str>) -> Result<Self> {
+    fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow(
-                decoded.to_raw().to_be_bytes().as_ref().to_vec(),
-            )));
+            return Err(Error::Base32Error(Base32Error::DecodeOverflow(decoded)));
         }
         Ok(decoded)
     }
@@ -165,7 +165,7 @@ where
 
 impl<ID> Base32SnowExt for ID
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     ID::Ty: BeBytes,
 {
 }
@@ -195,19 +195,24 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
+    #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 
     /// Consumes the builder and returns the raw buffer.
-    pub fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
+    pub const fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
         self.buf
     }
 }
@@ -239,11 +244,13 @@ where
     }
 }
 
-impl<T: Base32SnowExt> PartialEq<String> for Base32SnowFormatter<T>
+#[cfg(feature = "std")]
+#[cfg_attr(not(feature = "std"), doc(hidden))]
+impl<T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatter<T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }
@@ -272,19 +279,24 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
-    pub fn to_string(&self) -> String {
+    #[cfg(feature = "alloc")]
+    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
+    #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
+    pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 }
 
-impl<'a, T: Base32SnowExt> fmt::Display for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> fmt::Display for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -293,7 +305,7 @@ where
     }
 }
 
-impl<'a, T: Base32SnowExt> AsRef<str> for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> AsRef<str> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -302,7 +314,7 @@ where
     }
 }
 
-impl<'a, T: Base32SnowExt> PartialEq<str> for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> PartialEq<str> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -310,7 +322,7 @@ where
         self.as_str() == other
     }
 }
-impl<'a, T: Base32SnowExt> PartialEq<&str> for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> PartialEq<&str> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -319,11 +331,13 @@ where
     }
 }
 
-impl<'a, T: Base32SnowExt> PartialEq<String> for Base32SnowFormatterRef<'a, T>
+#[cfg(feature = "alloc")]
+#[cfg_attr(not(feature = "alloc"), doc(hidden))]
+impl<T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
-    fn eq(&self, other: &String) -> bool {
+    fn eq(&self, other: &alloc::string::String) -> bool {
         self.as_str() == other.as_str()
     }
 }
@@ -331,7 +345,7 @@ where
 #[cfg(all(test, feature = "snowflake"))]
 mod test {
     use crate::{
-        Base32Error, Base32SnowExt, Error, Snowflake, SnowflakeDiscordId, SnowflakeInstagramId,
+        Base32Error, Base32SnowExt, Error, SnowflakeDiscordId, SnowflakeId, SnowflakeInstagramId,
         SnowflakeMastodonId, SnowflakeTwitterId,
     };
 

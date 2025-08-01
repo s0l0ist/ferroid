@@ -3,11 +3,11 @@ use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
-    AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
-    BasicUlidGenerator, BeBytes, Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
-    MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
-    SnowflakeGeneratorAsyncExt, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource,
-    ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, UlidMono,
+    AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicMonoUlidGenerator,
+    BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes, Id, IdGenStatus, LockMonoUlidGenerator,
+    LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep, SnowflakeGenerator,
+    SnowflakeGeneratorAsyncExt, SnowflakeId, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom,
+    TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, UlidId,
 };
 use futures::future::try_join_all;
 use std::{thread::scope, time::Instant};
@@ -25,7 +25,7 @@ impl TimeSource<u64> for FixedMockTime {
 
 impl TimeSource<u128> for FixedMockTime {
     fn current_millis(&self) -> u128 {
-        self.millis as u128
+        u128::from(self.millis)
     }
 }
 
@@ -40,7 +40,7 @@ fn bench_generator_hot<ID, G, T>(
     group_name: &str,
     generator_factory: impl Fn() -> G,
 ) where
-    ID: Snowflake,
+    ID: SnowflakeId,
     G: SnowflakeGenerator<ID, T>,
     T: TimeSource<ID::Ty>,
 {
@@ -77,7 +77,7 @@ fn bench_generator_hot_yield<ID, G, T>(
     group_name: &str,
     generator_factory: impl Fn() -> G,
 ) where
-    ID: Snowflake,
+    ID: SnowflakeId,
     G: SnowflakeGenerator<ID, T>,
     T: TimeSource<ID::Ty>,
 {
@@ -118,7 +118,7 @@ fn bench_generator_threaded<ID, G, T>(
     generator_fn: impl Fn(ID::Ty, T) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy + Send + 'static,
 ) where
-    ID: Snowflake,
+    ID: SnowflakeId,
     ID::Ty: From<u64>,
     G: SnowflakeGenerator<ID, T>,
     T: TimeSource<ID::Ty> + Clone + Send + 'static,
@@ -156,7 +156,7 @@ fn bench_generator_threaded<ID, G, T>(
                                 }
                             });
                         }
-                    })
+                    });
                 }
                 start.elapsed()
             });
@@ -174,8 +174,9 @@ fn bench_generator_async_tokio<ID, G, T>(
     generator_fn: impl Fn(u64, T) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
 ) where
-    ID: Snowflake + Send + Sync + 'static,
+    ID: SnowflakeId + Send + Sync + 'static,
     G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
     let mut group = c.benchmark_group(group_name);
@@ -203,7 +204,7 @@ fn bench_generator_async_tokio<ID, G, T>(
                                 let id = generator.try_next_id_async::<TokioSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -218,14 +219,18 @@ fn bench_generator_async_tokio<ID, G, T>(
 
 /// Benchmarks many async generators in parallel, each running in a separate
 /// `smol` task.
+///
+/// # Panics
+/// - If a task fails
 pub fn bench_generator_async_smol<ID, G, T>(
     c: &mut Criterion,
     group_name: &str,
     generator_fn: impl Fn(u64, T) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
 ) where
-    ID: Snowflake + Send + Sync + 'static,
+    ID: SnowflakeId + Send + Sync + 'static,
     G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
     // Use all CPUs
@@ -254,7 +259,7 @@ pub fn bench_generator_async_smol<ID, G, T>(
                                 let id = generator.try_next_id_async::<SmolSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -272,7 +277,7 @@ fn bench_generator_ulid<ID, G, T, R>(
     group_name: &str,
     generator_factory: impl Fn() -> G,
 ) where
-    ID: Ulid,
+    ID: UlidId,
     G: UlidGenerator<ID, T, R>,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
@@ -314,7 +319,7 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
     clock_factory: impl Fn() -> T + Copy + Send + 'static,
     rand_factory: impl Fn() -> R + Copy + Send + 'static,
 ) where
-    ID: Ulid,
+    ID: UlidId,
     G: UlidGenerator<ID, T, R>,
     T: TimeSource<ID::Ty> + Clone + Send + 'static,
     R: RandSource<ID::Ty> + Clone + Send + 'static,
@@ -356,7 +361,7 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                                 }
                             });
                         }
-                    })
+                    });
                 }
                 start.elapsed()
             });
@@ -375,8 +380,9 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
     clock_factory: impl Fn() -> T + Copy,
     rand_factory: impl Fn() -> R + Copy,
 ) where
-    ID: Ulid + Send + Sync + 'static,
+    ID: UlidId + Send + Sync + 'static,
     G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
     R: RandSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
@@ -407,7 +413,7 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
                                 let id = generator.try_next_id_async::<TokioSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -429,8 +435,9 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
     clock_factory: impl Fn() -> T + Copy,
     rand_factory: impl Fn() -> R + Copy,
 ) where
-    ID: Ulid + Send + Sync + 'static,
+    ID: UlidId + Send + Sync + 'static,
     G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
     R: RandSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
@@ -462,7 +469,7 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
                                 let id = generator.try_next_id_async::<SmolSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -477,7 +484,7 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
 
 fn bench_snow_base32<ID>(c: &mut Criterion, group_name: &str)
 where
-    ID: Snowflake + Base32SnowExt,
+    ID: SnowflakeId + Base32SnowExt,
     ID::Ty: BeBytes,
 {
     let id = ID::from_components(
@@ -520,7 +527,7 @@ where
     group.bench_function("encode/buffer/format", |b| {
         b.iter(|| {
             let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(format!("{}", b));
+            black_box(format!("{b}"));
         });
     });
 
@@ -548,7 +555,7 @@ where
 
 fn bench_ulid_base32<ID>(c: &mut Criterion, group_name: &str)
 where
-    ID: Ulid + Base32UlidExt,
+    ID: UlidId + Base32UlidExt,
     ID::Ty: BeBytes,
 {
     let id = ID::from_components(ID::max_timestamp(), ID::max_random());
@@ -587,7 +594,7 @@ where
     group.bench_function("encode/buffer/format", |b| {
         b.iter(|| {
             let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(format!("{}", b));
+            black_box(format!("{b}"));
         });
     });
 
@@ -650,20 +657,25 @@ where
 fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str) {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
-    group.bench_function("new", |b| {
+    group.bench_function("new_ulid", |b| {
         b.iter(|| {
-            black_box(UlidMono::new());
+            black_box(Ulid::new_ulid());
+        });
+    });
+    group.bench_function("new_mono_ulid", |b| {
+        b.iter(|| {
+            black_box(Ulid::new_mono_ulid());
         });
     });
     group.bench_function("from_timestamp", |b| {
         b.iter(|| {
-            black_box(UlidMono::from_timestamp(42));
+            black_box(Ulid::from_timestamp(42));
         });
     });
     let now = std::time::SystemTime::now();
     group.bench_function("from_datetime", |b| {
         b.iter(|| {
-            black_box(UlidMono::from_datetime(now));
+            black_box(Ulid::from_datetime(now));
         });
     });
 
@@ -677,25 +689,50 @@ pub fn bench_thread_local_ulid_threaded(c: &mut Criterion, group_name: &str) {
         let total_ids = TOTAL_IDS * thread_count;
         group.throughput(Throughput::Elements(total_ids as u64));
 
-        group.bench_function(format!("elems/{total_ids}/threads/{thread_count}"), |b| {
-            b.iter_custom(|iters| {
-                let start = Instant::now();
+        group.bench_function(
+            format!("elems/{total_ids}/threads/{thread_count}/new_ulid"),
+            |b| {
+                b.iter_custom(|iters| {
+                    let start = Instant::now();
 
-                for _ in 0..iters {
-                    scope(|s| {
-                        for _ in 0..thread_count {
-                            s.spawn(|| {
-                                for _ in 0..TOTAL_IDS {
-                                    black_box(UlidMono::new());
-                                }
-                            });
-                        }
-                    });
-                }
+                    for _ in 0..iters {
+                        scope(|s| {
+                            for _ in 0..thread_count {
+                                s.spawn(|| {
+                                    for _ in 0..TOTAL_IDS {
+                                        black_box(Ulid::new_ulid());
+                                    }
+                                });
+                            }
+                        });
+                    }
 
-                start.elapsed()
-            });
-        });
+                    start.elapsed()
+                });
+            },
+        );
+        group.bench_function(
+            format!("elems/{total_ids}/threads/{thread_count}/new_mono_ulid"),
+            |b| {
+                b.iter_custom(|iters| {
+                    let start = Instant::now();
+
+                    for _ in 0..iters {
+                        scope(|s| {
+                            for _ in 0..thread_count {
+                                s.spawn(|| {
+                                    for _ in 0..TOTAL_IDS {
+                                        black_box(Ulid::new_mono_ulid());
+                                    }
+                                });
+                            }
+                        });
+                    }
+
+                    start.elapsed()
+                });
+            },
+        );
     }
 
     group.finish();
@@ -762,7 +799,7 @@ fn bench_generator_threaded_basic(c: &mut Criterion) {
         "mono/threaded/basic",
         BasicSnowflakeGenerator::new,
         MonotonicClock::default,
-    )
+    );
 }
 /// Multi-threaded benchmark for `LockSnowflakeGenerator` with `MonotonicClock`.
 fn bench_generator_threaded_lock(c: &mut Criterion) {
@@ -771,7 +808,7 @@ fn bench_generator_threaded_lock(c: &mut Criterion) {
         "mono/threaded/lock",
         LockSnowflakeGenerator::new,
         MonotonicClock::default,
-    )
+    );
 }
 /// Multi-threaded benchmark for `AtomicSnowflakeGenerator` with
 /// `MonotonicClock`.
@@ -781,7 +818,7 @@ fn bench_generator_threaded_atomic(c: &mut Criterion) {
         "mono/threaded/atomic",
         AtomicSnowflakeGenerator::new,
         MonotonicClock::default,
-    )
+    );
 }
 
 // --- ASYNC ---
@@ -830,18 +867,20 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
     );
 }
 
-// --- Ulid ---
-// Mocks
+// --- Ulid --- Mocks
 fn benchmark_mock_sequential_ulid_basic(c: &mut Criterion) {
     let rand = ThreadRandom;
     bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/basic", || {
         BasicUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
     });
+    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/basic_mono", || {
+        BasicMonoUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
+    });
 }
 fn benchmark_mock_sequential_ulid_lock(c: &mut Criterion) {
     let rand = ThreadRandom;
-    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/lock", || {
-        LockUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
+    bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/lock_mono", || {
+        LockMonoUlidGenerator::new(FixedMockTime { millis: 1 }, rand.clone())
     });
 }
 // Mono clocks
@@ -851,12 +890,15 @@ fn benchmark_mono_sequential_ulid_basic(c: &mut Criterion) {
     bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic", || {
         BasicUlidGenerator::new(clock.clone(), rand.clone())
     });
+    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic_mono", || {
+        BasicMonoUlidGenerator::new(clock.clone(), rand.clone())
+    });
 }
 fn benchmark_mono_sequential_ulid_lock(c: &mut Criterion) {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
-    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/lock", || {
-        LockUlidGenerator::new(clock.clone(), rand.clone())
+    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/lock_mono", || {
+        LockMonoUlidGenerator::new(clock.clone(), rand.clone())
     });
 }
 fn benchmark_mono_threaded_ulid_basic(c: &mut Criterion) {
@@ -867,12 +909,19 @@ fn benchmark_mono_threaded_ulid_basic(c: &mut Criterion) {
         MonotonicClock::default,
         ThreadRandom::default,
     );
+    bench_generator_ulid_threaded::<ULID, _, _, _>(
+        c,
+        "mono/threaded/ulid/basic_mono",
+        BasicMonoUlidGenerator::new,
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
 }
 fn benchmark_mono_threaded_ulid_lock(c: &mut Criterion) {
     bench_generator_ulid_threaded::<ULID, _, _, _>(
         c,
-        "mono/threaded/ulid/lock",
-        LockUlidGenerator::new,
+        "mono/threaded/ulid/lock_mono",
+        LockMonoUlidGenerator::new,
         MonotonicClock::default,
         ThreadRandom::default,
     );
@@ -881,8 +930,8 @@ fn benchmark_mono_threaded_ulid_lock(c: &mut Criterion) {
 fn benchmark_mono_tokio_ulid_lock(c: &mut Criterion) {
     bench_ulid_generator_async_tokio::<ULID, _, _, _>(
         c,
-        "mono/async/tokio/ulid/lock",
-        LockUlidGenerator::new,
+        "mono/async/tokio/ulid/lock_mono",
+        LockMonoUlidGenerator::new,
         MonotonicClock::default,
         ThreadRandom::default,
     );
@@ -890,8 +939,8 @@ fn benchmark_mono_tokio_ulid_lock(c: &mut Criterion) {
 fn benchmark_mono_smol_ulid_lock(c: &mut Criterion) {
     bench_ulid_generator_async_smol::<ULID, _, _, _>(
         c,
-        "mono/async/smol/ulid/lock",
-        LockUlidGenerator::new,
+        "mono/async/smol/ulid/lock_mono",
+        LockMonoUlidGenerator::new,
         MonotonicClock::default,
         ThreadRandom::default,
     );

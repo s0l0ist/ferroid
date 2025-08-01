@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{IdGenStatus, Result, SnowflakeId, SnowflakeGenerator, TimeSource};
 use core::{
     cmp,
     marker::PhantomData,
@@ -15,7 +15,7 @@ use tracing::instrument;
 /// ## Features
 ///
 /// - ✅ Thread-safe
-/// - ❌ Safely implement any [`Snowflake`] layout
+/// - ❌ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Caveats
 /// This implementation uses an `AtomicU64` internally, so it only supports ID
@@ -34,7 +34,7 @@ use tracing::instrument;
 /// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
 pub struct AtomicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake<Ty = u64>,
+    ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
     state: AtomicU64,
@@ -45,7 +45,7 @@ where
 
 impl<ID, T> AtomicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake<Ty = u64>,
+    ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`AtomicSnowflakeGenerator`] initialized with the current
@@ -71,10 +71,13 @@ where
     /// # Example
     ///
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
     ///
-    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
-    /// let id = generator.next_id();
+    ///     let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
+    ///     let id = generator.next_id();
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -131,20 +134,23 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
     ///
-    /// // Create a clock and a generator with machine_id = 0
-    /// let clock = MonotonicClock::default();
-    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    ///     // Create a clock and a generator with machine_id = 0
+    ///     let clock = MonotonicClock::default();
+    ///     let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.next_id() {
-    ///     IdGenStatus::Ready { id } => {
-    ///         println!("ID: {}", id);
-    ///         assert_eq!(id.machine_id(), 0);
-    ///     }
-    ///     IdGenStatus::Pending { yield_for } => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
+    ///     // Attempt to generate a new ID
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => {
+    ///             println!("ID: {}", id);
+    ///             assert_eq!(id.machine_id(), 0);
+    ///         }
+    ///         IdGenStatus::Pending { yield_for } => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
     ///     }
     /// }
     /// ```
@@ -166,24 +172,31 @@ where
     ///   milliseconds) before trying again
     /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
     ///
+    /// # Errors
+    /// - This method currently does not return any errors and always returns
+    ///   `Ok`. It is marked as fallible to allow for future extensibility
+    ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
     ///
-    /// // Create a clock and a generator with machine_id = 0
-    /// let clock = MonotonicClock::default();
-    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    ///     // Create a clock and a generator with machine_id = 0
+    ///     let clock = MonotonicClock::default();
+    ///     let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.try_next_id() {
-    ///     Ok(IdGenStatus::Ready { id }) => {
-    ///         println!("ID: {}", id);
-    ///         assert_eq!(id.machine_id(), 0);
+    ///     // Attempt to generate a new ID
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => {
+    ///             println!("ID: {}", id);
+    ///             assert_eq!(id.machine_id(), 0);
+    ///         }
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
+    ///         Err(e) => eprintln!("Generator error: {}", e),
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
-    ///     }
-    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
@@ -233,9 +246,11 @@ where
 
 impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake<Ty = u64>,
+    ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
+    type Err = core::convert::Infallible;
+
     fn new(machine_id: ID::Ty, clock: T) -> Self {
         Self::new(machine_id, clock)
     }
@@ -244,7 +259,7 @@ where
         self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
         self.try_next_id()
     }
 }

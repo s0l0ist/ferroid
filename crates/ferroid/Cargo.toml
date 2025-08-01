@@ -7,6 +7,14 @@ authors.workspace = true
 readme = "README.md"
 description = "Flexible ID generators for producing unique, monotonic, and lexicographically sortable IDs."
 repository = "https://github.com/s0l0ist/ferroid/blob/main/crates/ferroid"
+categories = [
+  "algorithms",         # Implements time-sortable ID generation algorithms
+  "data-structures",    # Exposes structured types like ULID, SnowflakeId, etc.
+  "encoding",           # Optional Base32 support (Crockford-style)
+  "asynchronous",       # If using async stream generation features
+  "no-std",             # Supports no_std-compatible environments
+  "development-tools"   # Broad utility for developers building systems
+]
 documentation.workspace = true
 keywords.workspace = true
 
@@ -14,7 +22,7 @@ keywords.workspace = true
 all-features = true
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [dependencies]
 base32 = { workspace = true, optional = true }
@@ -29,7 +37,7 @@ tracing = { workspace = true, optional = true, features = ["attributes"] }
 [dev-dependencies]
 async-lock = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
-futures = { workspace = true,  features = ["alloc"] }
+futures = { workspace = true, features = ["alloc"] }
 num_cpus = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"] }
 
@@ -39,12 +47,15 @@ harness = false
 
 [features]
 default = []
+std = ["dep:rand"]
+alloc = []
+thread_local = ["std", "alloc"]
 snowflake = []
-ulid = ["dep:rand"]
+ulid = []
 
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
 base32 = ["dep:base32"]
 futures = ["dep:futures", "dep:pin-project-lite"]
-async-tokio = ["futures", "dep:tokio"]
-async-smol = ["futures", "dep:smol"]
+async-tokio = ["std", "alloc", "futures", "dep:tokio"]
+async-smol = ["std", "alloc", "futures", "dep:smol"]

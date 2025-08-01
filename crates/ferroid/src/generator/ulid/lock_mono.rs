@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, TimeSource, Ulid, UlidGenerator, rand::RandSource};
+use crate::{Error, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
 use core::cmp::Ordering;
 use std::sync::{Arc, Mutex};
 #[cfg(feature = "tracing")]
@@ -24,11 +24,13 @@ use tracing::instrument;
 ///
 /// ## See Also
 /// - [`BasicUlidGenerator`]
+/// - [`BasicMonoUlidGenerator`]
 ///
 /// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
-pub struct LockUlidGenerator<ID, T, R>
+/// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
+pub struct LockMonoUlidGenerator<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -37,13 +39,13 @@ where
     rng: R,
 }
 
-impl<ID, T, R> LockUlidGenerator<ID, T, R>
+impl<ID, T, R> LockMonoUlidGenerator<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`LockUlidGenerator`] with the provided time source and
+    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source and
     /// RNG.
     ///
     /// # Parameters
@@ -56,11 +58,14 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockUlidGenerator, ULID, MonotonicClock, ThreadRandom};
+    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// {
+    ///     use ferroid::{LockMonoUlidGenerator, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let generator = LockUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
-    /// let id = generator.next_id();
-    /// println!("Generated ID: {:?}", id);
+    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
+    ///     let id = generator.next_id();
+    ///     println!("Generated ID: {:?}", id);
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -109,19 +114,22 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// {
+    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let clock = MonotonicClock::default();
-    /// let rand = ThreadRandom::default();
-    /// let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
+    ///     let clock = MonotonicClock::default();
+    ///     let rand = ThreadRandom::default();
+    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.next_id() {
-    ///     IdGenStatus::Ready { id } => {
-    ///         println!("ID: {}", id);
-    ///     }
-    ///     IdGenStatus::Pending { yield_for } => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
+    ///     // Attempt to generate a new ID
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => {
+    ///             println!("ID: {}", id);
+    ///         }
+    ///         IdGenStatus::Pending { yield_for } => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
     ///     }
     /// }
     /// ```
@@ -140,29 +148,35 @@ where
     ///   Snowflake API
     /// - Err(e) if the time source or rand source failed
     ///
+    /// # Errors
+    /// - Returns an error if the underlying lock has been poisoned.
+    ///
     /// # Example
     /// ```
-    /// use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// {
+    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let clock = MonotonicClock::default();
-    /// let rand = ThreadRandom::default();
-    /// let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
+    ///     let clock = MonotonicClock::default();
+    ///     let rand = ThreadRandom::default();
+    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.try_next_id() {
-    ///     Ok(IdGenStatus::Ready { id }) => {
-    ///         println!("ID: {}", id);
+    ///     // Attempt to generate a new ID
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => {
+    ///             println!("ID: {}", id);
+    ///         }
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             // In practice, Ulid generators will never return `Pending`, but
+    ///             // it is kept to have a consistent API.
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
+    ///         Err(e) => eprintln!("Generator error: {}", e),
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         // In practice, Ulid generators will never return `Pending`, but
-    ///         // it is kept to have a consistent API.
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
-    ///     }
-    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
         let now = self.clock.current_millis();
         let mut id = self.state.lock()?;
         let current_ts = id.timestamp();
@@ -192,12 +206,14 @@ where
     }
 }
 
-impl<ID, T, R> UlidGenerator<ID, T, R> for LockUlidGenerator<ID, T, R>
+impl<ID, T, R> UlidGenerator<ID, T, R> for LockMonoUlidGenerator<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err = Error;
+
     fn new(clock: T, rng: R) -> Self {
         Self::new(clock, rng)
     }
@@ -206,7 +222,7 @@ where
         self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
         self.try_next_id()
     }
 }
