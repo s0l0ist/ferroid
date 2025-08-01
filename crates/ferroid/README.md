@@ -489,7 +489,7 @@ efficiency).
 | `LockSnowflakeGenerator`   | **~8.9 ns** | ~111M IDs/sec |
 | `AtomicSnowflakeGenerator` | **~3.1 ns** | ~320M IDs/sec |
 | `BasicUlidGenerator`       | **~3.4 ns** | ~288M IDs/sec |
-| `BasicMonoUlidGenerator`   | **~3.4 ns** | ~44M IDs/sec  |
+| `BasicMonoUlidGenerator`   | **~20 ns**  | ~44M IDs/sec  |
 | `LockMonoUlidGenerator`    | **~9.2 ns** | ~109M IDs/sec |
 
 #### Async (Tokio Runtime) - Peak throughput
