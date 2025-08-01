@@ -28,7 +28,7 @@ crate-type = ["rlib"]
 base32 = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 pin-project-lite = { workspace = true, optional = true }
-rand = { workspace = true, optional = true, features = ["thread_rng"] }
+rand = { workspace = true, optional = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 smol = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["time", "rt-multi-thread"] }
@@ -47,9 +47,9 @@ harness = false
 
 [features]
 default = []
-std = []
+std = ["rand?/thread_rng"]
 alloc = []
-thread_local = ["std", "alloc", "dep:rand"]
+thread_local = ["std", "alloc"]
 snowflake = []
 ulid = []
 
@@ -58,4 +58,4 @@ serde = ["dep:serde"]
 base32 = ["dep:base32"]
 futures = ["dep:futures", "dep:pin-project-lite"]
 async-tokio = ["std", "alloc", "futures", "dep:tokio"]
-async-smol = ["std", "futures", "dep:smol"]
+async-smol = ["std", "alloc", "futures", "dep:smol"]

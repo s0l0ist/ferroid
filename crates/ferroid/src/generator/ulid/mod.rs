@@ -2,7 +2,7 @@ mod basic;
 mod interface;
 #[cfg(all(feature = "std", feature = "alloc"))]
 mod lock;
-#[cfg(test)]
+#[cfg(all(test, feature = "std", feature = "alloc"))]
 mod tests;
 #[cfg(feature = "thread_local")]
 mod thread_local;

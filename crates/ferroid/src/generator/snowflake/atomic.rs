@@ -71,10 +71,13 @@ where
     /// # Example
     ///
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
     ///
-    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
-    /// let id = generator.next_id();
+    ///     let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
+    ///     let id = generator.next_id();
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -131,20 +134,23 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
     ///
-    /// // Create a clock and a generator with machine_id = 0
-    /// let clock = MonotonicClock::default();
-    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    ///     // Create a clock and a generator with machine_id = 0
+    ///     let clock = MonotonicClock::default();
+    ///     let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.next_id() {
-    ///     IdGenStatus::Ready { id } => {
-    ///         println!("ID: {}", id);
-    ///         assert_eq!(id.machine_id(), 0);
-    ///     }
-    ///     IdGenStatus::Pending { yield_for } => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
+    ///     // Attempt to generate a new ID
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => {
+    ///             println!("ID: {}", id);
+    ///             assert_eq!(id.machine_id(), 0);
+    ///         }
+    ///         IdGenStatus::Pending { yield_for } => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
     ///     }
     /// }
     /// ```
@@ -172,22 +178,25 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
+    /// {
+    ///     use ferroid::{AtomicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
     ///
-    /// // Create a clock and a generator with machine_id = 0
-    /// let clock = MonotonicClock::default();
-    /// let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    ///     // Create a clock and a generator with machine_id = 0
+    ///     let clock = MonotonicClock::default();
+    ///     let generator = AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.try_next_id() {
-    ///     Ok(IdGenStatus::Ready { id }) => {
-    ///         println!("ID: {}", id);
-    ///         assert_eq!(id.machine_id(), 0);
+    ///     // Attempt to generate a new ID
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => {
+    ///             println!("ID: {}", id);
+    ///             assert_eq!(id.machine_id(), 0);
+    ///         }
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
+    ///         Err(e) => eprintln!("Generator error: {}", e),
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
-    ///     }
-    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]

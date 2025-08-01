@@ -56,11 +56,14 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockUlidGenerator, ULID, MonotonicClock, ThreadRandom};
+    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// {
+    ///     use ferroid::{LockUlidGenerator, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let generator = LockUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
-    /// let id = generator.next_id();
-    /// println!("Generated ID: {:?}", id);
+    ///     let generator = LockUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
+    ///     let id = generator.next_id();
+    ///     println!("Generated ID: {:?}", id);
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -109,19 +112,22 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// {
+    ///     use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let clock = MonotonicClock::default();
-    /// let rand = ThreadRandom::default();
-    /// let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
+    ///     let clock = MonotonicClock::default();
+    ///     let rand = ThreadRandom::default();
+    ///     let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.next_id() {
-    ///     IdGenStatus::Ready { id } => {
-    ///         println!("ID: {}", id);
-    ///     }
-    ///     IdGenStatus::Pending { yield_for } => {
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
+    ///     // Attempt to generate a new ID
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => {
+    ///             println!("ID: {}", id);
+    ///         }
+    ///         IdGenStatus::Pending { yield_for } => {
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
     ///     }
     /// }
     /// ```
@@ -145,23 +151,26 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// {
+    ///     use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let clock = MonotonicClock::default();
-    /// let rand = ThreadRandom::default();
-    /// let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
+    ///     let clock = MonotonicClock::default();
+    ///     let rand = ThreadRandom::default();
+    ///     let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
-    /// // Attempt to generate a new ID
-    /// match generator.try_next_id() {
-    ///     Ok(IdGenStatus::Ready { id }) => {
-    ///         println!("ID: {}", id);
+    ///     // Attempt to generate a new ID
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => {
+    ///             println!("ID: {}", id);
+    ///         }
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             // In practice, Ulid generators will never return `Pending`, but
+    ///             // it is kept to have a consistent API.
+    ///             println!("Exhausted; wait for: {}ms", yield_for);
+    ///         }
+    ///         Err(e) => eprintln!("Generator error: {}", e),
     ///     }
-    ///     Ok(IdGenStatus::Pending { yield_for }) => {
-    ///         // In practice, Ulid generators will never return `Pending`, but
-    ///         // it is kept to have a consistent API.
-    ///         println!("Exhausted; wait for: {}ms", yield_for);
-    ///     }
-    ///     Err(e) => eprintln!("Generator error: {}", e),
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]

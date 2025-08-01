@@ -63,9 +63,9 @@ Calling `next_id()` may yield `Pending` if the current sequence is exhausted. In
 that case, you can spin, yield, or sleep depending on your environment:
 
 ```rust
-#[cfg(feature = "snowflake")]
+#[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
 {
-    use ferroid::{MonotonicClock, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+    use ferroid::{MonotonicClock, IdGenStatus, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId};
 
     let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
     let generator = BasicSnowflakeGenerator::new(0, clock);
@@ -85,7 +85,7 @@ that case, you can spin, yield, or sleep depending on your environment:
     };
 }
 
-#[cfg(feature = "ulid")]
+#[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
 {
     use ferroid::{MonotonicClock, IdGenStatus, UNIX_EPOCH, ThreadRandom, BasicUlidGenerator, ULID};
 

@@ -415,7 +415,7 @@ define_snowflake_id!(
     sequence: 20
 );
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
     use std::println;

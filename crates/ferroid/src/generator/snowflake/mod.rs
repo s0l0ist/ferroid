@@ -3,7 +3,7 @@ mod basic;
 mod interface;
 #[cfg(all(feature = "std", feature = "alloc"))]
 mod lock;
-#[cfg(test)]
+#[cfg(all(test, feature = "std", feature = "alloc"))]
 mod tests;
 
 pub use atomic::*;

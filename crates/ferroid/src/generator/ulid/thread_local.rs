@@ -91,7 +91,7 @@ impl UlidMono {
     ///
     /// # Example
     /// ```
-    /// #[cfg(feature = "ulid")]
+    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
     /// {
     ///     use ferroid::UlidMono;
     ///     let id = UlidMono::new_ulid();
@@ -110,7 +110,7 @@ impl UlidMono {
     ///
     /// # Example
     /// ```
-    /// #[cfg(feature = "ulid")]
+    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
     /// {
     ///     use ferroid::{UlidMono, Backoff};
     ///     let id = UlidMono::with_backoff(Backoff::Spin);
@@ -128,7 +128,7 @@ impl UlidMono {
     ///
     /// # Example
     /// ```
-    /// #[cfg(feature = "ulid")]
+    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
     /// {
     ///     use ferroid::UlidMono;
     ///     let id = UlidMono::from_timestamp(1_694_201_234_000);
@@ -146,7 +146,7 @@ impl UlidMono {
     ///
     /// # Example
     /// ```
-    /// #[cfg(feature = "ulid")]
+    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
     /// {
     ///     use ferroid::{UlidMono, ThreadRandom};
     ///     let id = UlidMono::from_timestamp_and_rand(0, &ThreadRandom);
@@ -166,7 +166,7 @@ impl UlidMono {
     ///
     /// # Example
     /// ```
-    /// #[cfg(feature = "ulid")]
+    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
     /// {
     ///     use ferroid::UlidMono;
     ///     let id = UlidMono::from_datetime(std::time::SystemTime::now());
@@ -181,7 +181,7 @@ impl UlidMono {
     ///
     /// # Example
     /// ```
-    /// #[cfg(feature = "ulid")]
+    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
     /// {
     ///     use ferroid::{UlidMono, ThreadRandom};
     ///     let now = std::time::SystemTime::now();
