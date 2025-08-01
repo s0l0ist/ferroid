@@ -36,10 +36,10 @@ where
 
 impl<G, ID, T, R> UlidGeneratorAsyncTokioExt<ID, T, R> for G
 where
-    G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
+    G: UlidGenerator<ID, T, R> + Sync,
+    ID: Ulid + Send,
+    T: TimeSource<ID::Ty> + Send,
+    R: RandSource<ID::Ty> + Send,
 {
     type Err = G::Err;
 
@@ -184,6 +184,7 @@ mod tests {
             .flat_map(Result::unwrap)
             .collect();
 
+        #[allow(clippy::cast_possible_truncation)]
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
         assert_eq!(
             all_ids.len(),

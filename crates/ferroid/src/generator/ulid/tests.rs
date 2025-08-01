@@ -164,6 +164,7 @@ where
 {
     let mut last_timestamp = ID::ZERO;
     let mut random = None;
+    #[allow(clippy::items_after_statements)]
     const TOTAL_IDS: usize = 4096 * 256;
 
     for _ in 0..TOTAL_IDS {

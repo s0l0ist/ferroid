@@ -40,10 +40,10 @@ where
 
 impl<G, ID, T, R> UlidGeneratorAsyncExt<ID, T, R> for G
 where
-    G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
+    G: UlidGenerator<ID, T, R> + Sync,
+    ID: Ulid + Send,
+    T: TimeSource<ID::Ty> + Send,
+    R: RandSource<ID::Ty> + Send,
 {
     type Err = G::Err;
 

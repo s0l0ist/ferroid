@@ -134,10 +134,7 @@ impl MonotonicClock {
             }
         });
 
-        inner
-            .handle
-            .set(handle)
-            .expect("failed to set thread handle");
+        let _ = inner.handle.set(handle);
 
         Self {
             inner,

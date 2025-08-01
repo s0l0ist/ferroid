@@ -106,7 +106,7 @@ where
     assert_eq!(yield_for, ID::ONE);
 }
 
-fn run_generator_handles_rollover<G, ID, T>(generator: &G, shared_time: SharedMockStepTime)
+fn run_generator_handles_rollover<G, ID, T>(generator: &G, shared_time: &SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
@@ -136,6 +136,7 @@ where
 {
     let mut last_timestamp = ID::ZERO;
     let mut sequence = ID::ZERO;
+    #[allow(clippy::items_after_statements)]
     const TOTAL_IDS: usize = 4096 * 256;
 
     for _ in 0..TOTAL_IDS {
@@ -271,7 +272,7 @@ fn basic_generator_rollover_test() {
     };
     let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
         BasicSnowflakeGenerator::new(1, shared_time.clone());
-    run_generator_handles_rollover(&generator, shared_time);
+    run_generator_handles_rollover(&generator, &shared_time);
 }
 
 #[test]
@@ -284,7 +285,7 @@ fn lock_generator_rollover_test() {
     };
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
         LockSnowflakeGenerator::new(1, shared_time.clone());
-    run_generator_handles_rollover(&generator, shared_time);
+    run_generator_handles_rollover(&generator, &shared_time);
 }
 
 #[test]
@@ -297,7 +298,7 @@ fn atomic_generator_rollover_test() {
     };
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
         AtomicSnowflakeGenerator::new(1, shared_time.clone());
-    run_generator_handles_rollover(&generator, shared_time);
+    run_generator_handles_rollover(&generator, &shared_time);
 }
 
 #[test]

@@ -35,12 +35,13 @@ where
 
 impl<G, ID, T, R> UlidGeneratorAsyncSmolExt<ID, T, R> for G
 where
-    G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
+    G: UlidGenerator<ID, T, R> + Sync,
+    ID: Ulid + Send,
+    T: TimeSource<ID::Ty> + Send,
+    R: RandSource<ID::Ty> + Send,
 {
     type Err = G::Err;
+
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<SmolSleep>(self)
     }
@@ -183,6 +184,7 @@ mod tests {
     async fn validate_unique_ulid_ids(tasks: Vec<Task<Result<Vec<impl Ulid>>>>) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
+        #[allow(clippy::cast_possible_truncation)]
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
         assert_eq!(
             all_ids.len(),

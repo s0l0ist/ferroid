@@ -32,9 +32,9 @@ where
 
 impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
 where
-    G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
-    T: TimeSource<ID::Ty>,
+    G: SnowflakeGenerator<ID, T> + Sync,
+    ID: Snowflake + Send,
+    T: TimeSource<ID::Ty> + Send,
 {
     type Err = G::Err;
 
@@ -205,6 +205,7 @@ mod tests {
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
+        #[allow(clippy::cast_possible_truncation)]
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
         assert_eq!(
             all_ids.len(),

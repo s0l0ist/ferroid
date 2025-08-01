@@ -33,9 +33,9 @@ where
 
 impl<G, ID, T> SnowflakeGeneratorAsyncTokioExt<ID, T> for G
 where
-    G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
-    T: TimeSource<ID::Ty>,
+    G: SnowflakeGenerator<ID, T> + Sync,
+    ID: Snowflake + Send,
+    T: TimeSource<ID::Ty> + Send,
 {
     type Err = G::Err;
 
@@ -125,7 +125,7 @@ mod tests {
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
         ID: Snowflake + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
-        S: SleepProvider,
+        S: SleepProvider + Send,
     {
         let clock = clock_factory();
         let generators: Vec<_> = (0..NUM_GENERATORS)
@@ -198,6 +198,7 @@ mod tests {
             .flat_map(Result::unwrap)
             .collect();
 
+        #[allow(clippy::cast_possible_truncation)]
         let expected_total = NUM_GENERATORS as usize * IDS_PER_GENERATOR;
         assert_eq!(
             all_ids.len(),
