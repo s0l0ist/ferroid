@@ -68,7 +68,7 @@ where
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
-    pub fn new(clock: T, rng: R) -> Self {
+    pub const fn new(clock: T, rng: R) -> Self {
         Self {
             clock,
             rng,

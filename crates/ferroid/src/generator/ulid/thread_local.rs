@@ -24,7 +24,7 @@ thread_local! {
     static BASIC_ULID: BasicUlidGenerator<ULID, MonotonicClock, ThreadRandom> =
         BasicUlidGenerator::new(
             GLOBAL_MONOTONIC_CLOCK.clone(),
-            ThreadRandom,
+            ThreadRandom
         );
 
     /// A thread-local, monotonic ULID generator that reads from a global
@@ -32,7 +32,7 @@ thread_local! {
     static BASIC_MONO_ULID: BasicMonoUlidGenerator<ULID, MonotonicClock, ThreadRandom> =
         BasicMonoUlidGenerator::new(
             GLOBAL_MONOTONIC_CLOCK.clone(),
-            ThreadRandom,
+            ThreadRandom
         );
 }
 
@@ -77,12 +77,10 @@ impl Ulid {
     /// ```
     #[must_use]
     pub fn new_ulid() -> ULID {
-        BASIC_ULID.with(|g| {
-            loop {
-                match g.next_id() {
-                    IdGenStatus::Ready { id } => break id,
-                    IdGenStatus::Pending { .. } => unreachable!(),
-                }
+        BASIC_ULID.with(|g| match g.next_id() {
+            IdGenStatus::Ready { id } => id,
+            IdGenStatus::Pending { .. } => {
+                unreachable!("A non-monotinic generator should never yield!")
             }
         })
     }

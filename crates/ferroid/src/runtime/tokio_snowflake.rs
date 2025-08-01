@@ -1,4 +1,4 @@
-use crate::{Result, SnowflakeId, SnowflakeGenerator, TimeSource, TokioSleep};
+use crate::{Result, SnowflakeGenerator, SnowflakeId, TimeSource, TokioSleep};
 use core::fmt;
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
@@ -39,6 +39,7 @@ where
 {
     type Err = G::Err;
 
+    #[allow(clippy::future_not_send)]
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<TokioSleep>(self)
     }
@@ -49,7 +50,7 @@ mod tests {
     use super::*;
     use crate::{
         AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, SleepProvider,
-        SnowflakeId, SnowflakeGenerator, SnowflakeTwitterId, TimeSource, TokioYield,
+        SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource, TokioYield,
     };
     use core::fmt;
     use futures::future::try_join_all;
