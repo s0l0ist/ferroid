@@ -90,6 +90,11 @@ impl MonotonicClock {
     /// This allows you to control the timestamp layout by anchoring all
     /// generated times to a custom epoch of your choosing.
     ///
+    /// # Panics
+    /// - Panics if the background thread handle has already been set on the
+    ///   internal ticker. This happens if `with_epoch` is called more than once
+    ///   on the same `MonotonicClock` instance.
+    ///
     /// [`current_millis`]: TimeSource::current_millis
     #[must_use]
     pub fn with_epoch(epoch: Duration) -> Self {
@@ -97,6 +102,7 @@ impl MonotonicClock {
         let system_now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or(core::time::Duration::ZERO);
+        #[allow(clippy::cast_possible_truncation)]
         let offset = system_now.saturating_sub(epoch).as_millis() as u64;
 
         let inner = Arc::new(SharedTickerInner {
@@ -124,6 +130,7 @@ impl MonotonicClock {
 
                 // After waking, recompute how far we actually are from the
                 // start
+                #[allow(clippy::cast_possible_truncation)]
                 let now_ms = start.elapsed().as_millis() as u64;
 
                 // Monotonic store, aligned to elapsed milliseconds since start
@@ -134,7 +141,10 @@ impl MonotonicClock {
             }
         });
 
-        let _ = inner.handle.set(handle);
+        inner
+            .handle
+            .set(handle)
+            .expect("failed to set thread handle");
 
         Self {
             inner,
