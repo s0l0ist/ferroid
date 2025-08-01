@@ -33,9 +33,9 @@ where
 
 impl<G, ID, T> SnowflakeGeneratorAsyncTokioExt<ID, T> for G
 where
-    G: SnowflakeGenerator<ID, T> + Sync,
-    ID: Snowflake + Send,
-    T: TimeSource<ID::Ty> + Send,
+    G: SnowflakeGenerator<ID, T>,
+    ID: Snowflake,
+    T: TimeSource<ID::Ty>,
 {
     type Err = G::Err;
 

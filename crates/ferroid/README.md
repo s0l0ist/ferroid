@@ -57,7 +57,26 @@ and parsing **Snowflake** and **ULID** identifiers.
 
 ### Generate an ID
 
-#### Synchronous
+#### Thread Locals
+
+The simplest way to generate a ULID is via `UlidMono`, which provides a
+thread-local generator:
+
+```rust
+#[cfg(all(feature = "ulid", feature = "thread_local"))]
+{
+    use ferroid::{ULID, UlidMono};
+
+    let id: ULID = UlidMono::new_ulid();
+}
+```
+
+Thread-local generators are not currently available for `Snowflake`-style IDs
+because they rely on a valid `machine_id` to avoid collisions. Mapping unique
+`machine_id`s across threads requires coordination beyond what `thread_local!`
+alone can guarantee.
+
+#### Synchronous Generators
 
 Calling `next_id()` may yield `Pending` if the current sequence is exhausted. In
 that case, you can spin, yield, or sleep depending on your environment:
@@ -111,11 +130,11 @@ that case, you can spin, yield, or sleep depending on your environment:
 }
 ```
 
-#### Asynchronous
+#### Asynchronous Generators
 
 If you're in an async context (e.g., using [Tokio](https://tokio.rs/) or
 [Smol](https://github.com/smol-rs/smol)), you can enable one of the following
-features:
+features to prevent blocking behavior:
 
 - `async-tokio`
 - `async-smol`
@@ -130,12 +149,12 @@ features:
         #[cfg(feature = "snowflake")]
         {
             use ferroid::{
-                AtomicSnowflakeGenerator, SnowflakeMastodonId,
+                BasicSnowflakeGenerator, SnowflakeMastodonId,
                 SnowflakeGeneratorAsyncTokioExt
             };
 
             let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-            let generator = AtomicSnowflakeGenerator::new(0, clock);
+            let generator = BasicSnowflakeGenerator::new(0, clock);
 
             let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
             println!("Generated ID: {}", id);
@@ -166,12 +185,12 @@ features:
             #[cfg(feature = "snowflake")]
             {
                 use ferroid::{
-                    AtomicSnowflakeGenerator, SnowflakeMastodonId,
+                    BasicSnowflakeGenerator, SnowflakeMastodonId,
                     SnowflakeGeneratorAsyncSmolExt, CUSTOM_EPOCH
                 };
 
                 let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
-                let generator = AtomicSnowflakeGenerator::new(0, clock);
+                let generator = BasicSnowflakeGenerator::new(0, clock);
 
                 let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
                 println!("Generated ID: {}", id);
