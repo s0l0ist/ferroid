@@ -25,6 +25,7 @@ pub trait Ulid:
     fn max_random() -> Self::Ty;
 
     /// Constructs a new ULID from its components.
+    #[must_use]
     fn from_components(timestamp: Self::Ty, random: Self::Ty) -> Self;
 
     /// Returns true if the current sequence value can be incremented.
@@ -38,11 +39,13 @@ pub trait Ulid:
     }
 
     /// Returns a new ID with the random portion incremented.
+    #[must_use]
     fn increment_random(&self) -> Self {
         Self::from_components(self.timestamp(), self.next_random())
     }
 
     /// Returns a new ID for a newer timestamp with sequence reset to zero.
+    #[must_use]
     fn rollover_to_timestamp(&self, ts: Self::Ty, rand: Self::Ty) -> Self {
         Self::from_components(ts, rand)
     }
@@ -53,6 +56,7 @@ pub trait Ulid:
 
     /// Returns a normalized version of the ID with any invalid or reserved bits
     /// cleared. This guarantees a valid, canonical representation.
+    #[must_use]
     fn into_valid(self) -> Self;
 }
 

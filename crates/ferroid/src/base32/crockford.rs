@@ -43,6 +43,7 @@ const LOOKUP: [u8; 256] = {
 ///   - Therefore, `ALPHABET[(acc >> bits) & 0x1F]` is guaranteed to be
 ///     in-bounds.
 #[inline(always)]
+#[allow(clippy::inline_always)]
 pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
     let input_bits = input.len() * 8;
     let output_chars = buf_slice.len();
@@ -82,6 +83,7 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 /// - `LOOKUP` is a fixed-size array of 256 elements, so `LOOKUP[b as usize]` is
 ///   always in-bounds.
 #[inline(always)]
+#[allow(clippy::inline_always)]
 pub fn decode_base32<T, E>(encoded: &str) -> Result<T, E>
 where
     T: BeBytes

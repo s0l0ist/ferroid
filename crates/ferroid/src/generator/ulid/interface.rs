@@ -14,5 +14,9 @@ where
     fn next_id(&self) -> IdGenStatus<ID>;
 
     /// A fallible version of [`Self::next_id`] that returns a [`Result`].
+    ///
+    /// # Errors
+    /// - May return an error if the underlying generator uses a lock and it is
+    ///   poisoned.
     fn try_next_id(&self) -> Result<IdGenStatus<ID>>;
 }
