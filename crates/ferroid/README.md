@@ -50,9 +50,9 @@ and parsing **Snowflake** and **ULID** identifiers.
 
 | Ulid Generator           | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
 | ------------------------ | --------- | ----------- | --------- | ---------- | --------------------------------------- |
-| `BasicUlidGenerator`     | ❌        | ✅          | ❌        | High       | Multi-threaded, always random           |
+| `BasicUlidGenerator`     | ❌        | ✅          | ❌        | Medium     | Multi-threaded, always random           |
 | `BasicMonoUlidGenerator` | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
-| `LockMonoUlidGenerator`  | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
+| `LockMonoUlidGenerator`  | ✅        | ✅          | ❌        | High       | Fair multithreaded access               |
 
 ## 🚀 Usage
 
@@ -60,22 +60,19 @@ and parsing **Snowflake** and **ULID** identifiers.
 
 #### Thread Locals
 
-The simplest way to generate a ULID is via `Ulid`, which provides a
-thread-local generator:
+The simplest way to generate a ULID is via `Ulid`, which provides a thread-local
+generator that can produce both non-monotonic and monotonic ULIDs:
 
 ```rust
 #[cfg(all(feature = "ulid", feature = "thread_local"))]
 {
     use ferroid::{ULID, Ulid};
 
+    // A ULID (slower, always random within the same millisecond)
     let id: ULID = Ulid::new_ulid();
-}
 
-#[cfg(all(feature = "ulid", feature = "thread_local"))]
-{
-    use ferroid::{ULID, Ulid};
-
-    let id: ULID = Ulid::new_ulid();
+    // A monotonic ULID (faster, increments within the same millisecond)
+    let id: ULID = Ulid::new_mono_ulid();
 }
 ```
 
@@ -476,6 +473,7 @@ efficiency).
 | `LockSnowflakeGenerator`   | **~8.9 ns** | ~111M IDs/sec |
 | `AtomicSnowflakeGenerator` | **~3.1 ns** | ~320M IDs/sec |
 | `BasicUlidGenerator`       | **~3.4 ns** | ~288M IDs/sec |
+| `BasicMonoUlidGenerator`   | **~3.4 ns** | ~44M IDs/sec  |
 | `LockMonoUlidGenerator`    | **~9.2 ns** | ~109M IDs/sec |
 
 #### Async (Tokio Runtime) - Peak throughput
