@@ -30,6 +30,6 @@ use std::sync::{MutexGuard, PoisonError};
 // Convert all poisoned lock errors to a simplified `LockPoisoned`
 impl<T, E: fmt::Debug> From<PoisonError<MutexGuard<'_, T>>> for Error<E> {
     fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {
-        Error::LockPoisoned(core::marker::PhantomData)
+        Self::LockPoisoned(core::marker::PhantomData)
     }
 }

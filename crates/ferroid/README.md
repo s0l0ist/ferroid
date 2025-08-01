@@ -310,19 +310,23 @@ Where:
 - $r$ = number of random bits per ID
 - $P_\text{collision}$ = probability of at least one collision
 
-> Note:
-> The formula above uses the approximate (birthday bound) model, which assumes that:
+> Note: The formula above uses the approximate (birthday bound) model, which
+> assumes that:
 >
 > - $k \ll 2^r$ and $g \ll 2^r$
-> - Each generator's range of $k$ IDs starts at a uniformly random position within the $r$-bit space
+> - Each generator's range of $k$ IDs starts at a uniformly random position
+>   within the $r$-bit space
 
 #### Estimating Time Until a Collision Occurs
 
-While collisions only happen within a single millisecond, we often want to know how long it takes before **any** collision happens, given continuous generation over time.
+While collisions only happen within a single millisecond, we often want to know
+how long it takes before **any** collision happens, given continuous generation
+over time.
 
 The expected time in milliseconds to reach a 50% chance of collision is:
 
-$T_{\text{50\%}} \approx \frac{\ln 2}{P_\text{collision}} = \frac{0.6931 \cdot 2 \cdot 2^r}{g(g - 1)(2k - 1)}$
+$T_{\text{50\%}} \approx \frac{\ln 2}{P_\text{collision}} = \frac{0.6931 \cdot 2
+\cdot 2^r}{g(g - 1)(2k - 1)}$
 
 This is derived from the cumulative probability formula:
 
@@ -334,11 +338,13 @@ $(1 - P_\text{collision})^T = 0.5$
 
 $\Rightarrow T \approx \frac{\ln(0.5)}{\ln(1 - P_\text{collision})}$
 
-Using the approximation $\ln(1 - x) \approx -x$ for small $x$, this simplifies to:
+Using the approximation $\ln(1 - x) \approx -x$ for small $x$, this simplifies
+to:
 
 $\Rightarrow T \approx \frac{\ln 2}{P_\text{collision}}$
 
-The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$ milliseconds, there's a 50% chance that at least one collision has occurred.
+The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$
+milliseconds, there's a 50% chance that at least one collision has occurred.
 
 | Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{\text{50\%}}$)         |
 | ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
@@ -437,29 +443,29 @@ efficiency).
 
 #### Synchronous Generators
 
-| Generator                | Time per ID | Throughput    |
-| ------------------------ | ----------- | ------------- |
-| BasicSnowflakeGenerator  | **~2.8 ns** | ~353M IDs/sec |
-| LockSnowflakeGenerator   | **~8.9 ns** | ~111M IDs/sec |
-| AtomicSnowflakeGenerator | **~3.1 ns** | ~320M IDs/sec |
-| BasicUlidGenerator       | **~3.4 ns** | ~288M IDs/sec |
-| LockUlidGenerator        | **~9.2 ns** | ~109M IDs/sec |
+| Generator                  | Time per ID | Throughput    |
+| -------------------------- | ----------- | ------------- |
+| `BasicSnowflakeGenerator`  | **~2.8 ns** | ~353M IDs/sec |
+| `LockSnowflakeGenerator`   | **~8.9 ns** | ~111M IDs/sec |
+| `AtomicSnowflakeGenerator` | **~3.1 ns** | ~320M IDs/sec |
+| `BasicUlidGenerator`       | **~3.4 ns** | ~288M IDs/sec |
+| `LockUlidGenerator`        | **~9.2 ns** | ~109M IDs/sec |
 
 #### Async (Tokio Runtime) - Peak throughput
 
-| Generator                | Generators | Time per ID  | Throughput     |
-| ------------------------ | ---------- | ------------ | -------------- |
-| LockSnowflakeGenerator   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
-| AtomicSnowflakeGenerator | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
-| LockUlidGenerator        | 1024       | **~1.57 ns** | ~635M IDs/sec  |
+| Generator                  | Generators | Time per ID  | Throughput     |
+| -------------------------- | ---------- | ------------ | -------------- |
+| `LockSnowflakeGenerator`   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
+| `LockUlidGenerator`        | 1024       | **~1.57 ns** | ~635M IDs/sec  |
 
 #### Async (Smol Runtime) - Peak throughput
 
-| Generator                | Generators | Time per ID  | Throughput     |
-| ------------------------ | ---------- | ------------ | -------------- |
-| LockSnowflakeGenerator   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
-| AtomicSnowflakeGenerator | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
-| LockUlidGenerator        | 1024       | **~1.32 ns** | ~756M IDs/sec  |
+| Generator                  | Generators | Time per ID  | Throughput     |
+| -------------------------- | ---------- | ------------ | -------------- |
+| `LockSnowflakeGenerator`   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
+| `LockUlidGenerator`        | 1024       | **~1.32 ns** | ~756M IDs/sec  |
 
 To run all benchmarks:
 

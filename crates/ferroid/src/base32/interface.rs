@@ -17,7 +17,7 @@ use crate::{Base32Error, BeBytes, Error, Id, Result};
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub(crate) trait Base32Ext: Id
+pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {

@@ -22,7 +22,7 @@ impl TimeSource<u64> for MockTime {
 
 impl TimeSource<u128> for MockTime {
     fn current_millis(&self) -> u128 {
-        <Self as TimeSource<u64>>::current_millis(self) as u128
+        u128::from(<Self as TimeSource<u64>>::current_millis(self))
     }
 }
 
@@ -62,8 +62,8 @@ where
 {
     fn unwrap_ready(self) -> T {
         match self {
-            IdGenStatus::Ready { id } => id,
-            IdGenStatus::Pending { yield_for } => {
+            Self::Ready { id } => id,
+            Self::Pending { yield_for } => {
                 panic!("unexpected pending (yield for: {yield_for})")
             }
         }
@@ -71,13 +71,13 @@ where
 
     fn unwrap_pending(self) -> T::Ty {
         match self {
-            IdGenStatus::Ready { id } => panic!("unexpected ready ({id})"),
-            IdGenStatus::Pending { yield_for } => yield_for,
+            Self::Ready { id } => panic!("unexpected ready ({id})"),
+            Self::Pending { yield_for } => yield_for,
         }
     }
 }
 
-fn run_id_sequence_increments_within_same_tick<G, ID, T>(generator: G)
+fn run_id_sequence_increments_within_same_tick<G, ID, T>(generator: &G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
@@ -96,7 +96,7 @@ where
     assert!(id1 < id2 && id2 < id3);
 }
 
-fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(generator: G)
+fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(generator: &G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
@@ -106,7 +106,7 @@ where
     assert_eq!(yield_for, ID::ONE);
 }
 
-fn run_generator_handles_rollover<G, ID, T>(generator: G, shared_time: SharedMockStepTime)
+fn run_generator_handles_rollover<G, ID, T>(generator: &G, shared_time: SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
@@ -128,7 +128,7 @@ where
     assert_eq!(id.sequence().to_u64(), 0);
 }
 
-fn run_generator_monotonic<G, ID, T>(generator: G)
+fn run_generator_monotonic<G, ID, T>(generator: &G)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
@@ -186,8 +186,7 @@ where
                     loop {
                         match generator.next_id() {
                             IdGenStatus::Ready { id } => {
-                                let mut set = seen_ids.lock().unwrap();
-                                assert!(set.insert(id));
+                                assert!(seen_ids.lock().unwrap().insert(id));
                                 break;
                             }
                             IdGenStatus::Pending { .. } => std::thread::yield_now(),
@@ -207,7 +206,7 @@ fn basic_generator_sequence_test() {
     let mock_time = MockTime { millis: 42 };
     let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
         BasicSnowflakeGenerator::new(0, mock_time);
-    run_id_sequence_increments_within_same_tick(generator);
+    run_id_sequence_increments_within_same_tick(&generator);
 }
 
 #[test]
@@ -215,7 +214,7 @@ fn lock_generator_sequence_test() {
     let mock_time = MockTime { millis: 42 };
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
         LockSnowflakeGenerator::new(0, mock_time);
-    run_id_sequence_increments_within_same_tick(generator);
+    run_id_sequence_increments_within_same_tick(&generator);
 }
 
 #[test]
@@ -223,7 +222,7 @@ fn atomic_generator_sequence_test() {
     let mock_time = MockTime { millis: 42 };
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
         AtomicSnowflakeGenerator::new(0, mock_time);
-    run_id_sequence_increments_within_same_tick(generator);
+    run_id_sequence_increments_within_same_tick(&generator);
 }
 
 #[test]
@@ -235,7 +234,7 @@ fn basic_generator_pending_test() {
             SnowflakeTwitterId::max_sequence(),
             FixedTime,
         );
-    run_generator_returns_pending_when_sequence_exhausted(generator);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
 #[test]
@@ -247,7 +246,7 @@ fn lock_generator_pending_test() {
             SnowflakeTwitterId::max_sequence(),
             FixedTime,
         );
-    run_generator_returns_pending_when_sequence_exhausted(generator);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
 #[test]
@@ -259,7 +258,7 @@ fn atomic_generator_pending_test() {
             SnowflakeTwitterId::max_sequence(),
             FixedTime,
         );
-    run_generator_returns_pending_when_sequence_exhausted(generator);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
 #[test]
@@ -272,7 +271,7 @@ fn basic_generator_rollover_test() {
     };
     let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
         BasicSnowflakeGenerator::new(1, shared_time.clone());
-    run_generator_handles_rollover(generator, shared_time);
+    run_generator_handles_rollover(&generator, shared_time);
 }
 
 #[test]
@@ -285,7 +284,7 @@ fn lock_generator_rollover_test() {
     };
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
         LockSnowflakeGenerator::new(1, shared_time.clone());
-    run_generator_handles_rollover(generator, shared_time);
+    run_generator_handles_rollover(&generator, shared_time);
 }
 
 #[test]
@@ -298,7 +297,7 @@ fn atomic_generator_rollover_test() {
     };
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
         AtomicSnowflakeGenerator::new(1, shared_time.clone());
-    run_generator_handles_rollover(generator, shared_time);
+    run_generator_handles_rollover(&generator, shared_time);
 }
 
 #[test]
@@ -306,7 +305,7 @@ fn basic_generator_monotonic_clock_sequence_increments() {
     let clock = MonotonicClock::default();
     let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
         BasicSnowflakeGenerator::new(1, clock);
-    run_generator_monotonic(generator);
+    run_generator_monotonic(&generator);
 }
 
 #[test]
@@ -314,7 +313,7 @@ fn lock_generator_monotonic_clock_sequence_increments() {
     let clock = MonotonicClock::default();
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
         LockSnowflakeGenerator::new(1, clock);
-    run_generator_monotonic(generator);
+    run_generator_monotonic(&generator);
 }
 
 #[test]
@@ -322,7 +321,7 @@ fn atomic_generator_monotonic_clock_sequence_increments() {
     let clock = MonotonicClock::default();
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
         AtomicSnowflakeGenerator::new(1, clock);
-    run_generator_monotonic(generator);
+    run_generator_monotonic(&generator);
 }
 
 #[test]

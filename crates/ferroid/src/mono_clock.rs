@@ -91,6 +91,7 @@ impl MonotonicClock {
     /// generated times to a custom epoch of your choosing.
     ///
     /// [`current_millis`]: TimeSource::current_millis
+    #[must_use]
     pub fn with_epoch(epoch: Duration) -> Self {
         let start = Instant::now();
         let system_now = SystemTime::now()
@@ -157,6 +158,6 @@ impl TimeSource<u128> for MonotonicClock {
     /// Returns the number of milliseconds since the configured epoch, based on
     /// the elapsed monotonic time since construction.
     fn current_millis(&self) -> u128 {
-        <Self as TimeSource<u64>>::current_millis(self) as u128
+        u128::from(<Self as TimeSource<u64>>::current_millis(self))
     }
 }

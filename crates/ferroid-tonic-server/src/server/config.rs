@@ -57,9 +57,9 @@ pub struct CliArgs {
     /// balancing performance (more workers per node) with availability (more
     /// nodes, fewer workers).
     ///
-    /// The total number of distinct machine IDs (shard_offset + num_workers)
-    /// across all nodes must not exceed the machine ID bit width defined by
-    /// your Snowflake format.
+    /// The total number of distinct machine IDs (`shard_offset` +
+    /// `num_workers`) across all nodes must not exceed the machine ID bit width
+    /// defined by your Snowflake format.
     ///
     /// Environment variable: `NUM_WORKERS`
     ///
@@ -115,8 +115,9 @@ pub struct CliArgs {
     /// during shutdown.
     ///
     /// This grace period allows in-flight requests to finish cleanly before
-    /// forcibly shutting down workers. If the timeout is reached and streams are
-    /// still active, the server proceeds with termination and logs a warning.
+    /// forcibly shutting down workers. If the timeout is reached and streams
+    /// are still active, the server proceeds with termination and logs a
+    /// warning.
     ///
     /// Environment variable: `SHUTDOWN_TIMEOUT`
     ///

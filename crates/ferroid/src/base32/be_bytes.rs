@@ -33,7 +33,7 @@ pub trait BeBytes: Sized {
     fn from_be_bytes(bytes: Self::ByteArray) -> Self;
 }
 impl BeBytes for u32 {
-    const SIZE: usize = core::mem::size_of::<u32>();
+    const SIZE: usize = core::mem::size_of::<Self>();
     const BASE32_SIZE: usize = base32_size(Self::SIZE);
 
     type ByteArray = [u8; Self::SIZE];
@@ -48,7 +48,7 @@ impl BeBytes for u32 {
     }
 }
 impl BeBytes for u64 {
-    const SIZE: usize = core::mem::size_of::<u64>();
+    const SIZE: usize = core::mem::size_of::<Self>();
     const BASE32_SIZE: usize = base32_size(Self::SIZE);
 
     type ByteArray = [u8; Self::SIZE];
@@ -63,7 +63,7 @@ impl BeBytes for u64 {
     }
 }
 impl BeBytes for u128 {
-    const SIZE: usize = core::mem::size_of::<u128>();
+    const SIZE: usize = core::mem::size_of::<Self>();
     const BASE32_SIZE: usize = base32_size(Self::SIZE);
 
     type ByteArray = [u8; Self::SIZE];

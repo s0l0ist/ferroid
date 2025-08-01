@@ -33,6 +33,7 @@ where
     /// integer type.
     ///
     /// See also: [`Base32UlidExt::encode_to_buf`] for usage.
+    #[must_use]
     fn buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
         <Self as Base32Ext>::inner_buf()
     }
@@ -89,7 +90,7 @@ where
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
-    /// ⚠️ **Note:**  
+    /// ⚠️ **Note:**\
     /// This method structurally decodes a Crockford base32 string into an
     /// integer representing a ULID, regardless of whether the input is a
     /// canonical ULID.
@@ -192,7 +193,7 @@ where
     }
 
     /// Consumes the builder and returns the raw buffer.
-    pub fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
+    pub const fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
         self.buf
     }
 }
@@ -259,6 +260,7 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
@@ -268,13 +270,14 @@ where
     #[cfg(feature = "alloc")]
     #[cfg_attr(not(feature = "alloc"), doc(hidden))]
     #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
     pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 }
 
-impl<'a, T: Base32UlidExt> fmt::Display for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> fmt::Display for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -283,7 +286,7 @@ where
     }
 }
 
-impl<'a, T: Base32UlidExt> AsRef<str> for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> AsRef<str> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -292,7 +295,7 @@ where
     }
 }
 
-impl<'a, T: Base32UlidExt> PartialEq<str> for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> PartialEq<str> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -300,7 +303,7 @@ where
         self.as_str() == other
     }
 }
-impl<'a, T: Base32UlidExt> PartialEq<&str> for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> PartialEq<&str> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -311,7 +314,7 @@ where
 
 #[cfg(feature = "alloc")]
 #[cfg_attr(not(feature = "alloc"), doc(hidden))]
-impl<'a, T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatterRef<'a, T>
+impl<T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -341,28 +344,28 @@ mod test {
 
     #[test]
     fn ulid_known() {
-        let id = ULID::from_components(1469922850259, 1012768647078601740696923);
-        assert_eq!(id.timestamp(), 1469922850259);
-        assert_eq!(id.random(), 1012768647078601740696923);
+        let id = ULID::from_components(1_469_922_850_259, 1_012_768_647_078_601_740_696_923);
+        assert_eq!(id.timestamp(), 1_469_922_850_259);
+        assert_eq!(id.random(), 1_012_768_647_078_601_740_696_923);
 
         let encoded = id.encode();
         assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
         let decoded = ULID::decode(encoded).unwrap();
 
-        assert_eq!(decoded.timestamp(), 1469922850259);
-        assert_eq!(decoded.random(), 1012768647078601740696923);
+        assert_eq!(decoded.timestamp(), 1_469_922_850_259);
+        assert_eq!(decoded.random(), 1_012_768_647_078_601_740_696_923);
         assert_eq!(id, decoded);
 
-        let id = ULID::from_components(1611559180765, 885339478614498720052741);
-        assert_eq!(id.timestamp(), 1611559180765);
-        assert_eq!(id.random(), 885339478614498720052741);
+        let id = ULID::from_components(1_611_559_180_765, 885_339_478_614_498_720_052_741);
+        assert_eq!(id.timestamp(), 1_611_559_180_765);
+        assert_eq!(id.random(), 885_339_478_614_498_720_052_741);
 
         let encoded = id.encode();
         assert_eq!(encoded, "01EWW6K6EXQDX5JV0E9CAHPXG5");
         let decoded = ULID::decode(encoded).unwrap();
 
-        assert_eq!(decoded.timestamp(), 1611559180765);
-        assert_eq!(decoded.random(), 885339478614498720052741);
+        assert_eq!(decoded.timestamp(), 1_611_559_180_765);
+        assert_eq!(decoded.random(), 885_339_478_614_498_720_052_741);
         assert_eq!(id, decoded);
     }
 

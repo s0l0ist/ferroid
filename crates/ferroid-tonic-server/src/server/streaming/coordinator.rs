@@ -74,7 +74,7 @@ pub async fn feed_chunks(
                 // the client.
                 if let Err(_e) = resp_tx.send(Err(e.clone().into())).await {
                     #[cfg(feature = "tracing")]
-                    tracing::warn!("Failed to forward err: {}", _e)
+                    tracing::warn!("Failed to forward err: {}", _e);
                 }
                 return Err(e);
             }

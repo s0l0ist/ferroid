@@ -30,7 +30,7 @@ pub trait Snowflake:
     /// Returns the machine ID portion of the ID.
     fn machine_id(&self) -> Self::Ty;
 
-    /// Returns the maximum possible value for the machine_id field.
+    /// Returns the maximum possible value for the `machine_id` field.
     fn max_machine_id() -> Self::Ty;
 
     /// Returns the sequence portion of the ID.
@@ -165,6 +165,7 @@ macro_rules! define_snowflake_id {
                 (Self::SEQUENCE_MASK << Self::SEQUENCE_SHIFT)
             }
 
+            #[must_use]
             pub const fn from(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let m = (machine_id & Self::MACHINE_ID_MASK) << Self::MACHINE_ID_SHIFT;
@@ -173,39 +174,47 @@ macro_rules! define_snowflake_id {
             }
 
             /// Extracts the timestamp from the packed ID.
+            #[must_use]
             pub const fn timestamp(&self) -> $int {
                 (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
             }
             /// Extracts the machine ID from the packed ID.
+            #[must_use]
             pub const fn machine_id(&self) -> $int {
                 (self.id >> Self::MACHINE_ID_SHIFT) & Self::MACHINE_ID_MASK
             }
             /// Extracts the sequence number from the packed ID.
+            #[must_use]
             pub const fn sequence(&self) -> $int {
                 (self.id >> Self::SEQUENCE_SHIFT) & Self::SEQUENCE_MASK
             }
             /// Returns the maximum representable timestamp value based on
             /// Self::TIMESTAMP_BITS.
+            #[must_use]
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
             /// Returns the maximum representable machine ID value based on
             /// Self::MACHINE_ID_BITS.
+            #[must_use]
             pub const fn max_machine_id() -> $int {
                 (1 << Self::MACHINE_ID_BITS) - 1
             }
             /// Returns the maximum representable sequence value based on
             /// Self::SEQUENCE_BITS.
+            #[must_use]
             pub const fn max_sequence() -> $int {
                 (1 << Self::SEQUENCE_BITS) - 1
             }
 
             /// Converts this type into its raw type representation
+            #[must_use]
             pub const fn to_raw(&self) -> $int {
                 self.id
             }
 
             /// Converts a raw type into this type
+            #[must_use]
             pub const fn from_raw(raw: $int) -> Self {
                 Self { id: raw }
             }

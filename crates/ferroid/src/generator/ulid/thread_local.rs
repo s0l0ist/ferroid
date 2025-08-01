@@ -97,6 +97,7 @@ impl UlidMono {
     ///     let id = UlidMono::new_ulid();
     /// }
     /// ```
+    #[must_use]
     pub fn new_ulid() -> ULID {
         Self::with_backoff(Backoff::Yield)
     }
@@ -115,6 +116,7 @@ impl UlidMono {
     ///     let id = UlidMono::with_backoff(Backoff::Spin);
     /// }
     /// ```
+    #[must_use]
     pub fn with_backoff(strategy: Backoff) -> ULID {
         ulid_mono(strategy)
     }
@@ -132,6 +134,7 @@ impl UlidMono {
     ///     let id = UlidMono::from_timestamp(1_694_201_234_000);
     /// }
     /// ```
+    #[must_use]
     pub fn from_timestamp(timestamp: <ULID as Id>::Ty) -> ULID {
         ULID::from_timestamp(timestamp)
     }
@@ -169,6 +172,7 @@ impl UlidMono {
     ///     let id = UlidMono::from_datetime(std::time::SystemTime::now());
     /// }
     /// ```
+    #[must_use]
     pub fn from_datetime(datetime: std::time::SystemTime) -> ULID {
         ULID::from_datetime(datetime)
     }

@@ -143,6 +143,7 @@ macro_rules! define_ulid {
                 (Self::RANDOM_MASK << Self::RANDOM_SHIFT)
             }
 
+            #[must_use]
             pub const fn from(timestamp: $int, random: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let r = (random & Self::RANDOM_MASK) << Self::RANDOM_SHIFT;
@@ -150,30 +151,36 @@ macro_rules! define_ulid {
             }
 
             /// Extracts the timestamp from the packed ID.
+            #[must_use]
             pub const fn timestamp(&self) -> $int {
                 (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
             }
             /// Extracts the random number from the packed ID.
+            #[must_use]
             pub const fn random(&self) -> $int {
                 (self.id >> Self::RANDOM_SHIFT) & Self::RANDOM_MASK
             }
             /// Returns the maximum representable timestamp value based on
             /// Self::TIMESTAMP_BITS.
+            #[must_use]
             pub const fn max_timestamp() -> $int {
                 (1 << Self::TIMESTAMP_BITS) - 1
             }
             /// Returns the maximum representable randome value based on
             /// Self::RANDOM_BITS.
+            #[must_use]
             pub const fn max_random() -> $int {
                 (1 << Self::RANDOM_BITS) - 1
             }
 
             /// Converts this type into its raw type representation
+            #[must_use]
             pub const fn to_raw(&self) -> $int {
                 self.id
             }
 
             /// Converts a raw type into this type
+            #[must_use]
             pub const fn from_raw(raw: $int) -> Self {
                 Self { id: raw }
             }
@@ -185,6 +192,7 @@ macro_rules! define_ulid {
             /// [`ThreadRandom`]: crate::ThreadRandom
             #[cfg(feature = "thread_local")]
             #[cfg_attr(not(feature = "thread_local"), doc(hidden))]
+            #[must_use]
             pub fn from_timestamp(timestamp: <Self as $crate::Id>::Ty) -> Self {
                 Self::from_timestamp_and_rand(timestamp, &$crate::ThreadRandom)
             }
@@ -194,6 +202,7 @@ macro_rules! define_ulid {
             /// [`RandSource`]
             ///
             /// [`RandSource`]: crate::RandSource
+            #[must_use]
             pub fn from_timestamp_and_rand<R>(timestamp:  <Self as $crate::Id>::Ty, rng: &R) -> Self
             where
                 R: $crate::RandSource<<Self as $crate::Id>::Ty>,
@@ -208,6 +217,7 @@ macro_rules! define_ulid {
             /// [`ThreadRandom`]: crate::ThreadRandom
             #[cfg(feature = "thread_local")]
             #[cfg_attr(not(feature = "thread_local"), doc(hidden))]
+            #[must_use]
             pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
                 Self::from_datetime_and_rand(datetime, &$crate::ThreadRandom)
             }
@@ -219,6 +229,7 @@ macro_rules! define_ulid {
             ///
             #[cfg(feature = "std")]
             #[cfg_attr(not(feature = "std"), doc(hidden))]
+            #[must_use]
             pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
             where
                 R: $crate::RandSource<<Self as $crate::Id>::Ty>,

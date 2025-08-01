@@ -194,7 +194,7 @@ impl IdGenerator for IdService {
         }
 
         increment_requests_metric();
-        record_ids_per_request_metric(total_ids as f64);
+        record_ids_per_request_metric(req.get_ref().count);
         increment_streams_inflight(); // global
         increment_streams_inflight_metric();
 

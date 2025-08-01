@@ -321,7 +321,7 @@ static STREAM_DURATION_MS_METRIC: OnceLock<Histogram<f64>> = OnceLock::new();
 #[cfg(feature = "metrics")]
 static IDS_GENERATED_METRIC: OnceLock<Counter<u64>> = OnceLock::new();
 #[cfg(feature = "metrics")]
-static IDS_PER_REQUEST_METRIC: OnceLock<Histogram<f64>> = OnceLock::new();
+static IDS_PER_REQUEST_METRIC: OnceLock<Histogram<u64>> = OnceLock::new();
 
 #[cfg(feature = "metrics")]
 fn init_metric_handles(meter: Meter) {
@@ -363,7 +363,7 @@ fn init_metric_handles(meter: Meter) {
 
     let _ = IDS_PER_REQUEST_METRIC.set(
         meter
-            .f64_histogram("ids_per_request")
+            .u64_histogram("ids_per_request")
             .with_description("IDs requested per stream")
             .build(),
     );
@@ -431,11 +431,11 @@ pub fn increment_ids_generated_metric(count: u64) {
 pub fn increment_ids_generated_metric(_count: u64) {}
 
 #[cfg(feature = "metrics")]
-pub fn record_ids_per_request_metric(count: f64) {
+pub fn record_ids_per_request_metric(count: u64) {
     if let Some(histogram) = IDS_PER_REQUEST_METRIC.get() {
         histogram.record(count, &[]);
     }
 }
 
 #[cfg(not(feature = "metrics"))]
-pub fn record_ids_per_request_metric(_count: f64) {}
+pub fn record_ids_per_request_metric(_count: u64) {}

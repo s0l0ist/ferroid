@@ -43,7 +43,7 @@ const LOOKUP: [u8; 256] = {
 ///   - Therefore, `ALPHABET[(acc >> bits) & 0x1F]` is guaranteed to be
 ///     in-bounds.
 #[inline(always)]
-pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
+pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
     let input_bits = input.len() * 8;
     let output_chars = buf_slice.len();
     let total_bits = output_chars * BITS_PER_CHAR;
@@ -53,7 +53,7 @@ pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 
     let mut out = 0;
     for &b in input {
-        acc = (acc << 8) | b as u16;
+        acc = (acc << 8) | u16::from(b);
         bits += 8;
         while bits >= BITS_PER_CHAR {
             bits -= BITS_PER_CHAR;
@@ -82,7 +82,7 @@ pub(crate) fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 /// - `LOOKUP` is a fixed-size array of 256 elements, so `LOOKUP[b as usize]` is
 ///   always in-bounds.
 #[inline(always)]
-pub(crate) fn decode_base32<T, E>(encoded: &str) -> Result<T, E>
+pub fn decode_base32<T, E>(encoded: &str) -> Result<T, E>
 where
     T: BeBytes
         + Default
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_u32() {
-        for &v in &[0, 1, u32::MAX, u32::MIN, 42, 0xFF00FF00, 0x12345678] {
+        for &v in &[0, 1, u32::MAX, u32::MIN, 42, 0xFF00_FF00, 0x1234_5678] {
             roundtrip_u32(v);
         }
     }
@@ -149,8 +149,8 @@ mod tests {
             u64::MAX,
             u64::MIN,
             42,
-            0xFF00FF00FF00FF00,
-            0x1234567890ABCDEF,
+            0xFF00_FF00_FF00_FF00,
+            0x1234_5678_90AB_CDEF,
         ] {
             roundtrip_u64(v);
         }
@@ -164,8 +164,8 @@ mod tests {
             u128::MAX,
             u128::MIN,
             42,
-            0xFFFF0000FFFF0000FFFF0000FFFF0000,
-            0x0123456789ABCDEF0123456789ABCDEFu128,
+            0xFFFF_0000_FFFF_0000_FFFF_0000_FFFF_0000,
+            0x0123_4567_89AB_CDEF_0123_4567_89AB_CDEF,
         ] {
             roundtrip_u128(v);
         }
@@ -205,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_ulid_ts() {
-        let time: u128 = 1469922850259;
+        let time: u128 = 1_469_922_850_259;
         let time_bytes = time.to_be_bytes();
         let mut out = [0u8; 26];
         encode_base32(&time_bytes, &mut out);

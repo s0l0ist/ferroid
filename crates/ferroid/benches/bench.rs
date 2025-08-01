@@ -25,7 +25,7 @@ impl TimeSource<u64> for FixedMockTime {
 
 impl TimeSource<u128> for FixedMockTime {
     fn current_millis(&self) -> u128 {
-        self.millis as u128
+        u128::from(self.millis)
     }
 }
 
@@ -156,7 +156,7 @@ fn bench_generator_threaded<ID, G, T>(
                                 }
                             });
                         }
-                    })
+                    });
                 }
                 start.elapsed()
             });
@@ -356,7 +356,7 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                                 }
                             });
                         }
-                    })
+                    });
                 }
                 start.elapsed()
             });
@@ -762,7 +762,7 @@ fn bench_generator_threaded_basic(c: &mut Criterion) {
         "mono/threaded/basic",
         BasicSnowflakeGenerator::new,
         MonotonicClock::default,
-    )
+    );
 }
 /// Multi-threaded benchmark for `LockSnowflakeGenerator` with `MonotonicClock`.
 fn bench_generator_threaded_lock(c: &mut Criterion) {
@@ -771,7 +771,7 @@ fn bench_generator_threaded_lock(c: &mut Criterion) {
         "mono/threaded/lock",
         LockSnowflakeGenerator::new,
         MonotonicClock::default,
-    )
+    );
 }
 /// Multi-threaded benchmark for `AtomicSnowflakeGenerator` with
 /// `MonotonicClock`.
@@ -781,7 +781,7 @@ fn bench_generator_threaded_atomic(c: &mut Criterion) {
         "mono/threaded/atomic",
         AtomicSnowflakeGenerator::new,
         MonotonicClock::default,
-    )
+    );
 }
 
 // --- ASYNC ---
@@ -830,8 +830,7 @@ fn benchmark_mono_smol_atomic(c: &mut Criterion) {
     );
 }
 
-// --- Ulid ---
-// Mocks
+// --- Ulid --- Mocks
 fn benchmark_mock_sequential_ulid_basic(c: &mut Criterion) {
     let rand = ThreadRandom;
     bench_generator_ulid::<ULID, _, _, _>(c, "mock/sequential/ulid/basic", || {

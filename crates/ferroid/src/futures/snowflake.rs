@@ -81,7 +81,7 @@ where
     ///
     /// This does not immediately begin polling the generator; instead, it will
     /// attempt to produce an ID when `.poll()` is called.
-    pub fn new(generator: &'a G) -> Self {
+    pub const fn new(generator: &'a G) -> Self {
         Self {
             generator,
             sleep: None,
@@ -89,7 +89,7 @@ where
         }
     }
 }
-impl<'a, G, ID, T, S> Future for SnowflakeGeneratorFuture<'a, G, ID, T, S>
+impl<G, ID, T, S> Future for SnowflakeGeneratorFuture<'_, G, ID, T, S>
 where
     G: SnowflakeGenerator<ID, T>,
     ID: Snowflake,
@@ -114,7 +114,7 @@ where
                     this.sleep.set(None);
                 }
             }
-        };
+        }
         match this.generator.try_next_id()? {
             IdGenStatus::Ready { id } => Poll::Ready(Ok(id)),
             IdGenStatus::Pending { yield_for } => {

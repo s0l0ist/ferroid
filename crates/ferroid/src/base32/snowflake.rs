@@ -33,6 +33,7 @@ where
     /// integer type.
     ///
     /// See also: [`Base32SnowExt::encode_to_buf`] for usage.
+    #[must_use]
     fn buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
         <Self as Base32Ext>::inner_buf()
     }
@@ -89,7 +90,7 @@ where
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
-    /// ⚠️ **Note:**  
+    /// ⚠️ **Note:**\
     /// This method structurally decodes a Crockford base32 string into an
     /// integer representing a Snowflake ID, regardless of whether the input is
     /// a canonical Snowflake ID.
@@ -209,7 +210,7 @@ where
     }
 
     /// Consumes the builder and returns the raw buffer.
-    pub fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
+    pub const fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
         self.buf
     }
 }
@@ -276,6 +277,7 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
@@ -285,13 +287,14 @@ where
     #[cfg(feature = "alloc")]
     #[cfg_attr(not(feature = "alloc"), doc(hidden))]
     #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
     pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 }
 
-impl<'a, T: Base32SnowExt> fmt::Display for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> fmt::Display for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -300,7 +303,7 @@ where
     }
 }
 
-impl<'a, T: Base32SnowExt> AsRef<str> for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> AsRef<str> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -309,7 +312,7 @@ where
     }
 }
 
-impl<'a, T: Base32SnowExt> PartialEq<str> for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> PartialEq<str> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -317,7 +320,7 @@ where
         self.as_str() == other
     }
 }
-impl<'a, T: Base32SnowExt> PartialEq<&str> for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> PartialEq<&str> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
@@ -328,7 +331,7 @@ where
 
 #[cfg(feature = "alloc")]
 #[cfg_attr(not(feature = "alloc"), doc(hidden))]
-impl<'a, T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatterRef<'a, T>
+impl<T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {

@@ -47,7 +47,7 @@ impl SharedMockStepTime {
 
 impl TimeSource<u128> for SharedMockStepTime {
     fn current_millis(&self) -> u128 {
-        self.clock.values[self.clock.index.get()] as u128
+        u128::from(self.clock.values[self.clock.index.get()])
     }
 }
 struct MockStepTime {
@@ -90,8 +90,8 @@ where
 {
     fn unwrap_ready(self) -> T {
         match self {
-            IdGenStatus::Ready { id } => id,
-            IdGenStatus::Pending { yield_for } => {
+            Self::Ready { id } => id,
+            Self::Pending { yield_for } => {
                 panic!("unexpected pending (yield for: {yield_for})")
             }
         }
@@ -99,8 +99,8 @@ where
 
     fn unwrap_pending(self) -> T::Ty {
         match self {
-            IdGenStatus::Ready { id } => panic!("unexpected ready ({id})"),
-            IdGenStatus::Pending { yield_for } => yield_for,
+            Self::Ready { id } => panic!("unexpected ready ({id})"),
+            Self::Pending { yield_for } => yield_for,
         }
     }
 }
@@ -214,8 +214,7 @@ where
                     loop {
                         match generator.next_id() {
                             IdGenStatus::Ready { id } => {
-                                let mut set = seen_ids.lock().unwrap();
-                                assert!(set.insert(id));
+                                assert!(seen_ids.lock().unwrap().insert(id));
                                 break;
                             }
                             IdGenStatus::Pending { .. } => std::thread::yield_now(),

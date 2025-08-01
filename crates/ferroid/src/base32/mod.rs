@@ -9,7 +9,7 @@ mod snowflake;
 mod ulid;
 
 pub use be_bytes::*;
-use crockford::*;
+use crockford::{decode_base32, encode_base32};
 pub use error::*;
 #[cfg(feature = "snowflake")]
 pub use snowflake::*;

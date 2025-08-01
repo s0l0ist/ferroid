@@ -30,10 +30,10 @@ enum Compression {
 impl fmt::Display for Compression {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Compression::None => write!(f, "none"),
-            Compression::Deflate => write!(f, "deflate"),
-            Compression::Gzip => write!(f, "gzip"),
-            Compression::Zstd => write!(f, "zstd"),
+            Self::None => write!(f, "none"),
+            Self::Deflate => write!(f, "deflate"),
+            Self::Gzip => write!(f, "gzip"),
+            Self::Zstd => write!(f, "zstd"),
         }
     }
 }
@@ -153,7 +153,7 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
         tasks.push(tokio::spawn(async move {
             let mut client = IdGeneratorClient::new(channel);
             if let Some(encoding) = compression.into() {
-                client = client.accept_compressed(encoding).send_compressed(encoding)
+                client = client.accept_compressed(encoding).send_compressed(encoding);
             }
 
             let mut stream = client
