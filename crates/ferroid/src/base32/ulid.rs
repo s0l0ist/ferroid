@@ -178,6 +178,7 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
@@ -187,6 +188,7 @@ where
     #[cfg(feature = "alloc")]
     #[cfg_attr(not(feature = "alloc"), doc(hidden))]
     #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
     pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
@@ -260,6 +262,7 @@ where
     }
 
     /// Returns a `&str` view of the base32 encoding.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
@@ -269,6 +272,7 @@ where
     #[cfg(feature = "alloc")]
     #[cfg_attr(not(feature = "alloc"), doc(hidden))]
     #[allow(clippy::inherent_to_string_shadow_display)]
+    #[must_use]
     pub fn to_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }

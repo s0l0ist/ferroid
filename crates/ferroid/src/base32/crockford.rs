@@ -108,7 +108,6 @@ where
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
-    use std;
 
     fn roundtrip_u32(val: u32) {
         let bytes = val.to_be_bytes();
