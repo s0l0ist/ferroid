@@ -219,6 +219,9 @@ fn bench_generator_async_tokio<ID, G, T>(
 
 /// Benchmarks many async generators in parallel, each running in a separate
 /// `smol` task.
+///
+/// # Panics
+/// - If a task fails
 pub fn bench_generator_async_smol<ID, G, T>(
     c: &mut Criterion,
     group_name: &str,
