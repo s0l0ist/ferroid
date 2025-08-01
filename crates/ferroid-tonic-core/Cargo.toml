@@ -16,7 +16,7 @@ keywords.workspace = true
 publish = true
 
 [dependencies]
-ferroid = { version = "0.5.5", path = "../ferroid", features = ["std", "alloc", "snowflake", "ulid"] }
+ferroid = { version = "0.6.0", path = "../ferroid", features = ["std", "alloc", "snowflake"] }
 prost = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tonic = { workspace = true, features = ["prost", "codegen"] }
