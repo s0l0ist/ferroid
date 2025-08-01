@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{RandSource, Result, TimeSource, TokioSleep, Ulid, UlidGenerator};
+use crate::{RandSource, Result, TimeSource, TokioSleep, UlidId, UlidGenerator};
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
@@ -12,7 +12,7 @@ use crate::{RandSource, Result, TimeSource, TokioSleep, Ulid, UlidGenerator};
 /// [`SleepProvider`]: crate::SleepProvider
 pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -37,7 +37,7 @@ where
 impl<G, ID, T, R> UlidGeneratorAsyncTokioExt<ID, T, R> for G
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -53,7 +53,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        LockUlidGenerator, MonotonicClock, Result, SleepProvider, ThreadRandom, TimeSource,
+        LockMonoUlidGenerator, MonotonicClock, Result, SleepProvider, ThreadRandom, TimeSource,
         TokioYield, ULID,
     };
     use core::fmt;
@@ -69,7 +69,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_basic_sleep() -> Result<()> {
         test_many_ulid_unique_ids_explicit::<ULID, _, _, _, TokioSleep>(
-            LockUlidGenerator::new,
+            LockMonoUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
@@ -79,7 +79,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_basic_yield() -> Result<()> {
         test_many_ulid_unique_ids_explicit::<ULID, _, _, _, TokioYield>(
-            LockUlidGenerator::new,
+            LockMonoUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
@@ -89,7 +89,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_basic_convience() -> Result<()> {
         test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
-            LockUlidGenerator::new,
+            LockMonoUlidGenerator::new,
             MonotonicClock::default,
             ThreadRandom::default,
         )
@@ -105,7 +105,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: Ulid + Send + 'static,
+        ID: UlidId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
@@ -144,7 +144,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: Ulid + fmt::Debug + Send + 'static,
+        ID: UlidId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
     {
@@ -176,7 +176,7 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_ulid_ids(
-        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl Ulid>>>>,
+        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl UlidId>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks)
             .await

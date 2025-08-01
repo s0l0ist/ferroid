@@ -1,4 +1,4 @@
-use crate::{Error, IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{Error, IdGenStatus, Result, SnowflakeId, SnowflakeGenerator, TimeSource};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
 use std::sync::Mutex;
@@ -28,7 +28,7 @@ use tracing::instrument;
 /// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
 pub struct LockSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     state: Arc<Mutex<ID>>,
@@ -37,7 +37,7 @@ where
 
 impl<ID, T> LockSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`LockSnowflakeGenerator`] initialized with the current
@@ -218,7 +218,7 @@ where
 
 impl<ID, T> SnowflakeGenerator<ID, T> for LockSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err = Error;

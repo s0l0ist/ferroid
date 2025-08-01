@@ -1,4 +1,4 @@
-use crate::{Error, IdGenStatus, Result, TimeSource, Ulid, UlidGenerator, rand::RandSource};
+use crate::{Error, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
 use core::cmp::Ordering;
 use std::sync::{Arc, Mutex};
 #[cfg(feature = "tracing")]
@@ -24,11 +24,13 @@ use tracing::instrument;
 ///
 /// ## See Also
 /// - [`BasicUlidGenerator`]
+/// - [`BasicMonoUlidGenerator`]
 ///
 /// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
-pub struct LockUlidGenerator<ID, T, R>
+/// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
+pub struct LockMonoUlidGenerator<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -37,13 +39,13 @@ where
     rng: R,
 }
 
-impl<ID, T, R> LockUlidGenerator<ID, T, R>
+impl<ID, T, R> LockMonoUlidGenerator<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`LockUlidGenerator`] with the provided time source and
+    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source and
     /// RNG.
     ///
     /// # Parameters
@@ -58,9 +60,9 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "ulid"))]
     /// {
-    ///     use ferroid::{LockUlidGenerator, ULID, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{LockMonoUlidGenerator, ULID, MonotonicClock, ThreadRandom};
     ///
-    ///     let generator = LockUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
+    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
     ///     let id = generator.next_id();
     ///     println!("Generated ID: {:?}", id);
     /// }
@@ -114,11 +116,11 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "ulid"))]
     /// {
-    ///     use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
     ///     let clock = MonotonicClock::default();
     ///     let rand = ThreadRandom::default();
-    ///     let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
+    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
     ///     // Attempt to generate a new ID
     ///     match generator.next_id() {
@@ -153,11 +155,11 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "ulid"))]
     /// {
-    ///     use ferroid::{LockUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
     ///     let clock = MonotonicClock::default();
     ///     let rand = ThreadRandom::default();
-    ///     let generator = LockUlidGenerator::<ULID, _, _>::new(clock, rand);
+    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
     ///
     ///     // Attempt to generate a new ID
     ///     match generator.try_next_id() {
@@ -204,9 +206,9 @@ where
     }
 }
 
-impl<ID, T, R> UlidGenerator<ID, T, R> for LockUlidGenerator<ID, T, R>
+impl<ID, T, R> UlidGenerator<ID, T, R> for LockMonoUlidGenerator<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {

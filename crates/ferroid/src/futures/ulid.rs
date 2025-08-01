@@ -1,5 +1,5 @@
 use super::SleepProvider;
-use crate::{IdGenStatus, RandSource, Result, TimeSource, ToU64, Ulid, UlidGenerator};
+use crate::{IdGenStatus, RandSource, Result, TimeSource, ToU64, UlidGenerator, UlidId};
 use core::{
     fmt,
     future::Future,
@@ -19,7 +19,7 @@ use pin_project_lite::pin_project;
 /// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait UlidGeneratorAsyncExt<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -41,7 +41,7 @@ where
 impl<G, ID, T, R> UlidGeneratorAsyncExt<ID, T, R> for G
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -66,7 +66,7 @@ pin_project! {
     pub struct UlidGeneratorFuture<'a, G, ID, T, R, S>
     where
         G: UlidGenerator<ID, T, R>,
-        ID: Ulid,
+        ID: UlidId,
         T: TimeSource<ID::Ty>,
         R: RandSource<ID::Ty>,
         S: SleepProvider,
@@ -81,7 +81,7 @@ pin_project! {
 impl<'a, G, ID, T, R, S> UlidGeneratorFuture<'a, G, ID, T, R, S>
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
     S: SleepProvider,
@@ -102,7 +102,7 @@ where
 impl<G, ID, T, R, S> Future for UlidGeneratorFuture<'_, G, ID, T, R, S>
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
     S: SleepProvider,

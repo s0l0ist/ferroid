@@ -1,5 +1,5 @@
 use super::interface::Base32Ext;
-use crate::{Base32Error, BeBytes, Error, Id, Result, Snowflake};
+use crate::{Base32Error, BeBytes, Error, Id, Result, SnowflakeId};
 use core::fmt;
 use core::marker::PhantomData;
 
@@ -20,7 +20,7 @@ use core::marker::PhantomData;
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub trait Base32SnowExt: Snowflake
+pub trait Base32SnowExt: SnowflakeId
 where
     Self::Ty: BeBytes,
 {
@@ -122,7 +122,7 @@ where
     /// ```
     /// #[cfg(all(feature = "base32", feature = "snowflake"))]
     /// {
-    ///     use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId, Error, Base32Error, Id};
+    ///     use ferroid::{Base32SnowExt, SnowflakeId, SnowflakeTwitterId, Error, Base32Error, Id};
     ///
     ///     // Crockford base32 encodes in 5-bit chunks, so encoding a u64 (64 bits)
     ///     // requires 13 characters (13 * 5 = 65 bits). The highest (leftmost) bit
@@ -165,7 +165,7 @@ where
 
 impl<ID> Base32SnowExt for ID
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     ID::Ty: BeBytes,
 {
 }
@@ -345,7 +345,7 @@ where
 #[cfg(all(test, feature = "snowflake"))]
 mod test {
     use crate::{
-        Base32Error, Base32SnowExt, Error, Snowflake, SnowflakeDiscordId, SnowflakeInstagramId,
+        Base32Error, Base32SnowExt, Error, SnowflakeDiscordId, SnowflakeId, SnowflakeInstagramId,
         SnowflakeMastodonId, SnowflakeTwitterId,
     };
 

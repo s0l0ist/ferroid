@@ -48,10 +48,11 @@ and parsing **Snowflake** and **ULID** identifiers.
 | `LockSnowflakeGenerator`   | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
 | `AtomicSnowflakeGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation (less fair)  |
 
-| Ulid Generator       | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
-| -------------------- | --------- | ----------- | --------- | ---------- | --------------------------------------- |
-| `BasicUlidGenerator` | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
-| `LockUlidGenerator`  | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
+| Ulid Generator           | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
+| ------------------------ | --------- | ----------- | --------- | ---------- | --------------------------------------- |
+| `BasicUlidGenerator`     | ❌        | ✅          | ❌        | High       | Multi-threaded, always random           |
+| `BasicMonoUlidGenerator` | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
+| `LockMonoUlidGenerator`  | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
 
 ## 🚀 Usage
 
@@ -59,15 +60,22 @@ and parsing **Snowflake** and **ULID** identifiers.
 
 #### Thread Locals
 
-The simplest way to generate a ULID is via `UlidMono`, which provides a
+The simplest way to generate a ULID is via `Ulid`, which provides a
 thread-local generator:
 
 ```rust
 #[cfg(all(feature = "ulid", feature = "thread_local"))]
 {
-    use ferroid::{ULID, UlidMono};
+    use ferroid::{ULID, Ulid};
 
-    let id: ULID = UlidMono::new_ulid();
+    let id: ULID = Ulid::new_ulid();
+}
+
+#[cfg(all(feature = "ulid", feature = "thread_local"))]
+{
+    use ferroid::{ULID, Ulid};
+
+    let id: ULID = Ulid::new_ulid();
 }
 ```
 
@@ -381,7 +389,7 @@ Use `.encode()` or `.encode_to_buf()` for sortable string representations:
 ```rust
 #[cfg(all(feature = "base32", feature = "snowflake"))]
 {
-    use ferroid::{Base32SnowExt, Snowflake, SnowflakeTwitterId};
+    use ferroid::{Base32SnowExt, SnowflakeId, SnowflakeTwitterId};
 
     let id = SnowflakeTwitterId::from(123456, 1, 42);
     assert_eq!(format!("default: {id}"), "default: 517811998762");
@@ -468,7 +476,7 @@ efficiency).
 | `LockSnowflakeGenerator`   | **~8.9 ns** | ~111M IDs/sec |
 | `AtomicSnowflakeGenerator` | **~3.1 ns** | ~320M IDs/sec |
 | `BasicUlidGenerator`       | **~3.4 ns** | ~288M IDs/sec |
-| `LockUlidGenerator`        | **~9.2 ns** | ~109M IDs/sec |
+| `LockMonoUlidGenerator`    | **~9.2 ns** | ~109M IDs/sec |
 
 #### Async (Tokio Runtime) - Peak throughput
 
@@ -476,7 +484,7 @@ efficiency).
 | -------------------------- | ---------- | ------------ | -------------- |
 | `LockSnowflakeGenerator`   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
 | `AtomicSnowflakeGenerator` | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
-| `LockUlidGenerator`        | 1024       | **~1.57 ns** | ~635M IDs/sec  |
+| `LockMonoUlidGenerator`    | 1024       | **~1.57 ns** | ~635M IDs/sec  |
 
 #### Async (Smol Runtime) - Peak throughput
 
@@ -484,7 +492,7 @@ efficiency).
 | -------------------------- | ---------- | ------------ | -------------- |
 | `LockSnowflakeGenerator`   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
 | `AtomicSnowflakeGenerator` | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
-| `LockUlidGenerator`        | 1024       | **~1.32 ns** | ~756M IDs/sec  |
+| `LockMonoUlidGenerator`    | 1024       | **~1.32 ns** | ~756M IDs/sec  |
 
 To run all benchmarks:
 

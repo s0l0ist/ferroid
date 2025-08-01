@@ -1,5 +1,5 @@
 use super::interface::Base32Ext;
-use crate::{Base32Error, BeBytes, Error, Id, Result, Ulid};
+use crate::{Base32Error, BeBytes, Error, Id, Result, UlidId};
 use core::fmt;
 use core::marker::PhantomData;
 
@@ -20,7 +20,7 @@ use core::marker::PhantomData;
 /// - Fixed-width, lexicographically sortable output
 /// - ASCII-safe encoding using Crockford's Base32 alphabet
 /// - Fallible decoding with strong validation
-pub trait Base32UlidExt: Ulid
+pub trait Base32UlidExt: UlidId
 where
     Self::Ty: BeBytes,
 {
@@ -123,7 +123,7 @@ where
     /// ```
     /// #[cfg(all(feature = "base32", feature = "ulid"))]
     /// {
-    ///     use ferroid::{Base32UlidExt, Ulid, ULID};
+    ///     use ferroid::{Base32UlidExt, UlidId, ULID};
     ///     // Crockford base32 encodes in 5-bit chunks, so encoding a 128-bit ULID
     ///     // requires 26 characters (26 * 5 = 130 bits). The two highest (leftmost)
     ///     // bits from base32 encoding are always truncated (ignored) for performance.
@@ -148,7 +148,7 @@ where
 
 impl<ID> Base32UlidExt for ID
 where
-    ID: Ulid,
+    ID: UlidId,
     ID::Ty: BeBytes,
 {
 }
@@ -327,7 +327,7 @@ where
 
 #[cfg(all(test, feature = "ulid"))]
 mod test {
-    use crate::{Base32UlidExt, ULID, Ulid};
+    use crate::{Base32UlidExt, ULID, UlidId};
 
     #[test]
     fn ulid_max() {

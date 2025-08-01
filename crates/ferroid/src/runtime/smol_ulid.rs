@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{RandSource, Result, SmolSleep, TimeSource, Ulid, UlidGenerator};
+use crate::{RandSource, Result, SmolSleep, TimeSource, UlidGenerator, UlidId};
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
@@ -12,7 +12,7 @@ use crate::{RandSource, Result, SmolSleep, TimeSource, Ulid, UlidGenerator};
 /// [`SleepProvider`]: crate::SleepProvider
 pub trait UlidGeneratorAsyncSmolExt<ID, T, R>
 where
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -36,7 +36,7 @@ where
 impl<G, ID, T, R> UlidGeneratorAsyncSmolExt<ID, T, R> for G
 where
     G: UlidGenerator<ID, T, R>,
-    ID: Ulid,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -52,8 +52,8 @@ where
 mod tests {
     use super::*;
     use crate::{
-        LockUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
-        ThreadRandom, TimeSource, ULID, Ulid, UlidGenerator,
+        LockMonoUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
+        ThreadRandom, TimeSource, ULID, UlidGenerator, UlidId,
     };
     use core::fmt;
     use futures::future::try_join_all;
@@ -70,7 +70,7 @@ mod tests {
     fn generates_many_unique_ids_basic_smol_sleep() {
         smol::block_on(async {
             test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolSleep>(
-                LockUlidGenerator::new,
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
@@ -82,7 +82,7 @@ mod tests {
     fn generates_many_unique_ids_basic_smol_yield() {
         smol::block_on(async {
             test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolYield>(
-                LockUlidGenerator::new,
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
@@ -94,7 +94,7 @@ mod tests {
     fn generates_many_unique_ids_basic_smol_convience() {
         smol::block_on(async {
             test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
-                LockUlidGenerator::new,
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
                 ThreadRandom::default,
             )
@@ -111,7 +111,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: Ulid + fmt::Debug + Send + 'static,
+        ID: UlidId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
@@ -151,7 +151,7 @@ mod tests {
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
         G::Err: Send + Sync + 'static,
-        ID: Ulid + fmt::Debug + Send + 'static,
+        ID: UlidId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
     {
@@ -182,7 +182,7 @@ mod tests {
     }
 
     // Helper to validate uniqueness - shared between test approaches
-    async fn validate_unique_ulid_ids(tasks: Vec<Task<Result<Vec<impl Ulid>>>>) -> Result<()> {
+    async fn validate_unique_ulid_ids(tasks: Vec<Task<Result<Vec<impl UlidId>>>>) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
         #[allow(clippy::cast_possible_truncation)]

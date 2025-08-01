@@ -1,6 +1,6 @@
 use crate::{
     AtomicSnowflakeGenerator, BasicSnowflakeGenerator, Id, IdGenStatus, LockSnowflakeGenerator,
-    MonotonicClock, Snowflake, SnowflakeGenerator, SnowflakeTwitterId, TimeSource, ToU64,
+    MonotonicClock, SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource, ToU64,
 };
 use alloc::rc::Rc;
 use alloc::sync::Arc;
@@ -80,7 +80,7 @@ where
 fn run_id_sequence_increments_within_same_tick<G, ID, T>(generator: &G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     let id1 = generator.next_id().unwrap_ready();
@@ -99,7 +99,7 @@ where
 fn run_generator_returns_pending_when_sequence_exhausted<G, ID, T>(generator: &G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     let yield_for = generator.next_id().unwrap_pending();
@@ -109,7 +109,7 @@ where
 fn run_generator_handles_rollover<G, ID, T>(generator: &G, shared_time: &SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     for i in 0..=ID::max_sequence().to_u64() {
@@ -131,7 +131,7 @@ where
 fn run_generator_monotonic<G, ID, T>(generator: &G)
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     let mut last_timestamp = ID::ZERO;
@@ -167,7 +167,7 @@ where
 fn run_generator_monotonic_threaded<G, ID, T>(make_generator: impl Fn() -> G)
 where
     G: SnowflakeGenerator<ID, T> + Send + Sync,
-    ID: Snowflake + Send,
+    ID: SnowflakeId + Send,
     T: TimeSource<ID::Ty>,
 {
     const THREADS: usize = 8;

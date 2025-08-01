@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{IdGenStatus, Result, SnowflakeId, SnowflakeGenerator, TimeSource};
 use core::{
     cmp,
     marker::PhantomData,
@@ -34,7 +34,7 @@ use tracing::instrument;
 /// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
 pub struct AtomicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake<Ty = u64>,
+    ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
     state: AtomicU64,
@@ -45,7 +45,7 @@ where
 
 impl<ID, T> AtomicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake<Ty = u64>,
+    ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`AtomicSnowflakeGenerator`] initialized with the current
@@ -246,7 +246,7 @@ where
 
 impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake<Ty = u64>,
+    ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
     type Err = core::convert::Infallible;

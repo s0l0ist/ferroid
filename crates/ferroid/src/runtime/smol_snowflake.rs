@@ -1,4 +1,4 @@
-use crate::{Result, SmolSleep, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{Result, SmolSleep, SnowflakeGenerator, SnowflakeId, TimeSource};
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
@@ -10,7 +10,7 @@ use crate::{Result, SmolSleep, Snowflake, SnowflakeGenerator, TimeSource};
 /// [`SleepProvider`]: crate::SleepProvider
 pub trait SnowflakeGeneratorAsyncSmolExt<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err;
@@ -33,7 +33,7 @@ where
 impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err = G::Err;
@@ -49,7 +49,7 @@ mod tests {
     use super::*;
     use crate::{
         AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, SleepProvider,
-        SmolYield, Snowflake, SnowflakeGenerator, SnowflakeTwitterId, TimeSource,
+        SmolYield, SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource,
     };
     use core::fmt;
     use futures::future::try_join_all;
@@ -136,7 +136,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: Snowflake + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
     {
@@ -172,7 +172,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: Snowflake + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + fmt::Debug + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
     {
         let clock = clock_factory();
@@ -202,7 +202,7 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_snow_ids(
-        tasks: Vec<Task<Result<Vec<impl Snowflake + fmt::Debug>>>>,
+        tasks: Vec<Task<Result<Vec<impl SnowflakeId + fmt::Debug>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 

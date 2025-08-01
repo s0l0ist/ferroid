@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
 use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -25,7 +25,7 @@ use tracing::instrument;
 /// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
 pub struct BasicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     state: Cell<ID>,
@@ -34,7 +34,7 @@ where
 
 impl<ID, T> BasicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`BasicSnowflakeGenerator`] initialized with the current
@@ -219,7 +219,7 @@ where
 
 impl<ID, T> SnowflakeGenerator<ID, T> for BasicSnowflakeGenerator<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err = core::convert::Infallible;

@@ -9,7 +9,7 @@ use core::{fmt, hash::Hash};
 ///
 /// Types implementing `Ulid` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
-pub trait Ulid:
+pub trait UlidId:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {
     /// Returns the timestamp portion of the ID.
@@ -263,7 +263,7 @@ macro_rules! define_ulid {
             }
         }
 
-        impl $crate::Ulid for $name {
+        impl $crate::UlidId for $name {
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }

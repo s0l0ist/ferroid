@@ -11,14 +11,14 @@ use core::{fmt, hash::Hash};
 /// # Example
 ///
 /// ```
-/// use ferroid::{Snowflake, SnowflakeTwitterId};
+/// use ferroid::{SnowflakeId, SnowflakeTwitterId};
 ///
 /// let id = SnowflakeTwitterId::from(1000, 2, 1);
 /// assert_eq!(id.timestamp(), 1000);
 /// assert_eq!(id.machine_id(), 2);
 /// assert_eq!(id.sequence(), 1);
 /// ```
-pub trait Snowflake:
+pub trait SnowflakeId:
     Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
 {
     /// Returns the timestamp portion of the ID.
@@ -240,7 +240,7 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl $crate::Snowflake for $name {
+        impl $crate::SnowflakeId for $name {
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }

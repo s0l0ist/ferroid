@@ -1,5 +1,5 @@
 use super::SleepProvider;
-use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource, ToU64};
+use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource, ToU64};
 use core::{
     fmt,
     future::Future,
@@ -20,7 +20,7 @@ use pin_project_lite::pin_project;
 /// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait SnowflakeGeneratorAsyncExt<ID, T>
 where
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err: fmt::Debug;
@@ -41,7 +41,7 @@ where
 impl<G, ID, T> SnowflakeGeneratorAsyncExt<ID, T> for G
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err = G::Err;
@@ -65,7 +65,7 @@ pin_project! {
     pub struct SnowflakeGeneratorFuture<'a, G, ID, T, S>
     where
         G: SnowflakeGenerator<ID, T>,
-        ID: Snowflake,
+        ID: SnowflakeId,
         T: TimeSource<ID::Ty>,
         S: SleepProvider,
     {
@@ -79,7 +79,7 @@ pin_project! {
 impl<'a, G, ID, T, S> SnowflakeGeneratorFuture<'a, G, ID, T, S>
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
     S: SleepProvider,
 {
@@ -98,7 +98,7 @@ where
 impl<G, ID, T, S> Future for SnowflakeGeneratorFuture<'_, G, ID, T, S>
 where
     G: SnowflakeGenerator<ID, T>,
-    ID: Snowflake,
+    ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
     S: SleepProvider,
 {
