@@ -1,3 +1,5 @@
+use core::fmt;
+
 use crate::{RandSource, Result, TimeSource, TokioSleep, Ulid, UlidGenerator};
 
 /// Extension trait for asynchronously generating ULIDs using the
@@ -14,6 +16,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err: fmt::Debug;
+
     /// Returns a future that resolves to the next available ULID using
     /// the [`TokioSleep`] provider.
     ///
@@ -27,7 +31,7 @@ where
     ///
     /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::UlidGeneratorAsyncExt::try_next_id_async
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
 impl<G, ID, T, R> UlidGeneratorAsyncTokioExt<ID, T, R> for G
@@ -37,7 +41,9 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+    type Err = G::Err;
+
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<TokioSleep>(self)
     }
 }
@@ -116,7 +122,9 @@ mod tests {
                 tokio::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = crate::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g).await?;
+                        let id = crate::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g)
+                            .await
+                            .unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -154,7 +162,7 @@ mod tests {
                     for _ in 0..IDS_PER_GENERATOR {
                         // This uses the convenience method - no explicit
                         // SleepProvider type!
-                        let id = g.try_next_id_async().await?;
+                        let id = g.try_next_id_async().await.unwrap();
                         ids.push(id);
                     }
                     Ok(ids)

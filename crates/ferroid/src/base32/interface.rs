@@ -63,7 +63,7 @@ where
     /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
     ///   alphabet)
     #[inline]
-    fn inner_decode<E>(s: impl AsRef<str>) -> Result<Self, E> {
+    fn inner_decode<E>(s: impl AsRef<str>) -> Result<Self, Error<E>> {
         let s_ref = s.as_ref();
         if s_ref.len() != Self::Ty::BASE32_SIZE {
             return Err(Error::Base32Error(Base32Error::DecodeInvalidLen(

@@ -13,6 +13,7 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
+    type Err;
     /// Returns a future that resolves to the next available Snowflake ID using
     /// the [`SmolSleep`] provider.
     ///
@@ -26,7 +27,7 @@ where
     ///
     /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
     ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>>;
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
 impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
@@ -35,7 +36,9 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID>> {
+    type Err = G::Err;
+
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<SmolSleep>(self)
     }
 }
@@ -148,8 +151,9 @@ mod tests {
                 smol::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id =
-                            crate::SnowflakeGeneratorAsyncExt::try_next_id_async::<S>(&g).await?;
+                        let id = crate::SnowflakeGeneratorAsyncExt::try_next_id_async::<S>(&g)
+                            .await
+                            .unwrap();
                         ids.push(id);
                     }
                     Ok(ids)
@@ -184,7 +188,7 @@ mod tests {
                     for _ in 0..IDS_PER_GENERATOR {
                         // This uses the convenience method - no explicit
                         // SleepProvider type!
-                        let id = g.try_next_id_async().await?;
+                        let id = g.try_next_id_async().await.unwrap();
                         ids.push(id);
                     }
                     Ok(ids)

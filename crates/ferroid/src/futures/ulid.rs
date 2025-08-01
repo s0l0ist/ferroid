@@ -1,6 +1,7 @@
 use super::SleepProvider;
 use crate::{IdGenStatus, RandSource, Result, TimeSource, ToU64, Ulid, UlidGenerator};
 use core::{
+    fmt,
     future::Future,
     marker::PhantomData,
     pin::Pin,
@@ -22,6 +23,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err: fmt::Debug;
+
     /// Returns a future that resolves to the next available Snowflake ID.
     ///
     /// If the generator is not ready to issue a new ID immediately, the future
@@ -30,7 +33,7 @@ where
     /// # Errors
     ///
     /// This future may return an error if the generator encounters one.
-    fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID>>
+    fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID, Self::Err>>
     where
         S: SleepProvider;
 }
@@ -42,7 +45,9 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID>>
+    type Err = G::Err;
+
+    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID, Self::Err>>
     where
         S: SleepProvider,
     {
@@ -101,7 +106,7 @@ where
     R: RandSource<ID::Ty>,
     S: SleepProvider,
 {
-    type Output = Result<ID>;
+    type Output = Result<ID, G::Err>;
 
     /// Polls the generator for a new ID.
     ///

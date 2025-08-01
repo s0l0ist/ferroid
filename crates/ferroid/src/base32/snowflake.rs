@@ -154,7 +154,7 @@ where
     ///     }).expect("should produce a valid ID");
     /// }
     /// ```
-    fn decode(s: impl AsRef<str>) -> Result<Self, Self> {
+    fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
             return Err(Error::Base32Error(Base32Error::DecodeOverflow(decoded)));

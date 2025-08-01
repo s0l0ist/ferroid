@@ -4,7 +4,7 @@ use criterion::async_executor::SmolExecutor;
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
     AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt, BasicSnowflakeGenerator,
-    BasicUlidGenerator, BeBytes, Error, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
+    BasicUlidGenerator, BeBytes, Id, IdGenStatus, LockSnowflakeGenerator, LockUlidGenerator,
     MonotonicClock, RandSource, SmolSleep, Snowflake, SnowflakeGenerator,
     SnowflakeGeneratorAsyncExt, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource,
     ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, UlidMono,
@@ -176,6 +176,7 @@ fn bench_generator_async_tokio<ID, G, T>(
 ) where
     ID: Snowflake + Send + Sync + 'static,
     G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
     let mut group = c.benchmark_group(group_name);
@@ -203,7 +204,7 @@ fn bench_generator_async_tokio<ID, G, T>(
                                 let id = generator.try_next_id_async::<TokioSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error<core::convert::Infallible>>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -226,6 +227,7 @@ pub fn bench_generator_async_smol<ID, G, T>(
 ) where
     ID: Snowflake + Send + Sync + 'static,
     G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
     // Use all CPUs
@@ -254,7 +256,7 @@ pub fn bench_generator_async_smol<ID, G, T>(
                                 let id = generator.try_next_id_async::<SmolSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error<core::convert::Infallible>>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -377,6 +379,7 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
 ) where
     ID: Ulid + Send + Sync + 'static,
     G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
     R: RandSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
@@ -407,7 +410,7 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
                                 let id = generator.try_next_id_async::<TokioSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error<core::convert::Infallible>>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();
@@ -431,6 +434,7 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
 ) where
     ID: Ulid + Send + Sync + 'static,
     G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
+    G::Err: Send + Sync + 'static,
     T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
     R: RandSource<ID::Ty> + Clone + Send + Sync + 'static,
 {
@@ -462,7 +466,7 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
                                 let id = generator.try_next_id_async::<SmolSleep>().await?;
                                 black_box(id);
                             }
-                            Ok::<(), Error<core::convert::Infallible>>(())
+                            Ok::<(), G::Err>(())
                         })
                     });
                     try_join_all(tasks).await.unwrap();

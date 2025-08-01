@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, TimeSource, Ulid, UlidGenerator, rand::RandSource};
+use crate::{Error, IdGenStatus, Result, TimeSource, Ulid, UlidGenerator, rand::RandSource};
 use core::cmp::Ordering;
 use std::sync::{Arc, Mutex};
 #[cfg(feature = "tracing")]
@@ -165,7 +165,7 @@ where
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
         let now = self.clock.current_millis();
         let mut id = self.state.lock()?;
         let current_ts = id.timestamp();
@@ -201,6 +201,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err = Error;
+
     fn new(clock: T, rng: R) -> Self {
         Self::new(clock, rng)
     }
@@ -209,7 +211,7 @@ where
         self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
         self.try_next_id()
     }
 }

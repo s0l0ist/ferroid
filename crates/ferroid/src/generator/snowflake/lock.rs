@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
+use crate::{Error, IdGenStatus, Result, Snowflake, SnowflakeGenerator, TimeSource};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
 use std::sync::Mutex;
@@ -178,7 +178,7 @@ where
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
         let now = self.time.current_millis();
         let mut id = self.state.lock()?;
         let current_ts = id.timestamp();
@@ -212,6 +212,8 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
+    type Err = Error;
+
     fn new(machine_id: ID::Ty, clock: T) -> Self {
         Self::new(machine_id, clock)
     }
@@ -220,7 +222,7 @@ where
         self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
         self.try_next_id()
     }
 }

@@ -84,7 +84,7 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 ///   always in-bounds.
 #[inline(always)]
 #[allow(clippy::inline_always)]
-pub fn decode_base32<T, E>(encoded: &str) -> Result<T, E>
+pub fn decode_base32<T, E>(encoded: &str) -> Result<T, Error<E>>
 where
     T: BeBytes
         + Default

@@ -1,4 +1,5 @@
 use crate::{IdGenStatus, RandSource, Result, TimeSource, Ulid};
+use core::fmt;
 
 /// A minimal interface for generating Ulid IDs
 pub trait UlidGenerator<ID, T, R>
@@ -7,6 +8,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err: fmt::Debug;
+
     // Creates a new generator
     fn new(clock: T, rng: R) -> Self;
 
@@ -18,5 +21,5 @@ where
     /// # Errors
     /// - May return an error if the underlying generator uses a lock and it is
     ///   poisoned.
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>>;
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err>;
 }

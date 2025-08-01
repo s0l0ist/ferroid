@@ -1,6 +1,7 @@
 use core::fmt;
 
-pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, Error<E>>;
+/// A Result type that is infallible by default
+pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, E>;
 
 #[derive(Clone, Debug)]
 #[non_exhaustive]

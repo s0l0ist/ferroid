@@ -213,6 +213,8 @@ where
     ID: Snowflake,
     T: TimeSource<ID::Ty>,
 {
+    type Err = core::convert::Infallible;
+
     fn new(machine_id: ID::Ty, clock: T) -> Self {
         Self::new(machine_id, clock)
     }
@@ -221,7 +223,7 @@ where
         self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
         self.try_next_id()
     }
 }

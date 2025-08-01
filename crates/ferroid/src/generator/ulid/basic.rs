@@ -202,6 +202,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    type Err = core::convert::Infallible;
+
     fn new(clock: T, rng: R) -> Self {
         Self::new(clock, rng)
     }
@@ -210,7 +212,7 @@ where
         self.next_id()
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
         self.try_next_id()
     }
 }
