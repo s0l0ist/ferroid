@@ -128,8 +128,9 @@ feature.
 
 Base32 encodes in 5-bit chunks. That means:
 
-- A u64 (64 bits) maps to 13 Base32 characters (13 × 5 = 65 bits)
-- A u128 (128 bits) maps to 26 Base32 characters (26 × 5 = 130 bits)
+- A `u32` (32 bits) maps to 7 Base32 characters (7 × 5 = 35 bits)
+- A `u64` (64 bits) maps to 13 Base32 characters (13 × 5 = 65 bits)
+- A `u128` (128 bits) maps to 26 Base32 characters (26 × 5 = 130 bits)
 
 This creates an invariant: an encoded string may contain more bits than the
 target type can hold.
@@ -148,18 +149,26 @@ is strict:
 
 Ferroid takes a more flexible stance:
 
-- Extra high bit(s) are implicitly shifted out (1 bit for u64, 2 bits for u128).
-- Decoding only fails if the overflowed bits land in reserved regions, which are
-  required to remain zero
+- Strings like `"ZZZZZZZZZZZZZZZZZZZZZZZZZZ"` (which technically overflow) are
+  accepted and decoded without error.
+- However, if any of the overflowed bits fall into reserved regions, which must
+  remain zero, decoding will fail with `Base32Error::DecodeOverflow`.
 
-This allows any 13-character Base32 string to decode into a u64, or any
-26-character string into a u128, correctly **as long as reserved layout
-constraints aren't violated**.
+This allows any 13-character Base32 string to decode into a `u64`, or any
+26-character string into a `u128`, **as long as reserved layout constraints
+aren't violated**. If the layout defines no reserved bits, decoding is always
+valid.
 
-If reserved bits are set, Ferroid returns an error, `Base32Error::DecodeOverflow
-{ id }`, containing the full decoded (but invalid) ID. You can recover by
-calling `.into_valid()` to mask off reserved bits allowing explicit error
-handling or silent recovery.
+For example:
+
+- A `ULID` has no reserved bits, so decoding will never fail due to overflow.
+- A `SnowflakeTwitterId` reserves the highest bit, so decoding must ensure that
+  bit remains unset.
+
+If reserved bits are set during decoding, Ferroid returns a
+`Base32Error::DecodeOverflow { id }` containing the full (invalid) ID. You can
+recover by calling `.into_valid()` to mask off reserved bits—allowing either
+explicit error handling or silent correction.
 
 ### Generate an ID
 
