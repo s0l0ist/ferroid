@@ -395,7 +395,7 @@ define_snowflake_id!(
     /// A 128-bit Snowflake ID using a hybrid layout.
     ///
     /// - 40 bits reserved
-    /// - 48 bits timestamp (ms since [`CUSTOM_EPOCH`])
+    /// - 48 bits timestamp
     /// - 20 bits machine ID
     /// - 20 bits sequence
     ///
@@ -407,7 +407,6 @@ define_snowflake_id!(
     ///              |<----- HI 64 bits ----->|<-------------- LO 64 bits ------------->|
     ///              |<--- MSB ------ LSB --->|<----- MSB ----- 64 bits ----- LSB ----->|
     /// ```
-    /// [`CUSTOM_EPOCH`]: crate::CUSTOM_EPOCH
     SnowflakeLongId, u128,
     reserved: 40,
     timestamp: 48,
