@@ -25,7 +25,7 @@ The core library provides:
   - `BasicSnowflakeGenerator`: single-threaded
   - `LockSnowflakeGenerator`: multi-threaded with locking
   - `AtomicSnowflakeGenerator`: multi-threaded, lock-free
-  - `BasicUlidGenerator`: single-threaded, high-entropy ULID generation
+  - `BasicUlidGenerator`: thread-safe, high-entropy ULID generation
   - `BasicMonoUlidGenerator`: single-threaded, monotonic, high-entropy ULID generation
   - `LockMonoUlidGenerator`: multi-threaded, monotonic, high-entropy ULID generation
 
