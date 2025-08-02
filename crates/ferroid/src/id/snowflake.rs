@@ -391,29 +391,6 @@ define_snowflake_id!(
     sequence: 10
 );
 
-define_snowflake_id!(
-    /// A 128-bit Snowflake ID using a hybrid layout.
-    ///
-    /// - 40 bits reserved
-    /// - 48 bits timestamp
-    /// - 20 bits machine ID
-    /// - 20 bits sequence
-    ///
-    /// ```text
-    ///  Bit Index:  127           88 87            40 39             20 19             0
-    ///              +---------------+----------------+-----------------+---------------+
-    ///  Field:      | reserved (40) | timestamp (48) | machine ID (20) | sequence (20) |
-    ///              +---------------+----------------+-----------------+---------------+
-    ///              |<----- HI 64 bits ----->|<-------------- LO 64 bits ------------->|
-    ///              |<--- MSB ------ LSB --->|<----- MSB ----- 64 bits ----- LSB ----->|
-    /// ```
-    SnowflakeLongId, u128,
-    reserved: 40,
-    timestamp: 48,
-    machine_id: 20,
-    sequence: 20
-);
-
 #[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
@@ -473,20 +450,6 @@ mod tests {
         assert_eq!(id.machine_id(), mid);
         assert_eq!(id.sequence(), seq);
         assert_eq!(SnowflakeInstagramId::from_components(ts, mid, seq), id);
-    }
-
-    #[test]
-    fn test_snowflake_long_id_fields_and_bounds() {
-        let ts = SnowflakeLongId::max_timestamp();
-        let mid = SnowflakeLongId::max_machine_id();
-        let seq = SnowflakeLongId::max_sequence();
-
-        let id = SnowflakeLongId::from(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeLongId::from_components(ts, mid, seq), id);
     }
 
     #[test]
@@ -574,27 +537,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "timestamp overflow")]
-    fn long_timestamp_overflow_panics() {
-        let ts = SnowflakeLongId::max_timestamp() + 1;
-        let _ = SnowflakeLongId::from_components(ts, 0, 0);
-    }
-
-    #[test]
-    #[should_panic(expected = "machine_id overflow")]
-    fn long_machine_id_overflow_panics() {
-        let mid = SnowflakeLongId::max_machine_id() + 1;
-        let _ = SnowflakeLongId::from_components(0, mid, 0);
-    }
-
-    #[test]
-    #[should_panic(expected = "sequence overflow")]
-    fn long_sequence_overflow_panics() {
-        let seq = SnowflakeLongId::max_sequence() + 1;
-        let _ = SnowflakeLongId::from_components(0, 0, seq);
-    }
-
-    #[test]
     fn twitter_validity() {
         let id = SnowflakeTwitterId::from_raw(u64::MAX);
         assert!(!id.is_valid()); // reserved bits (1)
@@ -622,14 +564,6 @@ mod tests {
     fn mastodon_validity() {
         let id = SnowflakeMastodonId::from_raw(u64::MAX);
         assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn long_validity() {
-        let id = SnowflakeLongId::from_raw(u128::MAX);
-        assert!(!id.is_valid()); // reserved bits (40)
         let valid = id.into_valid();
         assert!(valid.is_valid());
     }
@@ -687,19 +621,6 @@ mod tests {
     }
 
     #[test]
-    fn long_low_bit_fields() {
-        let id = SnowflakeLongId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeLongId::from_components(1, 1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 1);
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
     fn twitter_edge_rollover() {
         let id = SnowflakeTwitterId::from_components(0, 0, SnowflakeTwitterId::max_sequence());
         assert_eq!(id.sequence(), SnowflakeTwitterId::max_sequence());
@@ -731,14 +652,5 @@ mod tests {
         let id =
             SnowflakeInstagramId::from_components(0, SnowflakeInstagramId::max_machine_id(), 0);
         assert_eq!(id.machine_id(), SnowflakeInstagramId::max_machine_id());
-    }
-
-    #[test]
-    fn long_edge_rollover() {
-        let id = SnowflakeLongId::from_components(0, 0, SnowflakeLongId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeLongId::max_sequence());
-
-        let id = SnowflakeLongId::from_components(0, SnowflakeLongId::max_machine_id(), 0);
-        assert_eq!(id.machine_id(), SnowflakeLongId::max_machine_id());
     }
 }
