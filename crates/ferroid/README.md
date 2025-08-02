@@ -156,9 +156,10 @@ This allows any 13-character Base32 string to decode into a u64, or any
 26-character string into a u128, correctly **as long as reserved layout
 constraints aren't violated**.
 
-If reserved bits are set, Ferroid returns a `DecodeOverflow(id)` error with the
-full decoded (but invalid) ID. You can recover by calling `.into_valid()` to
-mask off reserved bits allowing explicit error handling or silent recovery.
+If reserved bits are set, Ferroid returns an error, `Base32Error::DecodeOverflow
+{ id }`, containing the full decoded (but invalid) ID. You can recover by
+calling `.into_valid()` to mask off reserved bits allowing explicit error
+handling or silent recovery.
 
 ### Generate an ID
 

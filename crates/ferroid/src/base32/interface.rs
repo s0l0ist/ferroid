@@ -66,9 +66,9 @@ where
     fn inner_decode<E>(s: impl AsRef<str>) -> Result<Self, Error<E>> {
         let s_ref = s.as_ref();
         if s_ref.len() != Self::Ty::BASE32_SIZE {
-            return Err(Error::Base32Error(Base32Error::DecodeInvalidLen(
-                s_ref.len(),
-            )));
+            return Err(Error::Base32Error(Base32Error::DecodeInvalidLen {
+                len: s_ref.len(),
+            }));
         }
         let raw = super::decode_base32(s_ref)?;
         Ok(Self::from_raw(raw))

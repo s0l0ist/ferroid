@@ -97,7 +97,9 @@ where
         // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
         let val = unsafe { *LOOKUP.get_unchecked(b as usize) };
         if val == NO_VALUE {
-            return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii(b)));
+            return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii {
+                byte: b,
+            }));
         }
         acc = (acc << BITS_PER_CHAR) | T::from(val);
     }
@@ -200,7 +202,7 @@ mod tests {
         let res = decode_base32::<u32, ()>(s);
         assert!(res.is_err());
         match res.unwrap_err() {
-            Error::Base32Error(Base32Error::DecodeInvalidAscii(b'!')) => {}
+            Error::Base32Error(Base32Error::DecodeInvalidAscii { byte: b'!' }) => {}
             e => panic!("unexpected error: {e:?}"),
         }
     }
