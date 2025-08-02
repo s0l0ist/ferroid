@@ -60,11 +60,16 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "ulid"))]
     /// {
-    ///     use ferroid::{LockMonoUlidGenerator, ULID, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    ///     
+    ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(MonotonicClock::default(), ThreadRandom::default());
-    ///     let id = generator.next_id();
-    ///     println!("Generated ID: {:?}", id);
+    ///     let id: ULID = loop {
+    ///         match generator.next_id() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///         }
+    ///     };
     /// }
     /// ```
     ///
@@ -117,20 +122,15 @@ where
     /// #[cfg(all(feature = "std", feature = "ulid"))]
     /// {
     ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    ///     
+    ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    ///     let clock = MonotonicClock::default();
-    ///     let rand = ThreadRandom::default();
-    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
-    ///
-    ///     // Attempt to generate a new ID
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => {
-    ///             println!("ID: {}", id);
+    ///     let id: ULID = loop {
+    ///         match generator.next_id() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => std::thread::yield_now(),
     ///         }
-    ///         IdGenStatus::Pending { yield_for } => {
-    ///             println!("Exhausted; wait for: {}ms", yield_for);
-    ///         }
-    ///     }
+    ///     };
     /// }
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
@@ -143,10 +143,10 @@ where
     /// produce a unique identifier. Returns [`IdGenStatus::Ready`] on success.
     ///
     /// # Returns
-    /// - Ok(IdGenStatus::Ready { id }) A ULID was generated
-    /// - Ok(IdGenStatus::Pending { yield_for }) Never, but kept to match the
-    ///   Snowflake API
-    /// - Err(e) if the time source or rand source failed
+    /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
+    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
+    ///   milliseconds) before trying again
+    /// - `Err(e)`: the lock was poisoned
     ///
     /// # Errors
     /// - Returns an error if the underlying lock has been poisoned.
@@ -155,24 +155,20 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "ulid"))]
     /// {
-    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{BasicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
     ///
-    ///     let clock = MonotonicClock::default();
-    ///     let rand = ThreadRandom::default();
-    ///     let generator = LockMonoUlidGenerator::<ULID, _, _>::new(clock, rand);
+    ///     let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     ///     // Attempt to generate a new ID
-    ///     match generator.try_next_id() {
-    ///         Ok(IdGenStatus::Ready { id }) => {
-    ///             println!("ID: {}", id);
+    ///     let id: ULID = loop {
+    ///         match generator.try_next_id() {
+    ///             Ok(IdGenStatus::Ready { id }) => break id,
+    ///             Ok(IdGenStatus::Pending { yield_for }) => {
+    ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
+    ///             }
+    ///             Err(e) => panic!("Generator error: {}", e),
     ///         }
-    ///         Ok(IdGenStatus::Pending { yield_for }) => {
-    ///             // In practice, Ulid generators will never return `Pending`, but
-    ///             // it is kept to have a consistent API.
-    ///             println!("Exhausted; wait for: {}ms", yield_for);
-    ///         }
-    ///         Err(e) => eprintln!("Generator error: {}", e),
-    ///     }
+    ///     };
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]

@@ -65,10 +65,16 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
     /// {
-    ///     use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, MonotonicClock};
+    ///     use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    ///     
+    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
-    ///     let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MonotonicClock::default());
-    ///     let id = generator.next_id();
+    ///     let id: SnowflakeTwitterId = loop {
+    ///         match generator.next_id() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///         }
+    ///     };
     /// }
     /// ```
     ///
@@ -124,22 +130,16 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
     /// {
-    ///     use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
+    ///     use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    ///     
+    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
-    ///     // Create a clock and a generator with machine_id = 0
-    ///     let clock = MonotonicClock::default();
-    ///     let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
-    ///
-    ///     // Attempt to generate a new ID
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => {
-    ///             println!("ID: {}", id);
-    ///             assert_eq!(id.machine_id(), 0);
+    ///     let id: SnowflakeTwitterId = loop {
+    ///         match generator.next_id() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => std::thread::yield_now(),
     ///         }
-    ///         IdGenStatus::Pending { yield_for } => {
-    ///             println!("Exhausted; wait for: {}ms", yield_for);
-    ///         }
-    ///     }
+    ///     };
     /// }
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
@@ -158,7 +158,7 @@ where
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
     /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
     ///   milliseconds) before trying again
-    /// - `Err(e)`: A recoverable error occurred (e.g., time source failure)
+    /// - `Err(e)`: the lock was poisoned
     ///
     /// # Errors
     /// - Returns an error if the underlying lock has been poisoned.
@@ -167,23 +167,20 @@ where
     /// ```
     /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
     /// {
-    ///     use ferroid::{LockSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus, MonotonicClock, TimeSource};
-    ///
-    ///     // Create a clock and a generator with machine_id = 0
-    ///     let clock = MonotonicClock::default();
-    ///     let generator = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock);
+    ///     use ferroid::{LockSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    ///     
+    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
     ///     // Attempt to generate a new ID
-    ///     match generator.try_next_id() {
-    ///         Ok(IdGenStatus::Ready { id }) => {
-    ///             println!("ID: {}", id);
-    ///             assert_eq!(id.machine_id(), 0);
+    ///     let id: SnowflakeTwitterId = loop {
+    ///         match generator.try_next_id() {
+    ///             Ok(IdGenStatus::Ready { id }) => break id,
+    ///             Ok(IdGenStatus::Pending { yield_for }) => {
+    ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
+    ///             }
+    ///             Err(e) => panic!("Generator error: {}", e),
     ///         }
-    ///         Ok(IdGenStatus::Pending { yield_for }) => {
-    ///             println!("Exhausted; wait for: {}ms", yield_for);
-    ///         }
-    ///         Err(e) => eprintln!("Generator error: {}", e),
-    ///     }
+    ///     };
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]

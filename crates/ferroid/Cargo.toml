@@ -15,7 +15,7 @@ categories = [
   "development-tools"   # Broad utility for developers building systems
 ]
 documentation.workspace = true
-keywords.workspace = true
+keywords = ["no_std", "id", "snowflake", "ulid", "uuid", "monotonic"]
 
 [package.metadata.docs.rs]
 all-features = true

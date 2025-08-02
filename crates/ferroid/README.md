@@ -87,27 +87,23 @@ IDs.
 By default, printing an ID returns its raw integer representation. If you need
 fixed-width, URL-safe, and lexicographically sortable strings (e.g. for use in
 databases, logs, or URLs), use `.encode()` to obtain a lightweight formatter. It
-avoids heap allocation and can be passed freely without committing to any
-specific string primitive, letting the consumer choose how and when to render
-it.
+can be passed freely without committing to any specific string primitive,
+letting the consumer choose how and when to render it.
 
-This feature avoids heap allocation by default and supports both owned and
-borrowed encoding buffers. For full `String` support, enable the `alloc`
+The formatter design avoids heap allocation by default and supports both owned
+and borrowed encoding buffers. For full `String` support, enable the `alloc`
 feature.
 
 ```rust
 #[cfg(all(feature = "base32", feature = "snowflake"))]
 {
-    use ferroid::{Base32SnowExt, SnowflakeId, SnowflakeTwitterId};
+    use ferroid::{Base32SnowExt, Base32SnowFormatter, SnowflakeId, SnowflakeTwitterId};
 
     let id = SnowflakeTwitterId::from(123456, 1, 42);
     assert_eq!(format!("default: {id}"), "default: 517811998762");
 
-    let encoded = id.encode();
+    let encoded: Base32SnowFormatter<SnowflakeTwitterId> = id.encode();
     assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
-
-    let decoded = SnowflakeTwitterId::decode(&encoded).expect("decode should succeed");
-    assert_eq!(id, decoded);
 
     let decoded = SnowflakeTwitterId::decode("00000F280041A").expect("decode should succeed");
     assert_eq!(id, decoded);
@@ -115,40 +111,95 @@ feature.
 
 #[cfg(all(feature = "base32", feature = "ulid"))]
 {
-    use ferroid::{Base32UlidExt, UlidId, ULID};
+    use ferroid::{Base32UlidExt, Base32UlidFormatter, UlidId, ULID};
 
     let id = ULID::from(123456, 42);
     assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");
 
-    let encoded = id.encode();
+    let encoded: Base32UlidFormatter<ULID> = id.encode();
     assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
 
-    let decoded = ULID::decode(&encoded).expect("decode should succeed");
-    assert_eq!(decoded.timestamp(), 123456);
-    assert_eq!(decoded.random(), 42);
-    assert_eq!(id, decoded);
-
-    let decoded = ULID::decode("0000003RJ0000000000000001A").unwrap();
-    assert_eq!(decoded.timestamp(), 123456);
-    assert_eq!(decoded.random(), 42);
+    let decoded = ULID::decode("0000003RJ0000000000000001A").expect("decode should succeed");
     assert_eq!(id, decoded);
 }
 ```
 
+⚠️ Decoding and Overflow: ULID Spec vs. Ferroid
+
+Base32 encodes in 5-bit chunks. That means:
+
+- A u64 (64 bits) maps to 13 Base32 characters (13 × 5 = 65 bits)
+- A u128 (128 bits) maps to 26 Base32 characters (26 × 5 = 130 bits)
+
+This creates an invariant: an encoded string may contain more bits than the
+target type can hold.
+
+The [ULID
+specification](https://github.com/ulid/spec?tab=readme-ov-file#overflow-errors-when-parsing-base32-strings)
+is strict:
+
+> Technically, a 26-character Base32 encoded string can contain 130 bits of
+> information, whereas a ULID must only contain 128 bits. Therefore, the largest
+> valid ULID encoded in Base32 is 7ZZZZZZZZZZZZZZZZZZZZZZZZZ, which corresponds
+> to an epoch time of 281474976710655 or 2 ^ 48 - 1.
+>
+> Any attempt to decode or encode a ULID larger than this should be rejected by
+> all implementations, to prevent overflow bugs.
+
+Ferroid takes a more flexible stance:
+
+- Extra high bit(s) are implicitly shifted out (1 bit for u64, 2 bits for u128).
+- Decoding only fails if the overflowed bits land in reserved regions, which are
+  required to remain zero
+
+This allows any 13-character Base32 string to decode into a u64, or any
+26-character string into a u128, correctly **as long as reserved layout
+constraints aren't violated**.
+
+If reserved bits are set, Ferroid returns a `DecodeOverflow(id)` error with the
+full decoded (but invalid) ID. You can recover by calling `.into_valid()` to
+mask off reserved bits allowing explicit error handling or silent recovery.
+
 ### Generate an ID
+
+#### Clocks
+
+In `std` environments, you can use the default `MonotonicClock` implementation.
+It is thread-safe, lightweight to clone, and intended to be shared across the
+application. If you're using multiple generators, clone and reuse the same clock
+instance.
+
+By default, `MonotonicClock::default()` sets the offset to `UNIX_EPOCH`. You
+should override this depending on the ID specification. For example, Twitter IDs
+use `TWITTER_EPOCH`, which begins at **Thursday, November 4, 2010, 01:42:54.657
+UTC** (millisecond zero).
+
+```rust
+#[cfg(all(feature = "std", feature = "alloc"))]
+{
+    use ferroid::{MonotonicClock, UNIX_EPOCH};
+
+    // Same as MonotonicClock::default();
+    let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
+
+    // let generator0 = BasicSnowflakeGenerator::new(0, clock.clone());
+    // let generator1 = BasicSnowflakeGenerator::new(1, clock.clone());
+}
+```
 
 #### Synchronous Generators
 
-Calling `next_id()` may yield `Pending` if the current sequence is exhausted. In
-that case, you can spin, yield, or sleep depending on your environment:
+Calling `next_id()` may yield `Pending` if the current sequence is exhausted.
+Please note that while this behavior is exposed to provide maximum flexibility,
+you must be generating enough IDs **per millisecond** to draw out the `Pending`
+path. You may spin, yield, or sleep depending on your environment:
 
 ```rust
 #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
 {
     use ferroid::{MonotonicClock, IdGenStatus, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId};
 
-    let clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
-    let generator = BasicSnowflakeGenerator::new(0, clock);
+    let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
 
     let id: SnowflakeTwitterId = loop {
         match generator.next_id() {
@@ -157,7 +208,7 @@ that case, you can spin, yield, or sleep depending on your environment:
                 println!("Exhausted; wait for: {}ms", yield_for);
                 core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
                 // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
-                // std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())); // Lowest CPU use, but imprecise and may oversleep.
+                // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
                 //
                 // For non-blocking ID generation, use the async API (see below).
             }
@@ -167,11 +218,9 @@ that case, you can spin, yield, or sleep depending on your environment:
 
 #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
 {
-    use ferroid::{MonotonicClock, IdGenStatus, UNIX_EPOCH, ThreadRandom, BasicUlidGenerator, ULID};
+    use ferroid::{MonotonicClock, IdGenStatus, ThreadRandom, BasicUlidGenerator, ULID};
 
-    let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
-    let rand = ThreadRandom::default();
-    let generator = BasicUlidGenerator::new(clock, rand);
+    let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
 
     let id: ULID = loop {
         match generator.next_id() {
@@ -180,25 +229,29 @@ that case, you can spin, yield, or sleep depending on your environment:
                 println!("Exhausted; wait for: {}ms", yield_for);
                 core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
                 // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
-                // std::thread::sleep(Duration::from_millis(yield_for.to_u64().unwrap())); // Lowest CPU use, but imprecise and may oversleep.
+                // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
                 //
                 // For non-blocking ID generation, use the async API (see below).
             }
         }
     };
-
-    println!("Generated ID: {}", id);
 }
 ```
 
 #### Asynchronous Generators
 
 If you're in an async context (e.g., using [Tokio](https://tokio.rs/) or
-[Smol](https://github.com/smol-rs/smol)), you can enable one of the following
-features to prevent blocking behavior:
+[Smol](https://github.com/smol-rs/smol)), enable one of the following features
+to avoid blocking behavior:
 
-- `async-tokio`
+- `aysnc-tokio`
 - `async-smol`
+
+These features extend the generator to yield cooperatively when it returns
+`Pending`, causing the current task to sleep for the specified `yield_for`
+duration (typically ~1ms). While this is fully non-blocking, it may oversleep
+slightly due to OS or executor timing precision, potentially reducing peak
+throughput.
 
 ```rust
 #[cfg(feature = "async-tokio")]
@@ -214,8 +267,7 @@ features to prevent blocking behavior:
                 SnowflakeGeneratorAsyncTokioExt
             };
 
-            let clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
-            let generator = BasicSnowflakeGenerator::new(0, clock);
+            let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
 
             let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
             println!("Generated ID: {}", id);
@@ -225,9 +277,7 @@ features to prevent blocking behavior:
         {
             use ferroid::{ThreadRandom, UlidGeneratorAsyncTokioExt, BasicUlidGenerator, ULID};
 
-            let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
-            let rand = ThreadRandom::default();
-            let generator = BasicUlidGenerator::new(clock, rand);
+            let generator = BasicUlidGenerator::new(MonotonicClock::with_epoch(UNIX_EPOCH), ThreadRandom::default());
 
             let id: ULID = generator.try_next_id_async().await?;
             println!("Generated ID: {}", id);
@@ -247,11 +297,10 @@ features to prevent blocking behavior:
             {
                 use ferroid::{
                     BasicSnowflakeGenerator, SnowflakeMastodonId,
-                    SnowflakeGeneratorAsyncSmolExt, CUSTOM_EPOCH
+                    SnowflakeGeneratorAsyncSmolExt, MASTODON_EPOCH
                 };
 
-                let clock = MonotonicClock::with_epoch(CUSTOM_EPOCH);
-                let generator = BasicSnowflakeGenerator::new(0, clock);
+                let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
 
                 let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
                 println!("Generated ID: {}", id);
@@ -261,9 +310,7 @@ features to prevent blocking behavior:
             {
                 use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID, UNIX_EPOCH};
 
-                let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
-                let rand = ThreadRandom::default();
-                let generator = BasicUlidGenerator::new(clock, rand);
+                let generator = BasicUlidGenerator::new(MonotonicClock::with_epoch(UNIX_EPOCH), ThreadRandom::default());
 
                 let id: ULID = generator.try_next_id_async().await?;
                 println!("Generated ID: {}", id);
@@ -278,7 +325,13 @@ features to prevent blocking behavior:
 
 ### Custom Layouts
 
-To define a custom layouts, use the `define_*` macros:
+To gain more control or optimize for different performance characteristics, you
+can define a custom layout.
+
+Use the `define_*` macros below to create a new struct with your chosen name.
+The resulting type behaves just like built-in types such as `SnowflakeTwitterId`
+or `ULID`, with no extra setup required and full compatibility with the existing
+API.
 
 ```rust
 #[cfg(feature = "snowflake")]
@@ -298,23 +351,6 @@ To define a custom layouts, use the `define_*` macros:
         timestamp: 41,
         machine_id: 10,
         sequence: 12
-    );
-
-
-    // Example: a 128-bit extended ID layout
-    //
-    //  Bit Index:  127           88 87            40 39             20 19             0
-    //              +---------------+----------------+-----------------+---------------+
-    //  Field:      | reserved (40) | timestamp (48) | machine ID (20) | sequence (20) |
-    //              +---------------+----------------+-----------------+---------------+
-    //              |<----- HI 64 bits ----->|<-------------- LO 64 bits ------------->|
-    //              |<--- MSB ------ LSB --->|<----- MSB ----- 64 bits ----- LSB ----->|
-    define_snowflake_id!(
-        MyCustomLongId, u128,
-        reserved: 40,
-        timestamp: 48,
-        machine_id: 20,
-        sequence: 20
     );
 }
 
@@ -342,11 +378,14 @@ To define a custom layouts, use the `define_*` macros:
 }
 ```
 
-> ⚠️ Note: All four sections (`reserved`, `timestamp`, `machine_id`, and
-> `sequence`) must be specified in the snowflake macro, even if a section uses 0
-> bits. `reserved` bits are always stored as **zero** and can be used for future
-> expansion. Similarly, the ulid macro requries (`reserved`, `timestamp`, and
-> `random`) fields.
+⚠️ Note: When using the snowflake macro, you must specify all four sections (in
+order): `reserved`, `timestamp`, `machine_id`, and `sequence`-even if a section
+uses 0 bits.
+
+The reserved bits are always set to **zero** and can be reserved for future use.
+
+Similarly, the ulid macro requires all three fields: `reserved`, `timestamp`,
+and `random`.
 
 ### Behavior
 
