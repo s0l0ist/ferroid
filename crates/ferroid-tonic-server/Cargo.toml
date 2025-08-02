@@ -14,7 +14,7 @@ categories = [
   "concurrency",             # Threaded workers / mpsc / stream batching
 ]
 documentation.workspace = true
-keywords = ["ferroid", "grpc", "tonic", "snowflake", "ulid", "monotonic"]
+keywords = ["ferroid", "grpc", "snowflake", "ulid", "monotonic"]
 publish = true
 
 [[bin]]

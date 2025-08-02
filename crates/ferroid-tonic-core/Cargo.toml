@@ -12,7 +12,7 @@ categories = [
   "network-programming", # Shared logic for a gRPC-based service
 ]
 documentation.workspace = true
-keywords = ["ferroid", "grpc", "tonic", "snowflake", "ulid", "monotonic"]
+keywords = ["ferroid", "grpc", "snowflake", "ulid", "monotonic"]
 publish = true
 
 [dependencies]
