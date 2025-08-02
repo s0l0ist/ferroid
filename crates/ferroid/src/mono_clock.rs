@@ -1,4 +1,4 @@
-use crate::{CUSTOM_EPOCH, TimeSource};
+use crate::{TimeSource, UNIX_EPOCH};
 use alloc::sync::Arc;
 use core::time::Duration;
 use std::{
@@ -7,7 +7,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
     thread::{self, JoinHandle},
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime},
 };
 
 /// Shared ticker thread that updates every millisecond.
@@ -33,11 +33,11 @@ pub struct MonotonicClock {
 }
 
 impl Default for MonotonicClock {
-    /// Constructs a monotonic clock aligned to the default [`CUSTOM_EPOCH`].
+    /// Constructs a monotonic clock aligned to the default [`UNIX_EPOCH`].
     ///
     /// Panics if system time is earlier than the custom epoch.
     fn default() -> Self {
-        Self::with_epoch(CUSTOM_EPOCH)
+        Self::with_epoch(UNIX_EPOCH)
     }
 }
 
@@ -100,7 +100,7 @@ impl MonotonicClock {
     pub fn with_epoch(epoch: Duration) -> Self {
         let start = Instant::now();
         let system_now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
+            .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or(core::time::Duration::ZERO);
         #[allow(clippy::cast_possible_truncation)]
         let offset = system_now.saturating_sub(epoch).as_millis() as u64;

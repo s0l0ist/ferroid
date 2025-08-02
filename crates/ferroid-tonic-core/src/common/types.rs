@@ -42,7 +42,7 @@
 //! > binary encoding. To change the format, fork or wrap the binary crate and
 //! > inject your own implementation.
 
-use ferroid::{BasicSnowflakeGenerator, CUSTOM_EPOCH, Id, MonotonicClock, SnowflakeTwitterId};
+use ferroid::{BasicSnowflakeGenerator, Id, MonotonicClock, SnowflakeTwitterId, TWITTER_EPOCH};
 
 /// The canonical Snowflake ID type used across the system.
 ///
@@ -67,8 +67,8 @@ pub type Clock = MonotonicClock;
 /// The epoch offset used as the zero-point for timestamp calculations.
 ///
 /// This value is subtracted from the system clock to produce smaller, monotonic
-/// timestamps. Defaults to [`CUSTOM_EPOCH`].
-pub const EPOCH: core::time::Duration = CUSTOM_EPOCH;
+/// timestamps. Defaults to [`TWITTER_EPOCH`].
+pub const EPOCH: core::time::Duration = TWITTER_EPOCH;
 
 /// The default Snowflake ID generator used by each worker.
 ///

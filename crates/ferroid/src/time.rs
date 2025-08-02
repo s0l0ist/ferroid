@@ -3,9 +3,6 @@ use core::time::Duration;
 /// Unix epoch: Thursday, January 1, 1970 00:00:00 UTC
 pub const UNIX_EPOCH: Duration = Duration::from_millis(0);
 
-/// Custom epoch: Wednesday, January 1, 2025 00:00:00 UTC
-pub const CUSTOM_EPOCH: Duration = Duration::from_millis(1_735_689_600_000);
-
 /// Twitter epoch: Thursday, November 4, 2010 1:42:54.657 UTC
 pub const TWITTER_EPOCH: Duration = Duration::from_millis(1_288_834_974_657);
 

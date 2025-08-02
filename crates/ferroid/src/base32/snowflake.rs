@@ -143,9 +143,9 @@ where
     ///
     ///     let id = SnowflakeTwitterId::decode("FZZZZZZZZZZZZ").or_else(|err| {
     ///         match err {
-    ///             Error::Base32Error(Base32Error::DecodeOverflow(invalid)) => {
-    ///                 debug_assert!(!invalid.is_valid());
-    ///                 let valid = invalid.into_valid(); // clears reserved bits
+    ///             Error::Base32Error(Base32Error::DecodeOverflow { id }) => {
+    ///                 debug_assert!(!id.is_valid());
+    ///                 let valid = id.into_valid(); // clears reserved bits
     ///                 debug_assert!(valid.is_valid());
     ///                 Ok(valid)
     ///             }
@@ -157,7 +157,9 @@ where
     fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow(decoded)));
+            return Err(Error::Base32Error(Base32Error::DecodeOverflow {
+                id: decoded,
+            }));
         }
         Ok(decoded)
     }
@@ -508,7 +510,9 @@ mod test {
         let result = SnowflakeTwitterId::decode(invalid);
         assert!(matches!(
             result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidAscii(64)))
+            Err(Error::Base32Error(Base32Error::DecodeInvalidAscii {
+                byte: 64
+            }))
         ));
     }
 
@@ -519,7 +523,9 @@ mod test {
         let result = SnowflakeTwitterId::decode(too_short);
         assert!(matches!(
             result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidLen(12)))
+            Err(Error::Base32Error(Base32Error::DecodeInvalidLen {
+                len: 12
+            }))
         ));
 
         // Longer than 13-byte base32 for u64 (decoded slice won't be 8 bytes)
@@ -527,7 +533,9 @@ mod test {
         let result = SnowflakeTwitterId::decode(too_long);
         assert!(matches!(
             result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidLen(14)))
+            Err(Error::Base32Error(Base32Error::DecodeInvalidLen {
+                len: 14
+            }))
         ));
     }
 }

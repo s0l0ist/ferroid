@@ -140,7 +140,9 @@ where
     fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow(decoded)));
+            return Err(Error::Base32Error(Base32Error::DecodeOverflow {
+                id: decoded,
+            }));
         }
         Ok(decoded)
     }
