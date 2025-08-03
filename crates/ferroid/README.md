@@ -541,6 +541,13 @@ efficiency).
 | `BasicMonoUlidGenerator`   | **~3.4 ns**  | ~288M IDs/sec |
 | `LockMonoUlidGenerator`    | **~9.2 ns**  | ~109M IDs/sec |
 
+#### Thread Local Generators
+
+| Generator             | Time per ID | Throughput     |
+| --------------------- | ----------- | -------------- |
+| `Ulid::new_ulid`      | **~24 ns**  | ~41.7M IDs/sec |
+| `Ulid::new_mono_ulid` | **~5.6 ns** | ~178M IDs/sec  |
+
 #### Async (Tokio Runtime) - Peak throughput
 
 | Generator                  | Generators | Time per ID  | Throughput     |

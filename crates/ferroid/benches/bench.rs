@@ -682,62 +682,6 @@ fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str) {
     group.finish();
 }
 
-pub fn bench_thread_local_ulid_threaded(c: &mut Criterion, group_name: &str) {
-    let mut group = c.benchmark_group(group_name);
-
-    for &thread_count in &[1, 2, 4, 8, 16] {
-        let total_ids = TOTAL_IDS * thread_count;
-        group.throughput(Throughput::Elements(total_ids as u64));
-
-        group.bench_function(
-            format!("elems/{total_ids}/threads/{thread_count}/new_ulid"),
-            |b| {
-                b.iter_custom(|iters| {
-                    let start = Instant::now();
-
-                    for _ in 0..iters {
-                        scope(|s| {
-                            for _ in 0..thread_count {
-                                s.spawn(|| {
-                                    for _ in 0..TOTAL_IDS {
-                                        black_box(Ulid::new_ulid());
-                                    }
-                                });
-                            }
-                        });
-                    }
-
-                    start.elapsed()
-                });
-            },
-        );
-        group.bench_function(
-            format!("elems/{total_ids}/threads/{thread_count}/new_mono_ulid"),
-            |b| {
-                b.iter_custom(|iters| {
-                    let start = Instant::now();
-
-                    for _ in 0..iters {
-                        scope(|s| {
-                            for _ in 0..thread_count {
-                                s.spawn(|| {
-                                    for _ in 0..TOTAL_IDS {
-                                        black_box(Ulid::new_mono_ulid());
-                                    }
-                                });
-                            }
-                        });
-                    }
-
-                    start.elapsed()
-                });
-            },
-        );
-    }
-
-    group.finish();
-}
-
 // --- MOCK CLOCK (fixed, non-advancing time) ---
 
 /// Single-threaded benchmark for `BasicSnowflakeGenerator` with a fixed clock.
@@ -963,7 +907,6 @@ fn bench_thread_rand(c: &mut Criterion) {
 
 fn bench_thread_local(c: &mut Criterion) {
     bench_thread_local_ulid(c, "thread_local/ulid");
-    bench_thread_local_ulid_threaded(c, "thread_local/ulid");
 }
 
 criterion_group!(
