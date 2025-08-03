@@ -254,12 +254,12 @@ macro_rules! define_ulid {
 
             /// Converts this type into its raw type representation
             fn to_raw(&self) -> Self::Ty {
-                self.id
+                self.to_raw()
             }
 
             /// Converts a raw type into this type
             fn from_raw(raw: Self::Ty) -> Self {
-                Self { id: raw }
+                Self::from_raw(raw)
             }
         }
 

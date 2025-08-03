@@ -97,12 +97,12 @@ where
     ///
     /// - If the input string's Crockford encoding is larger than the ULID
     ///   spec's maximum (i.e. "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" for 128-bit
-    ///   integers), the excess bits are automatically truncated (i.e., the top
-    ///   2 bits of the decoded value are discarded), so no overflow or error
+    ///   integers), the excess bits are automatically ignored (i.e., the top 2
+    ///   bits of the decoded value are discarded), so no overflow or error
     ///   occurs.
     /// - As a result, base32 strings that are technically invalid per the ULID
     ///   spec (i.e., lexicographically greater than the max ULID string) will
-    ///   still successfully decode, with the truncated value.
+    ///   still successfully decode.
     /// - **However**, if your ID type reserves bits (e.g., reserved or unused
     ///   bits in your layout), decoding a string with excess bits may set these
     ///   reserved bits to 1, causing `.is_valid()` to fail, and decode to
@@ -123,18 +123,32 @@ where
     /// ```
     /// #[cfg(all(feature = "base32", feature = "ulid"))]
     /// {
-    ///     use ferroid::{Base32UlidExt, UlidId, ULID};
-    ///     // Crockford base32 encodes in 5-bit chunks, so encoding a 128-bit ULID
-    ///     // requires 26 characters (26 * 5 = 130 bits). The two highest (leftmost)
-    ///     // bits from base32 encoding are always truncated (ignored) for performance.
-    ///     // This means *any* 26-character base32 string decodes structurally to a ULID,
-    ///     // regardless of whether it would be considered "out of range" by the ULID spec.
+    ///    use ferroid::{Base32Error, Base32UlidExt, Error, Id, ULID, UlidId};
     ///
-    ///     // For example, both "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" and "ZZZZZZZZZZZZZZZZZZZZZZZZZZ" are valid:
-    ///     // '7' = 0b00111 (top bits 00, rest 111...)
-    ///     // 'Z' = 0b11111 (top bits 11, rest 111...)
-    ///     assert!(ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
-    ///     assert!(ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").is_ok());
+    ///    // Crockford Base32 encodes values in 5-bit chunks, so encoding a u128 (128
+    ///    // bits) requires 26 characters (26 × 5 = 130 bits). Since u128 can only hold
+    ///    // 128 bits, the highest 2 bits are discarded during decoding.
+    ///    //
+    ///    // This means *any* 26-character Base32 string will decode into a u128, even
+    ///    // if it represents a value that exceeds the canonical range of a specific
+    ///    // ID type.
+    ///    //
+    ///    // Other ID formats may reserve one or more high bits for future use. These
+    ///    // reserved bits **must remain unset** for the decoded value to be
+    ///    // considered valid.
+    ///    //
+    ///    // For example, in a `ULID`, "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" represents the
+    ///    // largest lexicographically valid encoding that fills all 128 bits with
+    ///    // ones. Lexicographically larger values like "ZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+    ///    // decode to the *same* ID because their first character differs only in the
+    ///    // highest bits (129th & 130th), which are discarded:
+    ///    // - '7' = 0b00111 → top bits 00, rest = 111...
+    ///    // - 'Z' = 0b11111 → top bits 11, rest = 111... 
+    ///    //             ↑↑↑ identical after discarding MSBs
+    ///    let id1 = ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
+    ///    let id2 = ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
+    ///    assert_eq!(id1, id2);
+    ///
     /// }
     /// ```
     fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
