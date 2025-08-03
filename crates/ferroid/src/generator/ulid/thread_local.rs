@@ -80,7 +80,7 @@ impl Ulid {
         BASIC_ULID.with(|g| match g.next_id() {
             IdGenStatus::Ready { id } => id,
             IdGenStatus::Pending { .. } => {
-                unreachable!("A non-monotinic generator should never yield!")
+                unreachable!("A non-monotonic generator should never yield!")
             }
         })
     }
