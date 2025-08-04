@@ -1,5 +1,5 @@
 use crate::Id;
-use core::{fmt, hash::Hash};
+use core::hash::Hash;
 
 /// Trait for layout-compatible ULID-style identifiers.
 ///
@@ -9,9 +9,7 @@ use core::{fmt, hash::Hash};
 ///
 /// Types implementing `UlidId` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
-pub trait UlidId:
-    Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
-{
+pub trait UlidId: Id {
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -60,10 +58,8 @@ pub trait UlidId:
     fn into_valid(self) -> Self;
 }
 
-/// # Field Ordering Semantics
-///
-/// The `define_ulid!` macro defines a bit layout for a custom Ulid using four
-/// required components: `reserved`, `timestamp`, and `random`.
+/// A macro for defining a bit layout for a custom Ulid using three required
+/// components: `reserved`, `timestamp`, and `random`.
 ///
 /// These components are always laid out from **most significant bit (MSB)** to
 /// **least significant bit (LSB)** - in that exact order.
@@ -320,7 +316,7 @@ macro_rules! define_ulid {
 }
 
 define_ulid!(
-    /// A 128-bit Ulid using the ULID layout
+    /// A 128-bit ULID
     ///
     /// - 0 bits reserved
     /// - 48 bits timestamp

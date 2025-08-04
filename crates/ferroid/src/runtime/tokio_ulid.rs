@@ -1,6 +1,5 @@
+use crate::{RandSource, Result, TimeSource, TokioSleep, UlidGenerator, UlidId};
 use core::fmt;
-
-use crate::{RandSource, Result, TimeSource, TokioSleep, UlidId, UlidGenerator};
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.

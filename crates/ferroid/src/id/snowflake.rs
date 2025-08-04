@@ -1,5 +1,5 @@
 use crate::Id;
-use core::{fmt, hash::Hash};
+use core::hash::Hash;
 
 /// A trait representing a layout-compatible Snowflake ID generator.
 ///
@@ -18,9 +18,7 @@ use core::{fmt, hash::Hash};
 /// assert_eq!(id.machine_id(), 2);
 /// assert_eq!(id.sequence(), 1);
 /// ```
-pub trait SnowflakeId:
-    Id + Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash
-{
+pub trait SnowflakeId: Id {
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -75,11 +73,8 @@ pub trait SnowflakeId:
     fn into_valid(self) -> Self;
 }
 
-/// # Field Ordering Semantics
-///
-/// The `define_snowflake_id!` macro defines a bit layout for a custom Snowflake
-/// ID using four required components: `reserved`, `timestamp`, `machine_id`,
-/// and `sequence`.
+/// A macro for defining a bit layout for a custom Snowflake ID using four
+/// required components: `reserved`, `timestamp`, `machine_id`, and `sequence`.
 ///
 /// These components are always laid out from **most significant bit (MSB)** to
 /// **least significant bit (LSB)** - in that exact order.
