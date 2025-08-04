@@ -61,7 +61,7 @@ where
     /// # Example
     ///
     /// ```
-    /// #[cfg(all(feature = "base32", feature = "snowflake"))]
+    /// #[cfg(all(feature = "base32", feature = "ulid"))]
     /// {
     ///     use ferroid::{Base32UlidExt, BeBytes, Id, ULID};
     ///
