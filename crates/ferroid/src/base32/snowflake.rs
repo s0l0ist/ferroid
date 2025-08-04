@@ -6,9 +6,8 @@ use core::marker::PhantomData;
 /// Extension trait for Crockford Base32 encoding and decoding of ID types.
 ///
 /// This trait enables converting IDs backed by integer types into fixed-length,
-/// lexicographically sortable Base32 strings using the [Crockford
-/// Base32](https://www.crockford.com/base32.html) alphabet with zero
-/// allocation.
+/// lexicographically sortable Base32 representation using the [Crockford
+/// Base32](https://www.crockford.com/base32.html) alphabet.
 pub trait Base32SnowExt: SnowflakeId
 where
     Self::Ty: BeBytes,
@@ -42,10 +41,11 @@ where
     ///
     ///     let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
     ///
-    ///     // Format the encoded ID into an existing String (allocates once):
-    ///     let mut buf = String::new();
-    ///     write!(&mut buf, "{}", id.encode()).unwrap();
-    ///     assert_eq!(buf, "23953MG16DJDJ");
+    ///     // Formatter is a view over the internal encoded buffer
+    ///     let formatter = id.encode();
+    ///
+    ///     // Use the formatter directly:
+    ///     assert_eq!(formatter, "23953MG16DJDJ");
     /// }
     /// ```
     fn encode(&self) -> Base32SnowFormatter<Self> {
@@ -69,7 +69,7 @@ where
     ///     // Stack-allocated buffer of the correct size.
     ///     let mut buf = SnowflakeTwitterId::buf();
     ///
-    ///     // Formatter is a view over `buf`.
+    ///     // Formatter is a view over the external buffer
     ///     let formatter = id.encode_to_buf(&mut buf);
     ///
     ///     // Use the formatter directly:
