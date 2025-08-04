@@ -84,7 +84,6 @@ where
     ///
     /// See also: [`Base32UlidExt::encode`] for a version that manages its own
     /// buffer.
-    /// [`ULID::buf`]: crate::ULID::buf
     fn encode_to_buf<'buf>(
         &self,
         buf: &'buf mut <<Self as Id>::Ty as BeBytes>::Base32Array,
