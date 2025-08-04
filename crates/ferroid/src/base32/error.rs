@@ -17,11 +17,13 @@ pub enum Base32Error<E> {
         len: usize,
     },
 
-    /// The input string contained an invalid ASCII character.
+    /// The input contained a character that is not valid Crockford Base32.
     ///
-    /// Only Crockford-compatible characters (0–9, A–Z, excluding I, L, O, U)
-    /// are allowed. Characters outside this set (including lowercase or
-    /// symbols) will trigger this error.
+    /// Accepts digits `0–9`, uppercase letters `A–Z`, and lowercase letters.
+    /// Aliases like `O/o → 0` and `I/i/L/l → 1` are also supported.
+    ///
+    /// This error is returned when a non-alphanumeric or non-ASCII character
+    /// (e.g. `@`, `*`, `~`) is encountered during decoding.
     DecodeInvalidAscii {
         /// The invalid byte found in the input string.
         byte: u8,
@@ -29,10 +31,7 @@ pub enum Base32Error<E> {
 
     /// The decoded value exceeds the valid range for the target ID type.
     ///
-    /// This usually occurs when the input string sets reserved or unused high
-    /// bits. For example, decoding a 13-character string into a Snowflake ID
-    /// with reserved upper bits will produce this error, along with the decoded
-    /// `id` for inspection.
+    /// This occurs when the input string sets reserved or unused high bits.
     DecodeOverflow {
         /// The decoded ID value, which failed validation.
         id: E,
