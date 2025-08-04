@@ -6,7 +6,13 @@ use core::ops::{
     Mul, MulAssign, Not, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign,
 };
 
-// Common trait that captures the shared behavior
+/// A trait for types that wrap a primitive scalar identifier.
+///
+/// This is used to abstract over the raw scalar type behind an ID (e.g., `u64`,
+/// `u128`).
+///
+/// Types implementing `Id` must define a scalar type `Ty` and provide
+/// conversion to/from this raw representation.
 pub trait Id:
     Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
 {

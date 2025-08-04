@@ -3,28 +3,17 @@ use crate::{Base32Error, BeBytes, Error, Id, Result, UlidId};
 use core::fmt;
 use core::marker::PhantomData;
 
-/// Extension trait for types that support Crockford Base32 encoding and
-/// decoding.
+/// Extension trait for Crockford Base32 encoding and decoding of ID types.
 ///
-/// This trait enables converting IDs (typically backed by primitive integers)
-/// to and from fixed-length, lexicographically sortable Base32 strings using
-/// the [Crockford Base32](https://www.crockford.com/base32.html) alphabet.
-///
-/// It relies on the [`BeBytes`] trait for bit-level access to the underlying
-/// integer representation, and produces fixed-width ASCII-encoded output
-/// suitable for ordered storage (e.g., in databases, file systems, or URLs).
-///
-/// # Features
-///
-/// - Zero-allocation encoding support
-/// - Fixed-width, lexicographically sortable output
-/// - ASCII-safe encoding using Crockford's Base32 alphabet
-/// - Fallible decoding with strong validation
+/// This trait enables converting IDs backed by integer types into fixed-length,
+/// lexicographically sortable Base32 strings using the [Crockford
+/// Base32](https://www.crockford.com/base32.html) alphabet with zero
+/// allocation.
 pub trait Base32UlidExt: UlidId
 where
     Self::Ty: BeBytes,
 {
-    /// Allocates a default, zero-initialized buffer for Base32 encoding.
+    /// Returns a stack-allocated, zero-initialized buffer for Base32 encoding.
     ///
     /// This is a convenience method that returns a [`BeBytes::Base32Array`]
     /// suitable for use with [`Base32UlidExt::encode_to_buf`]. The returned
@@ -37,51 +26,65 @@ where
     fn buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
         <Self as Base32Ext>::inner_buf()
     }
-    /// Encodes this ID into a [`String`] using Crockford Base32.
+    /// Returns a formatter containing the Crockford Base32 representation of
+    /// the ID.
     ///
-    /// The resulting string is guaranteed to be ASCII and lexicographically
-    /// sortable.
+    /// The formatter is a lightweight, zero-allocation view over that internal
+    /// buffer that implements [`core::fmt::Display`] and [`AsRef<str>`].
     ///
     /// # Example
     ///
     /// ```
     /// #[cfg(all(feature = "base32", feature = "ulid"))]
-    /// {   
+    /// {
     ///     use ferroid::{Base32UlidExt, ULID};
+    ///     use std::fmt::Write;
+    ///
     ///     let id = ULID::from_raw(2_424_242_424_242_424_242);
-    ///     let encoded = id.encode();
-    ///     assert_eq!(encoded, "000000000000023953MG16DJDJ");
+    ///
+    ///     // Format the encoded ID into an existing String (allocates once):
+    ///     let mut buf = String::new();
+    ///     write!(&mut buf, "{}", id.encode()).unwrap();
+    ///     assert_eq!(buf, "000000000000023953MG16DJDJ");
     /// }
     /// ```
     fn encode(&self) -> Base32UlidFormatter<Self> {
         Base32UlidFormatter::new(self)
     }
-    /// Encodes this ID into the provided output buffer without heap allocation.
+    /// Encodes this ID into the provided buffer without heap allocation and
+    /// returns a formatter view over the buffer similar to
+    /// [`Base32UlidExt::encode`].
     ///
-    /// This is the zero-allocation alternative to [`Base32UlidExt::encode`].
-    /// The output buffer must be exactly [`BeBytes::BASE32_SIZE`] bytes in
-    /// length, which is guaranteed at compile time when using
-    /// [`BeBytes::Base32Array`].
+    /// The buffer must be exactly [`BeBytes::BASE32_SIZE`] bytes long, which is
+    /// guaranteed at compile time when using [`Base32UlidExt::buf`].
     ///
     /// # Example
     ///
     /// ```
-    /// #[cfg(all(feature = "base32", feature = "ulid"))]
-    /// {   
+    /// #[cfg(all(feature = "base32", feature = "snowflake"))]
+    /// {
     ///     use ferroid::{Base32UlidExt, BeBytes, Id, ULID};
+    ///
     ///     let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
-    ///     // Allocate a zeroed, stack-based buffer with the exact size required for encoding.
+    ///     // Stack-allocated buffer of the correct size.
     ///     let mut buf = ULID::buf();
-    ///     id.encode_to_buf(&mut buf);
     ///
-    ///     // SAFETY: Crockford Base32 is guaranteed to produce valid ASCII
-    ///     let encoded = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
-    ///     assert_eq!(encoded, "000000000000023953MG16DJDJ");
+    ///     // Formatter is a view over `buf`.
+    ///     let formatter = id.encode_to_buf(&mut buf);
+    ///
+    ///     // Use the formatter directly:
+    ///     assert_eq!(formatter, "000000000000023953MG16DJDJ");
+    ///
+    ///     // Or access the raw bytes directly:
+    ///     let as_str = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
+    ///     assert_eq!(as_str, "000000000000023953MG16DJDJ");
     /// }
     /// ```
     ///
-    /// See also: [`Base32UlidExt::encode`] for an allocation-producing version.
+    /// See also: [`Base32UlidExt::encode`] for a version that manages its own
+    /// buffer.
+    /// [`ULID::buf`]: crate::ULID::buf
     fn encode_to_buf<'buf>(
         &self,
         buf: &'buf mut <<Self as Id>::Ty as BeBytes>::Base32Array,
@@ -143,7 +146,7 @@ where
     ///    // decode to the *same* ID because their first character differs only in the
     ///    // highest bits (129th & 130th), which are discarded:
     ///    // - '7' = 0b00111 → top bits 00, rest = 111...
-    ///    // - 'Z' = 0b11111 → top bits 11, rest = 111... 
+    ///    // - 'Z' = 0b11111 → top bits 11, rest = 111...
     ///    //             ↑↑↑ identical after discarding MSBs
     ///    let id1 = ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
     ///    let id2 = ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
