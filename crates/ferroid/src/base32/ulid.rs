@@ -44,7 +44,6 @@ where
     ///     // Formatter is a view over the internal encoded buffer
     ///     let formatter = id.encode();
     ///
-    ///     // Use the formatter directly:
     ///     assert_eq!(formatter, "000000000000023953MG16DJDJ");
     /// }
     /// ```
@@ -73,7 +72,6 @@ where
     ///     // Formatter is a view over the external buffer
     ///     let formatter = id.encode_to_buf(&mut buf);
     ///
-    ///     // Use the formatter directly:
     ///     assert_eq!(formatter, "000000000000023953MG16DJDJ");
     ///
     ///     // Or access the raw bytes directly:
