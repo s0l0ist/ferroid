@@ -1,6 +1,6 @@
 use crate::{
     BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus, LockMonoUlidGenerator,
-    MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64, ULID, UlidId, UlidGenerator,
+    MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64, ULID, UlidGenerator, UlidId,
 };
 use alloc::rc::Rc;
 use alloc::sync::Arc;
