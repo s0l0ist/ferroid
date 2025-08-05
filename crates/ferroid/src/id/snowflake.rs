@@ -277,9 +277,30 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl core::fmt::Display for $name {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, "{}", self.id)
+        $crate::cfg_base32! {
+            impl core::fmt::Display for $name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    use $crate::Base32SnowExt;
+                    self.encode().fmt(f)
+                }
+            }
+
+            impl core::convert::TryFrom<&str> for $name {
+                type Error = $crate::Error<$name>;
+
+                fn try_from(s: &str) -> Result<Self, Self::Error> {
+                    use $crate::Base32SnowExt;
+                    Self::decode(s)
+                }
+            }
+
+            impl core::str::FromStr for $name {
+                type Err = $crate::Error<$name>;
+
+                fn from_str(s: &str) -> Result<Self, Self::Err> {
+                    use $crate::Base32SnowExt;
+                    Self::decode(s)
+                }
             }
         }
 

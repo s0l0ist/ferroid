@@ -13,9 +13,7 @@ use core::ops::{
 ///
 /// Types implementing `Id` must define a scalar type `Ty` and provide
 /// conversion to/from this raw representation.
-pub trait Id:
-    Copy + Clone + fmt::Display + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug
-{
+pub trait Id: Copy + Clone + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug {
     /// Zero value (used for resetting the sequence)
     const ZERO: Self::Ty;
 

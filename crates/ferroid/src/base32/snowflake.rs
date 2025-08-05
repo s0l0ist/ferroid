@@ -365,12 +365,63 @@ where
     }
 }
 
+#[cfg(all(test, feature = "alloc", feature = "snowflake"))]
+mod alloc_test {
+    use crate::{
+        Base32SnowExt, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
+        SnowflakeTwitterId,
+    };
+    use alloc::string::ToString;
+
+    #[test]
+    fn twitter_display() {
+        let id = SnowflakeTwitterId::decode("01ARZ3NDEKTSV").unwrap();
+        assert_eq!(alloc::format!("{id}"), "01ARZ3NDEKTSV");
+        assert_eq!(id.to_string(), "01ARZ3NDEKTSV");
+    }
+    #[test]
+    fn instagram_display() {
+        let id = SnowflakeInstagramId::decode("01ARZ3NDEKTSV").unwrap();
+        assert_eq!(alloc::format!("{id}"), "01ARZ3NDEKTSV");
+        assert_eq!(id.to_string(), "01ARZ3NDEKTSV");
+    }
+    #[test]
+    fn mastodon_display() {
+        let id = SnowflakeMastodonId::decode("01ARZ3NDEKTSV").unwrap();
+        assert_eq!(alloc::format!("{id}"), "01ARZ3NDEKTSV");
+        assert_eq!(id.to_string(), "01ARZ3NDEKTSV");
+    }
+    #[test]
+    fn discord_display() {
+        let id = SnowflakeDiscordId::decode("01ARZ3NDEKTSV").unwrap();
+        assert_eq!(alloc::format!("{id}"), "01ARZ3NDEKTSV");
+        assert_eq!(id.to_string(), "01ARZ3NDEKTSV");
+    }
+}
+
 #[cfg(all(test, feature = "snowflake"))]
 mod test {
     use crate::{
         Base32Error, Base32SnowExt, Error, SnowflakeDiscordId, SnowflakeId, SnowflakeInstagramId,
         SnowflakeMastodonId, SnowflakeTwitterId,
     };
+
+    #[test]
+    fn snow_try_from() {
+        // Don't need to test all IDs
+        let id = SnowflakeTwitterId::try_from("01ARZ3NDEKTSV").unwrap();
+        let encoded = id.encode();
+        assert_eq!(encoded, "01ARZ3NDEKTSV");
+    }
+
+    #[test]
+    fn snow_from_str() {
+        // Don't need to test all IDs
+        use core::str::FromStr;
+        let id = SnowflakeTwitterId::from_str("01ARZ3NDEKTSV").unwrap();
+        let encoded = id.encode();
+        assert_eq!(encoded, "01ARZ3NDEKTSV");
+    }
 
     #[test]
     fn twitter_max() {

@@ -341,9 +341,37 @@ where
     }
 }
 
+#[cfg(all(test, feature = "alloc", feature = "ulid"))]
+mod alloc_test {
+    use crate::{Base32UlidExt, ULID};
+    use alloc::string::ToString;
+
+    #[test]
+    fn ulid_display() {
+        let ulid = ULID::decode("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        assert_eq!(alloc::format!("{ulid}"), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(ulid.to_string(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+    }
+}
+
 #[cfg(all(test, feature = "ulid"))]
 mod test {
     use crate::{Base32UlidExt, ULID, UlidId};
+
+    #[test]
+    fn ulid_try_from() {
+        let ulid = ULID::try_from("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        let encoded = ulid.encode();
+        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+    }
+
+    #[test]
+    fn ulid_from_str() {
+        use core::str::FromStr;
+        let ulid = ULID::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        let encoded = ulid.encode();
+        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+    }
 
     #[test]
     fn ulid_max() {
