@@ -407,6 +407,23 @@ mod test {
     };
 
     #[test]
+    fn snow_try_from() {
+        // Don't need to test all IDs
+        let id = SnowflakeTwitterId::try_from("01ARZ3NDEKTSV").unwrap();
+        let encoded = id.encode();
+        assert_eq!(encoded, "01ARZ3NDEKTSV");
+    }
+
+    #[test]
+    fn snow_from_str() {
+        // Don't need to test all IDs
+        use core::str::FromStr;
+        let id = SnowflakeTwitterId::from_str("01ARZ3NDEKTSV").unwrap();
+        let encoded = id.encode();
+        assert_eq!(encoded, "01ARZ3NDEKTSV");
+    }
+
+    #[test]
     fn twitter_max() {
         let id = SnowflakeTwitterId::from_components(
             SnowflakeTwitterId::max_timestamp(),

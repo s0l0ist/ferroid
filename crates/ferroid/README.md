@@ -81,47 +81,47 @@ alone can guarantee.
 
 ### Crockford Base32
 
-Enable the `base32` feature to support Crockford Base32 encoding and decoding
-IDs. Useful if you need fixed-width, URL-safe, and lexicographically sortable
-strings (e.g. for use in databases, logs, or URLs).
+Enable the `base32` feature to support Crockford Base32 encoding and decoding of
+IDs. This is useful when you need fixed-width, URL-safe, and lexicographically
+sortable strings (e.g. for databases, logs, or URLs).
 
-If the `base32` feature is enabled, the ID type will automatically implement
-`fmt::Display`. For maximum control over allocations, use `.encode()` to obtain
-a lightweight formatter. It can be passed freely without committing to any
-specific string primitive, letting the consumer choose how and when to render
-it.
+With `base32` enabled, each ID type automatically implements `fmt::Display`,
+which internally uses `.encode()`. IDs also implement `TryFrom<&str>` and
+`FromStr`, both of which decode via `.decode()`.
 
-The formatter design avoids heap allocation by default and supports both owned
-and borrowed encoding buffers. For full `String` support, enable the `alloc`
-feature.
+For explicit, allocation-free formatting, use `.encode()` to get a lightweight
+formatter. This avoids committing to a specific string type and lets the
+consumer control how and when to render the result. The formatter uses a
+stack-allocated buffer and avoids heap allocation by default. To enable
+`.to_string()` and other owned string functionality, enable the `alloc` feature.
 
 ```rust
 #[cfg(all(feature = "base32", feature = "snowflake"))]
 {
     use ferroid::{Base32SnowExt, Base32SnowFormatter, SnowflakeId, SnowflakeTwitterId};
+    use core::str::FromStr;
 
-    let id = SnowflakeTwitterId::from(123456, 1, 42);
-    assert_eq!(format!("default: {id}"), "default: 00000F280041A");
+    let id = SnowflakeTwitterId::from(123_456, 0, 42);
 
-    let encoded: Base32SnowFormatter<SnowflakeTwitterId> = id.encode();
-    assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
-
-    let decoded = SnowflakeTwitterId::decode("00000F280041A").expect("decode should succeed");
-    assert_eq!(id, decoded);
+    assert_eq!(format!("{id}"), "00000F280001A");
+    assert_eq!(id.encode(), "00000F280001A");
+    assert_eq!(SnowflakeTwitterId::decode("00000F280001A").unwrap(), id);
+    assert_eq!(SnowflakeTwitterId::try_from("00000F280001A").unwrap(), id);
+    assert_eq!(SnowflakeTwitterId::from_str("00000F280001A").unwrap(), id);
 }
 
 #[cfg(all(feature = "base32", feature = "ulid"))]
 {
     use ferroid::{Base32UlidExt, Base32UlidFormatter, UlidId, ULID};
+    use core::str::FromStr;
 
-    let id = ULID::from(123456, 42);
-    assert_eq!(format!("default: {id}"), "default: 0000003RJ0000000000000001A");
+    let id = ULID::from(123_456, 42);
 
-    let encoded: Base32UlidFormatter<ULID> = id.encode();
-    assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");
-
-    let decoded = ULID::decode("0000003RJ0000000000000001A").expect("decode should succeed");
-    assert_eq!(id, decoded);
+    assert_eq!(format!("{id}"), "0000003RJ0000000000000001A");
+    assert_eq!(id.encode(), "0000003RJ0000000000000001A");
+    assert_eq!(ULID::decode("0000003RJ0000000000000001A").unwrap(), id);
+    assert_eq!(ULID::try_from("0000003RJ0000000000000001A").unwrap(), id);
+    assert_eq!(ULID::from_str("0000003RJ0000000000000001A").unwrap(), id);
 }
 ```
 
