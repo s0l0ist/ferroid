@@ -99,7 +99,7 @@ where
 
     fn unwrap_pending(self) -> T::Ty {
         match self {
-            Self::Ready { id } => panic!("unexpected ready ({id})"),
+            Self::Ready { id } => panic!("unexpected ready ({id:?})"),
             Self::Pending { yield_for } => yield_for,
         }
     }

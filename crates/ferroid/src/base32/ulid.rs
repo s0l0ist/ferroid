@@ -341,6 +341,19 @@ where
     }
 }
 
+#[cfg(all(test, feature = "alloc", feature = "ulid"))]
+mod alloc_test {
+    use crate::{Base32UlidExt, ULID};
+    use alloc::string::ToString;
+
+    #[test]
+    fn ulid_display() {
+        let ulid = ULID::decode("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
+        assert_eq!(alloc::format!("{ulid}"), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(ulid.to_string(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+    }
+}
+
 #[cfg(all(test, feature = "ulid"))]
 mod test {
     use crate::{Base32UlidExt, ULID, UlidId};

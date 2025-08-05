@@ -1,3 +1,4 @@
+mod display;
 mod interface;
 #[cfg(feature = "snowflake")]
 mod snowflake;

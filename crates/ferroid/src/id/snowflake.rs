@@ -277,9 +277,12 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl core::fmt::Display for $name {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, "{}", self.id)
+        $crate::cfg_base32! {
+            impl core::fmt::Display for $name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    use $crate::Base32SnowExt;
+                    self.encode().fmt(f)
+                }
             }
         }
 

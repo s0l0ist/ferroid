@@ -82,13 +82,14 @@ alone can guarantee.
 ### Crockford Base32
 
 Enable the `base32` feature to support Crockford Base32 encoding and decoding
-IDs.
+IDs. Useful if you need fixed-width, URL-safe, and lexicographically sortable
+strings (e.g. for use in databases, logs, or URLs).
 
-By default, printing an ID returns its raw integer representation. If you need
-fixed-width, URL-safe, and lexicographically sortable strings (e.g. for use in
-databases, logs, or URLs), use `.encode()` to obtain a lightweight formatter. It
-can be passed freely without committing to any specific string primitive,
-letting the consumer choose how and when to render it.
+If the `base32` feature is enabled, the ID type will automatically implement
+`fmt::Display`. For maximum control over allocations, use `.encode()` to obtain
+a lightweight formatter. It can be passed freely without committing to any
+specific string primitive, letting the consumer choose how and when to render
+it.
 
 The formatter design avoids heap allocation by default and supports both owned
 and borrowed encoding buffers. For full `String` support, enable the `alloc`
@@ -100,7 +101,7 @@ feature.
     use ferroid::{Base32SnowExt, Base32SnowFormatter, SnowflakeId, SnowflakeTwitterId};
 
     let id = SnowflakeTwitterId::from(123456, 1, 42);
-    assert_eq!(format!("default: {id}"), "default: 517811998762");
+    assert_eq!(format!("default: {id}"), "default: 00000F280041A");
 
     let encoded: Base32SnowFormatter<SnowflakeTwitterId> = id.encode();
     assert_eq!(format!("base32: {encoded}"), "base32: 00000F280041A");
@@ -114,7 +115,7 @@ feature.
     use ferroid::{Base32UlidExt, Base32UlidFormatter, UlidId, ULID};
 
     let id = ULID::from(123456, 42);
-    assert_eq!(format!("default: {id}"), "default: 149249145986343659392525664298");
+    assert_eq!(format!("default: {id}"), "default: 0000003RJ0000000000000001A");
 
     let encoded: Base32UlidFormatter<ULID> = id.encode();
     assert_eq!(format!("base32: {encoded}"), "base32: 0000003RJ0000000000000001A");

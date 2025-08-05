@@ -295,9 +295,12 @@ macro_rules! define_ulid {
             }
         }
 
-        impl core::fmt::Display for $name {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                write!(f, "{}", self.id)
+        $crate::cfg_base32! {
+            impl core::fmt::Display for $name {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    use $crate::Base32UlidExt;
+                    self.encode().fmt(f)
+                }
             }
         }
 
