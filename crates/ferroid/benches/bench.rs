@@ -1,3 +1,4 @@
+use core::fmt;
 use core::hint::black_box;
 use core::time::Duration;
 use criterion::async_executor::SmolExecutor;
@@ -484,7 +485,7 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
 
 fn bench_snow_base32<ID>(c: &mut Criterion, group_name: &str)
 where
-    ID: SnowflakeId + Base32SnowExt,
+    ID: SnowflakeId + Base32SnowExt + fmt::Display,
     ID::Ty: BeBytes,
 {
     let id = ID::from_components(
@@ -497,6 +498,12 @@ where
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
 
+    // Benches `Display::fmt` via the blanket `ToString` impl.
+    group.bench_function("self/to_string", |b| {
+        b.iter(|| {
+            black_box(id.to_string());
+        });
+    });
     group.bench_function("encode/to_string", |b| {
         b.iter(|| {
             black_box(id.encode().to_string());
@@ -507,46 +514,17 @@ where
             black_box(id.encode().as_str());
         });
     });
-    group.bench_function("encode/format", |b| {
-        b.iter(|| {
-            black_box(format!("{}", id.encode()));
-        });
-    });
-    group.bench_function("encode/buffer/to_string", |b| {
+    group.bench_function("encode_to_buf", |b| {
         b.iter(|| {
             let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(b.to_string());
-        });
-    });
-    group.bench_function("encode/buffer/as_str", |b| {
-        b.iter(|| {
-            let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(b.as_str());
-        });
-    });
-    group.bench_function("encode/buffer/format", |b| {
-        b.iter(|| {
-            let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(format!("{b}"));
+            black_box(b);
         });
     });
 
     let encoded = id.encode();
-    let encoded_str = encoded.as_str();
-    let encoded_string = encoded.to_string();
-    group.bench_function("decode/as_ref", |b| {
+    group.bench_function("decode", |b| {
         b.iter(|| {
             black_box(ID::decode(black_box(encoded.as_ref())).unwrap());
-        });
-    });
-    group.bench_function("decode/str", |b| {
-        b.iter(|| {
-            black_box(ID::decode(black_box(encoded_str)).unwrap());
-        });
-    });
-    group.bench_function("decode/string", |b| {
-        b.iter(|| {
-            black_box(ID::decode(black_box(&encoded_string)).unwrap());
         });
     });
 
@@ -555,7 +533,7 @@ where
 
 fn bench_ulid_base32<ID>(c: &mut Criterion, group_name: &str)
 where
-    ID: UlidId + Base32UlidExt,
+    ID: UlidId + Base32UlidExt + fmt::Display,
     ID::Ty: BeBytes,
 {
     let id = ID::from_components(ID::max_timestamp(), ID::max_random());
@@ -564,6 +542,12 @@ where
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
 
+    // Benches `Display::fmt` via the blanket `ToString` impl.
+    group.bench_function("self/to_string", |b| {
+        b.iter(|| {
+            black_box(id.to_string());
+        });
+    });
     group.bench_function("encode/to_string", |b| {
         b.iter(|| {
             black_box(id.encode().to_string());
@@ -574,46 +558,17 @@ where
             black_box(id.encode().as_str());
         });
     });
-    group.bench_function("encode/format", |b| {
-        b.iter(|| {
-            black_box(format!("{}", id.encode()));
-        });
-    });
-    group.bench_function("encode/buffer/to_string", |b| {
+    group.bench_function("encode_to_buf", |b| {
         b.iter(|| {
             let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(b.to_string());
-        });
-    });
-    group.bench_function("encode/buffer/as_str", |b| {
-        b.iter(|| {
-            let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(b.as_str());
-        });
-    });
-    group.bench_function("encode/buffer/format", |b| {
-        b.iter(|| {
-            let b = id.encode_to_buf(black_box(&mut buf));
-            black_box(format!("{b}"));
+            black_box(b);
         });
     });
 
     let encoded = id.encode();
-    let encoded_str = encoded.as_str();
-    let encoded_string = encoded.to_string();
-    group.bench_function("decode/as_ref", |b| {
+    group.bench_function("decode", |b| {
         b.iter(|| {
             black_box(ID::decode(black_box(encoded.as_ref())).unwrap());
-        });
-    });
-    group.bench_function("decode/str", |b| {
-        b.iter(|| {
-            black_box(ID::decode(black_box(encoded_str)).unwrap());
-        });
-    });
-    group.bench_function("decode/string", |b| {
-        b.iter(|| {
-            black_box(ID::decode(black_box(&encoded_string)).unwrap());
         });
     });
 
