@@ -1,4 +1,5 @@
 use crate::{Result, SmolSleep, SnowflakeGenerator, SnowflakeId, TimeSource};
+use core::future::Future;
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.

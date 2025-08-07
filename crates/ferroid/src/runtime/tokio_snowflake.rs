@@ -1,5 +1,6 @@
 use crate::{Result, SnowflakeGenerator, SnowflakeId, TimeSource, TokioSleep};
 use core::fmt;
+use core::future::Future;
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
