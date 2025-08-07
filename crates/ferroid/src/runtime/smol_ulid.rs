@@ -1,6 +1,6 @@
-use core::fmt;
-
 use crate::{RandSource, Result, SmolSleep, TimeSource, UlidGenerator, UlidId};
+use core::fmt;
+use core::future::Future;
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
@@ -53,7 +53,7 @@ mod tests {
     use super::*;
     use crate::{
         LockMonoUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
-        ThreadRandom, TimeSource, ULID, UlidGenerator, UlidId,
+        ThreadRandom, TimeSource, UlidGenerator, UlidId, ULID,
     };
     use core::fmt;
     use futures::future::try_join_all;

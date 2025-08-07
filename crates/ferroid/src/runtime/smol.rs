@@ -1,4 +1,5 @@
 use crate::SleepProvider;
+use core::future::Future;
 use core::{
     pin::Pin,
     task::{Context, Poll},
