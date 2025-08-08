@@ -1,7 +1,6 @@
 use super::SleepProvider;
 use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource, ToU64};
 use core::{
-    fmt,
     future::Future,
     marker::PhantomData,
     pin::Pin,
@@ -23,7 +22,7 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    type Err: fmt::Debug;
+    type Err;
 
     /// Returns a future that resolves to the next available Snowflake ID.
     ///

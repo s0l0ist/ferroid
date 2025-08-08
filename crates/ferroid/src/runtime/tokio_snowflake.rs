@@ -1,5 +1,4 @@
 use crate::{Result, SnowflakeGenerator, SnowflakeId, TimeSource, TokioSleep};
-use core::fmt;
 use core::future::Future;
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
@@ -15,7 +14,7 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    type Err: fmt::Debug;
+    type Err;
     /// Returns a future that resolves to the next available Snowflake ID using
     /// the [`TokioSleep`] provider.
     ///
@@ -53,7 +52,6 @@ mod tests {
         AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, SleepProvider,
         SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource, TokioYield,
     };
-    use core::fmt;
     use futures::future::try_join_all;
     use std::collections::HashSet;
     use std::vec::Vec;
@@ -125,7 +123,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: SnowflakeId + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
     {
@@ -161,7 +159,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: SnowflakeId + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
     {
         let clock = clock_factory();
@@ -191,7 +189,7 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_snow_ids(
-        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl SnowflakeId + fmt::Debug>>>>,
+        tasks: Vec<tokio::task::JoinHandle<Result<Vec<impl SnowflakeId>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks)
             .await
