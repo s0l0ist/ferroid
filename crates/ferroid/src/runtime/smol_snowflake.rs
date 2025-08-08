@@ -52,7 +52,6 @@ mod tests {
         AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, SleepProvider,
         SmolYield, SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource,
     };
-    use core::fmt;
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
@@ -137,7 +136,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: SnowflakeId + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
     {
@@ -173,7 +172,7 @@ mod tests {
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: SnowflakeId + fmt::Debug + Send + 'static,
+        ID: SnowflakeId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
     {
         let clock = clock_factory();
@@ -203,7 +202,7 @@ mod tests {
 
     // Helper to validate uniqueness - shared between test approaches
     async fn validate_unique_snow_ids(
-        tasks: Vec<Task<Result<Vec<impl SnowflakeId + fmt::Debug>>>>,
+        tasks: Vec<Task<Result<Vec<impl SnowflakeId>>>>,
     ) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 

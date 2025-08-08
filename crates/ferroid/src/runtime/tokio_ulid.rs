@@ -1,5 +1,4 @@
 use crate::{RandSource, Result, TimeSource, TokioSleep, UlidGenerator, UlidId};
-use core::fmt;
 use core::future::Future;
 
 /// Extension trait for asynchronously generating ULIDs using the
@@ -16,7 +15,7 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    type Err: fmt::Debug;
+    type Err;
 
     /// Returns a future that resolves to the next available ULID using
     /// the [`TokioSleep`] provider.
@@ -56,7 +55,6 @@ mod tests {
         LockMonoUlidGenerator, MonotonicClock, Result, SleepProvider, ThreadRandom, TimeSource,
         TokioYield, ULID,
     };
-    use core::fmt;
     use futures::future::try_join_all;
     use std::collections::HashSet;
     use std::vec::Vec;
@@ -144,7 +142,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: UlidId + fmt::Debug + Send + 'static,
+        ID: UlidId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
     {

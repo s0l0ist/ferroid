@@ -1,5 +1,4 @@
 use crate::{RandSource, Result, SmolSleep, TimeSource, UlidGenerator, UlidId};
-use core::fmt;
 use core::future::Future;
 
 /// Extension trait for asynchronously generating ULIDs using the
@@ -16,7 +15,7 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    type Err: fmt::Debug;
+    type Err;
     /// Returns a future that resolves to the next available Ulid using
     /// the [`SmolSleep`] provider.
     ///
@@ -55,7 +54,6 @@ mod tests {
         LockMonoUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
         ThreadRandom, TimeSource, UlidGenerator, UlidId, ULID,
     };
-    use core::fmt;
     use futures::future::try_join_all;
     use smol::Task;
     use std::collections::HashSet;
@@ -111,7 +109,7 @@ mod tests {
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-        ID: UlidId + fmt::Debug + Send + 'static,
+        ID: UlidId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
@@ -151,7 +149,7 @@ mod tests {
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
         G::Err: Send + Sync + 'static,
-        ID: UlidId + fmt::Debug + Send + 'static,
+        ID: UlidId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
     {
