@@ -203,7 +203,7 @@ macro_rules! define_ulid {
             ///
             /// [`RandSource`]: crate::RandSource
             #[must_use]
-            pub fn from_timestamp_and_rand<R>(timestamp:  <Self as $crate::Id>::Ty, rng: &R) -> Self
+            pub fn from_timestamp_and_rand<R>(timestamp: <Self as $crate::Id>::Ty, rng: &R) -> Self
             where
                 R: $crate::RandSource<<Self as $crate::Id>::Ty>,
             {
