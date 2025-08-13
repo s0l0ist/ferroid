@@ -3,11 +3,11 @@
 mod server;
 
 use clap::Parser;
-use ferroid_tonic_core::proto::{FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer};
+use ferroid_tonic_core::proto::{id_generator_server::IdGeneratorServer, FILE_DESCRIPTOR_SET};
 use futures::Stream;
 use server::config::{CliArgs, ServerConfig};
 use server::service::handler::IdService;
-use server::telemetry::{TelemetryProviders, init_telemetry};
+use server::telemetry::{init_telemetry, TelemetryProviders};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::signal;
@@ -110,6 +110,7 @@ where
     Ok(())
 }
 
+#[allow(clippy::used_underscore_binding)]
 fn log_startup_info(_addr: &str, _config: &ServerConfig) {
     if cfg!(debug_assertions) {
         #[cfg(feature = "tracing")]
@@ -137,6 +138,7 @@ fn build_id_service(service: IdService) -> IdGeneratorServer<IdService> {
         .accept_compressed(CompressionEncoding::Deflate)
 }
 
+#[allow(clippy::used_underscore_binding)]
 async fn shutdown_signal(
     service: IdService,
     health_reporter: HealthReporter,

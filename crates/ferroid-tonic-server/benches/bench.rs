@@ -1,8 +1,8 @@
 use core::{fmt, hint::black_box};
-use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use ferroid_tonic_core::{
-    proto::{StreamIdsRequest, id_generator_client::IdGeneratorClient},
-    types::{SNOWFLAKE_ID_SIZE, SnowflakeId, SnowflakeIdTy},
+    proto::{id_generator_client::IdGeneratorClient, StreamIdsRequest},
+    types::{SnowflakeId, SnowflakeIdTy, SNOWFLAKE_ID_SIZE},
 };
 
 use futures::stream::FuturesUnordered;
@@ -163,8 +163,8 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
                 );
                 for chunk in bytes.chunks_exact(SNOWFLAKE_ID_SIZE) {
                     let raw_id = SnowflakeIdTy::from_le_bytes(chunk.try_into().unwrap());
-                    let _id = SnowflakeId::from_raw(raw_id);
-                    black_box(_id);
+                    let id = SnowflakeId::from_raw(raw_id);
+                    black_box(id);
                 }
             }
         }));
@@ -176,6 +176,7 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
     }
 }
 
+#[allow(clippy::missing_panics_doc)]
 pub fn wait_for_port(addr: &str, timeout_secs: u64) {
     let start = Instant::now();
     while start.elapsed().as_secs() < timeout_secs {

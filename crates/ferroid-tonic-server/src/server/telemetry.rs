@@ -72,7 +72,7 @@ compile_error!(
 );
 
 // Core imports - always needed
-use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 // Honeycomb-specific imports
 #[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]
@@ -161,7 +161,7 @@ pub fn init_telemetry() -> anyhow::Result<TelemetryProviders> {
     let registry = {
         opentelemetry::global::set_meter_provider(meter_provider.clone());
         let meter = opentelemetry::global::meter_with_scope(scope);
-        init_metric_handles(meter);
+        init_metric_handles(&meter);
 
         registry.with(tracing_opentelemetry::MetricsLayer::new(
             meter_provider.clone(),
@@ -324,7 +324,7 @@ static IDS_GENERATED_METRIC: OnceLock<Counter<u64>> = OnceLock::new();
 static IDS_PER_REQUEST_METRIC: OnceLock<Histogram<u64>> = OnceLock::new();
 
 #[cfg(feature = "metrics")]
-fn init_metric_handles(meter: Meter) {
+fn init_metric_handles(meter: &Meter) {
     let _ = REQUESTS_METRIC.set(
         meter
             .u64_counter("requests")

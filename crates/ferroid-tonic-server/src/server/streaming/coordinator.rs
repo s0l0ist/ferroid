@@ -72,6 +72,7 @@ pub async fn feed_chunks(
                 // disconnected. Therefore, we return the original error and
                 // instead log when we are unable to send the error message to
                 // the client.
+                #[allow(clippy::used_underscore_binding)]
                 if let Err(_e) = resp_tx.send(Err(e.clone().into())).await {
                     #[cfg(feature = "tracing")]
                     tracing::warn!("Failed to forward err: {}", _e);

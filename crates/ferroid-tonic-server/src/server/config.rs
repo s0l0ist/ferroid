@@ -1,6 +1,6 @@
 use anyhow::bail;
 use clap::Parser;
-use ferroid_tonic_core::types::{SNOWFLAKE_ID_SIZE, SnowflakeId};
+use ferroid_tonic_core::types::{SnowflakeId, SNOWFLAKE_ID_SIZE};
 
 /// Runtime configuration for the `ferroid-tonic-server` binary.
 ///
@@ -143,6 +143,7 @@ impl TryFrom<CliArgs> for ServerConfig {
     type Error = anyhow::Error;
 
     fn try_from(args: CliArgs) -> Result<Self, Self::Error> {
+        #[allow(clippy::cast_possible_truncation)]
         let max_machine_id = SnowflakeId::max_machine_id() as usize + 1;
 
         if args.num_workers == 0 {

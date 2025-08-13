@@ -1,8 +1,8 @@
 use ferroid_tonic_core::{
-    Error,
     ferroid::IdGenStatus,
     proto::IdChunk,
     types::{Generator, SNOWFLAKE_ID_SIZE},
+    Error,
 };
 use tokio::sync::mpsc;
 use tonic::Status;
@@ -33,6 +33,8 @@ use tonic::Status;
 /// - Batches IDs into fixed-size chunks and sends them through `chunk_tx`.
 /// - On error, sends a single [`Error::IdGeneration`] response and exits.
 /// - Uses cooperative yielding (`yield_now`) when generation is pending.
+#[allow(clippy::needless_pass_by_ref_mut)]
+#[allow(clippy::used_underscore_binding)]
 pub async fn handle_stream_request(
     _worker_id: usize,
     chunk_buf: &mut [u8],
@@ -40,6 +42,7 @@ pub async fn handle_stream_request(
     chunk_bytes: usize,
     chunk_size: usize,
     chunk_tx: mpsc::Sender<Result<IdChunk, Status>>,
+    // Use `&mut` so this `Send` future doesn't require `Generator: Sync`.
     generator: &mut Generator,
 ) {
     let mut generated = 0;

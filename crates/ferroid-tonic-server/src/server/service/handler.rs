@@ -25,18 +25,18 @@ use crate::server::{
 };
 use core::pin::Pin;
 use ferroid_tonic_core::{
-    Error,
     ferroid::Id,
-    proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
-    types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
+    proto::{id_generator_server::IdGenerator, IdChunk, StreamIdsRequest},
+    types::{Clock, Generator, SnowflakeId, EPOCH, SNOWFLAKE_ID_SIZE},
+    Error,
 };
 use futures::TryStreamExt;
 use std::sync::{
-    Arc,
     atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc,
 };
 use tokio::sync::mpsc;
-use tokio_stream::{Stream, wrappers::ReceiverStream};
+use tokio_stream::{wrappers::ReceiverStream, Stream};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 
@@ -170,8 +170,9 @@ impl IdGenerator for IdService {
         if get_global_shutdown() {
             return Err(Error::ServiceShutdown.into());
         }
-
         let start = std::time::Instant::now();
+
+        #[allow(clippy::cast_possible_truncation)]
         let total_ids = req.get_ref().count as usize;
 
         if total_ids == 0 {
@@ -211,6 +212,8 @@ impl IdGenerator for IdService {
             }
             decrement_streams_inflight(); // global
             decrement_streams_inflight_metric();
+
+            #[allow(clippy::cast_precision_loss)]
             record_stream_duration_metric(start.elapsed().as_millis() as f64);
         };
         #[cfg(feature = "tracing")]

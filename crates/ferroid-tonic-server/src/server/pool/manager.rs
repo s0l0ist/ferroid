@@ -105,18 +105,9 @@ impl WorkerPool {
         })
         .await;
 
-        match drain_result {
-            Ok(()) => {
-                #[cfg(feature = "tracing")]
-                tracing::debug!("All in-flight streams drained successfully");
-            }
-            Err(_) => {
-                #[cfg(feature = "tracing")]
-                tracing::warn!(
-                    "Graceful drain timed out ({} streams still active)",
-                    get_streams_inflight()
-                );
-            }
+        if let Ok(()) = drain_result {
+            #[cfg(feature = "tracing")]
+            tracing::debug!("All in-flight streams drained successfully");
         }
 
         // === Phase 2: Cancel any remaining work ===
@@ -131,6 +122,8 @@ impl WorkerPool {
 
         for (i, worker) in self.workers.iter().enumerate() {
             let (tx, rx) = oneshot::channel();
+
+            #[allow(clippy::used_underscore_binding)]
             if let Err(_e) = worker.send(WorkRequest::Shutdown { response: tx }).await {
                 #[cfg(feature = "tracing")]
                 tracing::error!("Failed to send shutdown to worker {i}: {_e}");
@@ -142,6 +135,7 @@ impl WorkerPool {
         #[cfg(feature = "tracing")]
         tracing::debug!("Waiting for up to 3s per worker for shutdown acknowledgements");
 
+        #[allow(clippy::used_underscore_binding)]
         let timeout_futures = shutdown_handles.into_iter().map(|(_i, rx)| async move {
             match timeout(Duration::from_secs(3), rx).await {
                 Ok(Ok(())) => {
