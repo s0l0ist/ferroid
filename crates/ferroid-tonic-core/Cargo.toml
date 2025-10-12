@@ -20,7 +20,8 @@ publish = true
 ferroid = { version = "0.6.5", path = "../ferroid", features = ["std", "alloc", "snowflake"] }
 prost = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tonic = { workspace = true, features = ["prost", "codegen"] }
+tonic = { workspace = true, features = ["transport", "codegen"] }
+tonic-prost = { workspace = true }
 
 [build-dependencies]
-tonic-build = { workspace = true, features = ["prost"] }
+tonic-prost-build = { workspace = true, features = ["cleanup-markdown", "transport"] }

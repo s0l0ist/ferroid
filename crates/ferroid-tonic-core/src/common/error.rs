@@ -20,6 +20,7 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 /// Unified error type for the ID generation service.
 #[derive(Clone, thiserror::Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Internal channel send/receive failure (e.g., closed or full channel).
     #[error("Channel error: {context}")]

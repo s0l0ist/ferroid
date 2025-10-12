@@ -50,14 +50,14 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let descriptor_path = out_dir.join("ferroid_descriptor.bin");
 
-    let mut config = tonic_build::Config::new();
+    let mut config = tonic_prost_build::Config::new();
 
     // Ensure packed binary field is treated as `Bytes`, not `Vec<u8>`
     config
         .bytes([".ferroid.IdChunk.packed_ids"])
         .file_descriptor_set_path(&descriptor_path);
 
-    tonic_build::configure()
-        .compile_protos_with_config(config, &["proto/ferroid.proto"], &["proto"])
+    tonic_prost_build::configure()
+        .compile_with_config(config, &["proto/ferroid.proto"], &["proto"])
         .unwrap();
 }
