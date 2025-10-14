@@ -578,36 +578,34 @@ mod test {
     #[test]
     fn decode_invalid_character_fails() {
         // Base32 Crockford disallows symbols like `@`
-        let invalid = "012345678901@";
-        let result = SnowflakeTwitterId::decode(invalid);
-        assert!(matches!(
-            result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidAscii {
-                byte: 64
-            }))
-        ));
+        let invalid = "000000@000000";
+        let res = SnowflakeTwitterId::decode(invalid);
+        assert_eq!(
+            res.unwrap_err(),
+            Error::Base32Error(Base32Error::DecodeInvalidAscii {
+                byte: b'@',
+                index: 6,
+            })
+        );
     }
 
     #[test]
     fn decode_invalid_length_fails() {
-        // Shorter than 13-byte base32 for u64 (decoded slice won't be 8 bytes)
+        // Shorter than 13-byte base32 for u64
         let too_short = "012345678901";
-        let result = SnowflakeTwitterId::decode(too_short);
-        assert!(matches!(
-            result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidLen {
-                len: 12
-            }))
-        ));
+        let res = SnowflakeTwitterId::decode(too_short);
+        assert_eq!(
+            res.unwrap_err(),
+            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 12 })
+        );
 
-        // Longer than 13-byte base32 for u64 (decoded slice won't be 8 bytes)
+        // Longer than 13-byte base32 for u64
         let too_long = "01234567890123";
-        let result = SnowflakeTwitterId::decode(too_long);
-        assert!(matches!(
-            result,
-            Err(Error::Base32Error(Base32Error::DecodeInvalidLen {
-                len: 14
-            }))
-        ));
+        let res = SnowflakeTwitterId::decode(too_long);
+
+        assert_eq!(
+            res.unwrap_err(),
+            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 14 })
+        );
     }
 }

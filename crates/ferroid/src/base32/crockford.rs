@@ -93,12 +93,13 @@ where
         + core::ops::BitOr<Output = T>,
 {
     let mut acc = T::default();
-    for b in encoded.bytes() {
+    for (i, b) in encoded.bytes().enumerate() {
         // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
         let val = unsafe { *LOOKUP.get_unchecked(b as usize) };
         if val == NO_VALUE {
             return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii {
                 byte: b,
+                index: i,
             }));
         }
         acc = (acc << BITS_PER_CHAR) | T::from(val);
@@ -200,11 +201,13 @@ mod tests {
     fn test_invalid_character() {
         let s = "ZZZZZZ!"; // '!' is not valid
         let res = decode_base32::<u32, ()>(s);
-        assert!(res.is_err());
-        match res.unwrap_err() {
-            Error::Base32Error(Base32Error::DecodeInvalidAscii { byte: b'!' }) => {}
-            e => panic!("unexpected error: {e:?}"),
-        }
+        assert_eq!(
+            res.unwrap_err(),
+            Error::Base32Error(Base32Error::DecodeInvalidAscii {
+                byte: b'!',
+                index: 6,
+            })
+        );
     }
 
     #[test]

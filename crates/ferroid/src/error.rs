@@ -15,7 +15,7 @@ pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, E>;
 /// When both `std` and `base32` are disabled, `ferroid` is effectively
 /// infallible. The `Infallible` variant exists only to satisfy the type system
 /// and is never expected to surface in practice.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum Error<E = core::convert::Infallible> {
     /// The operation failed due to a poisoned lock.

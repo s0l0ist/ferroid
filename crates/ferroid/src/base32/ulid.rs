@@ -356,7 +356,7 @@ mod alloc_test {
 
 #[cfg(all(test, feature = "ulid"))]
 mod test {
-    use crate::{Base32UlidExt, ULID, UlidId};
+    use crate::{Base32Error, Base32UlidExt, Error, UlidId, ULID};
 
     #[test]
     fn ulid_try_from() {
@@ -428,5 +428,39 @@ mod test {
         assert_eq!(decoded.timestamp(), 0);
         assert_eq!(decoded.random(), 0);
         assert_eq!(id, decoded);
+    }
+
+    #[test]
+    fn decode_invalid_character_fails() {
+        // Base32 Crockford disallows symbols like `@`
+        let invalid = "000000000000@0000000000000";
+        let res = ULID::decode(invalid);
+        assert_eq!(
+            res.unwrap_err(),
+            Error::Base32Error(Base32Error::DecodeInvalidAscii {
+                byte: b'@',
+                index: 12,
+            })
+        );
+    }
+
+    #[test]
+    fn decode_invalid_length_fails() {
+        // Shorter than 26-byte base32 for u128
+        let too_short = "0123456789012345678901234";
+        let res = ULID::decode(too_short);
+        assert_eq!(
+            res.unwrap_err(),
+            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 25 })
+        );
+
+        // Longer than 26-byte base32 for u128
+        let too_long = "012345678901234567890123456";
+        let res = ULID::decode(too_long);
+
+        assert_eq!(
+            res.unwrap_err(),
+            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 27 })
+        );
     }
 }

@@ -6,7 +6,7 @@ use core::fmt;
 /// This error type is generic over the decoded ID type `E`, which allows
 /// including the decoded ID in case of overflow. This can help callers inspect
 /// or log invalid IDs during error handling.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Base32Error<E> {
     /// The input string length was invalid.
     ///
@@ -27,6 +27,8 @@ pub enum Base32Error<E> {
     DecodeInvalidAscii {
         /// The invalid byte found in the input string.
         byte: u8,
+        /// The index of the invalid byte in the input string.
+        index: usize,
     },
 
     /// The decoded value exceeds the valid range for the target ID type.
@@ -41,7 +43,9 @@ pub enum Base32Error<E> {
 impl<E: core::fmt::Debug> fmt::Display for Base32Error<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::DecodeInvalidAscii { byte } => write!(f, "invalid ascii byte: {byte}"),
+            Self::DecodeInvalidAscii { byte, index } => {
+                write!(f, "invalid ascii byte ({byte}) at index ({index})")
+            }
             Self::DecodeInvalidLen { len } => write!(f, "invalid length: {len}"),
             Self::DecodeOverflow { id } => write!(f, "decode overflow: {id:#?}"),
         }
