@@ -1,57 +1,59 @@
-use crate::{rand::RandSource, Error, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
-use core::cmp::Ordering;
-#[cfg(feature = "parking-lot")]
-use parking_lot::Mutex;
-use std::sync::Arc;
-#[cfg(not(feature = "parking-lot"))]
-use std::sync::Mutex;
+use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
+use core::cmp;
+use core::marker::PhantomData;
+use portable_atomic::{AtomicU128, Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
-/// A lock-based *monotonic* ULID-style ID generator suitable for multi-threaded
+/// A lock-free *monotonic* ULID-style ID generator suitable for single-threaded
 /// environments.
 ///
-/// This generator wraps the Ulid state in an [`Arc<Mutex<_>>`], allowing safe
-/// shared use across threads.
+/// This generator stores the ULID in an [`AtomicU128`], allowing safe shared
+/// use across threads.
 ///
 /// ## Features
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
 /// - ✅ Time-ordered (monotonically increasing per millisecond)
 ///
+/// ## Caveats
+/// This implementation uses an [`AtomicU128`] internally, so it only supports
+/// ID layouts where the underlying type is [`u128`]. You cannot use layouts
+/// with larger or smaller representations (i.e., `ID::Ty` must be [`u128`]).
+///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
 /// - You need require monotonically increasing IDs (ID generated within the
 ///   same millisecond increment a sequence counter)
-/// - Your target doesn't support atomics.
 ///
 /// ## See Also
 /// - [`BasicUlidGenerator`]
 /// - [`BasicMonoUlidGenerator`]
-/// - [`AtomicMonoUlidGenerator`]
+/// - [`LockMonoUlidGenerator`]
 ///
 /// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
 /// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
-/// [`AtomicMonoUlidGenerator`]: crate::AtomicMonoUlidGenerator
-pub struct LockMonoUlidGenerator<ID, T, R>
+/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
+pub struct AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: UlidId,
+    ID: UlidId<Ty = u128>,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    state: Arc<Mutex<ID>>,
+    state: AtomicU128,
     clock: T,
     rng: R,
+    _id: PhantomData<ID>,
 }
 
-impl<ID, T, R> LockMonoUlidGenerator<ID, T, R>
+impl<ID, T, R> AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: UlidId,
+    ID: UlidId<Ty = u128>,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source and
-    /// RNG.
+    /// Creates a new [`AtomicMonoUlidGenerator`] with the provided time source
+    /// and RNG.
     ///
     /// # Parameters
     /// - `clock`: A [`TimeSource`] used to retrieve the current timestamp
@@ -63,11 +65,11 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
     /// {
-    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///     
-    ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///     let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     ///     let id: ULID = loop {
     ///         match generator.next_id() {
@@ -106,9 +108,10 @@ where
     pub fn from_components(timestamp: ID::Ty, random: ID::Ty, clock: T, rng: R) -> Self {
         let id = ID::from_components(timestamp, random);
         Self {
-            state: Arc::new(Mutex::new(id)),
+            state: AtomicU128::new(id.to_raw()),
             clock,
             rng,
+            _id: PhantomData,
         }
     }
 
@@ -119,16 +122,17 @@ where
     /// explicit control over error handling.
     ///
     /// # Panics
-    /// Panics if the lock is poisoned. For explicitly fallible behavior, use
-    /// [`Self::try_next_id`] instead.
+    /// This method currently has no fallible code paths, but may panic if an
+    /// internal error occurs in future implementations. For explicitly fallible
+    /// behavior, use [`Self::try_next_id`] instead.
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
     /// {
-    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///     
-    ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///     let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     ///     let id: ULID = loop {
     ///         match generator.next_id() {
@@ -151,18 +155,19 @@ where
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
     /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
     ///   milliseconds) before trying again
-    /// - `Err(e)`: the lock was poisoned
+    /// - `Err(_)`: infallible for this generator
     ///
     /// # Errors
-    /// - Returns an error if the underlying lock has been poisoned.
+    /// - This method currently does not return any errors and always returns
+    ///   `Ok`. It is marked as fallible to allow for future extensibility
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "ulid"))]
+    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
     /// {
-    ///     use ferroid::{BasicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    ///     use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
     ///
-    ///     let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///     let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     ///     // Attempt to generate a new ID
     ///     let id: ULID = loop {
@@ -171,32 +176,46 @@ where
     ///             Ok(IdGenStatus::Pending { yield_for }) => {
     ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///             }
-    ///             Err(e) => panic!("Generator error: {}", e),
+    ///             Err(_) => unreachable!(),
     ///         }
     ///     };
     /// }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
         let now = self.clock.current_millis();
-        let mut id = self.state.lock();
-        let current_ts = id.timestamp();
 
-        match now.cmp(&current_ts) {
-            Ordering::Equal => {
-                if id.has_random_room() {
-                    *id = id.increment_random();
-                    Ok(IdGenStatus::Ready { id: *id })
+        let current_raw = self.state.load(Ordering::Relaxed);
+        let current_id = ID::from_raw(current_raw);
+        let current_ts = current_id.timestamp();
+
+        let (next_ts, next_rand) = match now.cmp(&current_ts) {
+            cmp::Ordering::Equal => {
+                if current_id.has_random_room() {
+                    (current_ts, current_id.next_random())
                 } else {
-                    Ok(IdGenStatus::Pending { yield_for: ID::ONE })
+                    return Ok(IdGenStatus::Pending { yield_for: ID::ONE });
                 }
             }
-            Ordering::Greater => {
-                let rand = self.rng.rand();
-                *id = id.rollover_to_timestamp(now, rand);
-                Ok(IdGenStatus::Ready { id: *id })
-            }
-            Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
+            cmp::Ordering::Greater => (now, self.rng.rand()),
+            cmp::Ordering::Less => return Ok(Self::cold_clock_behind(now, current_ts)),
+        };
+
+        let next_id = ID::from_components(next_ts, next_rand);
+        let next_raw = next_id.to_raw();
+
+        if self
+            .state
+            .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            Ok(IdGenStatus::Ready { id: next_id })
+        } else {
+            // CAS failed - another thread won the race. Yield 0 to retry
+            // immediately.
+            Ok(IdGenStatus::Pending {
+                yield_for: ID::ZERO,
+            })
         }
     }
 
@@ -209,13 +228,13 @@ where
     }
 }
 
-impl<ID, T, R> UlidGenerator<ID, T, R> for LockMonoUlidGenerator<ID, T, R>
+impl<ID, T, R> UlidGenerator<ID, T, R> for AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: UlidId,
+    ID: UlidId<Ty = u128>,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    type Err = Error;
+    type Err = core::convert::Infallible;
 
     fn new(clock: T, rng: R) -> Self {
         Self::new(clock, rng)

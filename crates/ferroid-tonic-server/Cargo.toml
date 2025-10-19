@@ -35,6 +35,7 @@ opentelemetry-otlp = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true, features = ["semconv_experimental"] }
 opentelemetry-stdout = { workspace = true, optional = true }
 opentelemetry_sdk = { workspace = true, optional = true }
+portable-atomic = { workspace = true, features = ["fallback", "std"] }
 tokio = { workspace = true, features = ["parking_lot", "rt-multi-thread", "signal"] }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }

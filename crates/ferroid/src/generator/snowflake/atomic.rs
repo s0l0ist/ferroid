@@ -1,9 +1,6 @@
 use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
-use core::{
-    cmp,
-    marker::PhantomData,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use core::{cmp, marker::PhantomData};
+use portable_atomic::{AtomicU64, Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -13,14 +10,13 @@ use tracing::instrument;
 /// shared use across threads.
 ///
 /// ## Features
-///
 /// - ✅ Thread-safe
 /// - ❌ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Caveats
-/// This implementation uses an `AtomicU64` internally, so it only supports ID
-/// layouts where the underlying type is `u64`. You cannot use layouts with
-/// larger or smaller representations (i.e., `ID::Ty` must be `u64`).
+/// This implementation uses an [`AtomicU64`] internally, so it only supports ID
+/// layouts where the underlying type is [`u64`]. You cannot use layouts with
+/// larger or smaller representations (i.e., `ID::Ty` must be [`u64`]).
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
@@ -202,23 +198,19 @@ where
 
         let current_raw = self.state.load(Ordering::Relaxed);
         let current_id = ID::from_raw(current_raw);
-
         let current_ts = current_id.timestamp();
-        let seq = current_id.sequence();
 
         let (next_ts, next_seq) = match now.cmp(&current_ts) {
-            cmp::Ordering::Less => {
-                let yield_for = current_ts - now;
-                debug_assert!(yield_for >= ID::ZERO);
-                return Ok(IdGenStatus::Pending { yield_for });
-            }
-            cmp::Ordering::Greater => (now, ID::ZERO),
             cmp::Ordering::Equal => {
-                if seq < ID::max_sequence() {
-                    (current_ts, seq + ID::ONE)
+                if current_id.has_sequence_room() {
+                    (current_ts, current_id.next_sequence())
                 } else {
                     return Ok(IdGenStatus::Pending { yield_for: ID::ONE });
                 }
+            }
+            cmp::Ordering::Greater => (now, ID::ZERO),
+            cmp::Ordering::Less => {
+                return Ok(Self::cold_clock_behind(now, current_ts));
             }
         };
 
@@ -238,6 +230,14 @@ where
                 yield_for: ID::ZERO,
             })
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> IdGenStatus<ID> {
+        let yield_for = current_ts - now;
+        debug_assert!(yield_for >= ID::ZERO);
+        IdGenStatus::Pending { yield_for }
     }
 }
 

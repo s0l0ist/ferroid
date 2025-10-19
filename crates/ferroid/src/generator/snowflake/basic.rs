@@ -9,7 +9,6 @@ use tracing::instrument;
 /// This generator is lightweight and fast, but **not thread-safe**.
 ///
 /// ## Features
-///
 /// - ❌ Not thread-safe
 /// - ✅ Safely implement any [`SnowflakeId`] layout
 ///
@@ -188,29 +187,31 @@ where
         let state = self.state.get();
         let current_ts = state.timestamp();
 
-        let status = match now.cmp(&current_ts) {
-            Ordering::Less => {
-                let yield_for = current_ts - now;
-                debug_assert!(yield_for >= ID::ZERO);
-                IdGenStatus::Pending { yield_for }
-            }
-            Ordering::Greater => {
-                let updated = state.rollover_to_timestamp(now);
-                self.state.set(updated);
-                IdGenStatus::Ready { id: updated }
-            }
+        match now.cmp(&current_ts) {
             Ordering::Equal => {
                 if state.has_sequence_room() {
                     let updated = state.increment_sequence();
                     self.state.set(updated);
-                    IdGenStatus::Ready { id: updated }
+                    Ok(IdGenStatus::Ready { id: updated })
                 } else {
-                    IdGenStatus::Pending { yield_for: ID::ONE }
+                    Ok(IdGenStatus::Pending { yield_for: ID::ONE })
                 }
             }
-        };
+            Ordering::Greater => {
+                let updated = state.rollover_to_timestamp(now);
+                self.state.set(updated);
+                Ok(IdGenStatus::Ready { id: updated })
+            }
+            Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
+        }
+    }
 
-        Ok(status)
+    #[cold]
+    #[inline(never)]
+    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> IdGenStatus<ID> {
+        let yield_for = current_ts - now;
+        debug_assert!(yield_for >= ID::ZERO);
+        IdGenStatus::Pending { yield_for }
     }
 }
 

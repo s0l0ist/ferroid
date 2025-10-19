@@ -1,6 +1,9 @@
 use crate::{Error, IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
+#[cfg(feature = "parking-lot")]
+use parking_lot::Mutex;
+#[cfg(not(feature = "parking-lot"))]
 use std::sync::Mutex;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -12,13 +15,13 @@ use tracing::instrument;
 /// safe shared use across threads.
 ///
 /// ## Features
-///
 /// - ✅ Thread-safe
 /// - ✅ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
 /// - Fair access across threads is important
+/// - Your target doesn't support atomics.
 ///
 /// ## See Also
 /// - [`BasicSnowflakeGenerator`]
@@ -31,7 +34,13 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
+    #[cfg(feature = "cache")]
+    state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
+    #[cfg(not(feature = "cache"))]
     state: Arc<Mutex<ID>>,
+    #[cfg(feature = "cache")]
+    time: crossbeam_utils::CachePadded<T>,
+    #[cfg(not(feature = "cache"))]
     time: T,
 }
 
@@ -111,7 +120,13 @@ where
     ) -> Self {
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
+            #[cfg(feature = "cache")]
+            state: Arc::new(crossbeam_utils::CachePadded::new(Mutex::new(id))),
+            #[cfg(not(feature = "cache"))]
             state: Arc::new(Mutex::new(id)),
+            #[cfg(feature = "cache")]
+            time: crossbeam_utils::CachePadded::new(clock),
+            #[cfg(not(feature = "cache"))]
             time: clock,
         }
     }
@@ -186,30 +201,31 @@ where
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
         let now = self.time.current_millis();
-        let mut id = self.state.lock()?;
+        let mut id = self.state.lock();
         let current_ts = id.timestamp();
-
-        let status = match now.cmp(&current_ts) {
-            Ordering::Less => {
-                let yield_for = current_ts - now;
-                debug_assert!(yield_for >= ID::ZERO);
-                IdGenStatus::Pending { yield_for }
-            }
-            Ordering::Greater => {
-                *id = id.rollover_to_timestamp(now);
-                IdGenStatus::Ready { id: *id }
-            }
+        match now.cmp(&current_ts) {
             Ordering::Equal => {
                 if id.has_sequence_room() {
                     *id = id.increment_sequence();
-                    IdGenStatus::Ready { id: *id }
+                    Ok(IdGenStatus::Ready { id: *id })
                 } else {
-                    IdGenStatus::Pending { yield_for: ID::ONE }
+                    Ok(IdGenStatus::Pending { yield_for: ID::ONE })
                 }
             }
-        };
+            Ordering::Greater => {
+                *id = id.rollover_to_timestamp(now);
+                Ok(IdGenStatus::Ready { id: *id })
+            }
+            Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
+        }
+    }
 
-        Ok(status)
+    #[cold]
+    #[inline(never)]
+    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> IdGenStatus<ID> {
+        let yield_for = current_ts - now;
+        debug_assert!(yield_for >= ID::ZERO);
+        IdGenStatus::Pending { yield_for }
     }
 }
 

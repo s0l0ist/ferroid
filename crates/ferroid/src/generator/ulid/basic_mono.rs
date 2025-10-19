@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
+use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
 use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -9,13 +9,11 @@ use tracing::instrument;
 /// This generator is lightweight and fast, but is not thread-safe.
 ///
 /// ## Features
-///
 /// - ❌ Not thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
 /// - ✅ Time-ordered (monotonically increasing per millisecond)
 ///
 /// ## Recommended When
-///
 /// - You're in a single-threaded environment (no shared access)
 /// - You need require monotonically increasing IDs (ID generated within the
 ///   same millisecond increment a sequence counter)
@@ -23,8 +21,10 @@ use tracing::instrument;
 /// ## See Also
 /// - [`BasicUlidGenerator`]
 /// - [`LockMonoUlidGenerator`]
+/// - [`AtomicMonoUlidGenerator`]
 ///
 /// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
+/// [`AtomicMonoUlidGenerator`]: crate::AtomicMonoUlidGenerator
 /// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
 pub struct BasicMonoUlidGenerator<ID, T, R>
 where
@@ -177,31 +177,33 @@ where
         let state = self.state.get();
         let current_ts = state.timestamp();
 
-        let status = match now.cmp(&current_ts) {
-            Ordering::Less => {
-                let yield_for = current_ts - now;
-                debug_assert!(yield_for >= ID::ZERO);
-                IdGenStatus::Pending { yield_for }
+        match now.cmp(&current_ts) {
+            Ordering::Equal => {
+                if state.has_random_room() {
+                    let updated = state.increment_random();
+                    self.state.set(updated);
+                    Ok(IdGenStatus::Ready { id: updated })
+                } else {
+                    Ok(IdGenStatus::Pending { yield_for: ID::ONE })
+                }
             }
             Ordering::Greater => {
                 // Set the new timestamp and random number.
                 let rand = self.rng.rand();
                 let updated = state.rollover_to_timestamp(now, rand);
                 self.state.set(updated);
-                IdGenStatus::Ready { id: updated }
+                Ok(IdGenStatus::Ready { id: updated })
             }
-            Ordering::Equal => {
-                if state.has_random_room() {
-                    let updated = state.increment_random();
-                    self.state.set(updated);
-                    IdGenStatus::Ready { id: updated }
-                } else {
-                    IdGenStatus::Pending { yield_for: ID::ONE }
-                }
-            }
-        };
+            Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
+        }
+    }
 
-        Ok(status)
+    #[cold]
+    #[inline(never)]
+    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> IdGenStatus<ID> {
+        let yield_for = current_ts - now;
+        debug_assert!(yield_for >= ID::ZERO);
+        IdGenStatus::Pending { yield_for }
     }
 }
 

@@ -10,21 +10,21 @@ use tracing::instrument;
 /// probabiliy than it's monotonic counterpart.
 ///
 /// ## Features
-///
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
 /// - ✅ Time-ordered (not monotonically increasing, random per millisecond)
 ///
 /// ## Recommended When
-///
 /// - You're in a single or multi-threaded environment
 /// - You require purely random IDs (even within the same millisecond)
 ///
 /// ## See Also
 /// - [`BasicMonoUlidGenerator`]
 /// - [`LockMonoUlidGenerator`]
+/// - [`AtomicMonoUlidGenerator`]
 ///
 /// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
+/// [`AtomicMonoUlidGenerator`]: crate::AtomicMonoUlidGenerator
 /// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
 pub struct BasicUlidGenerator<ID, T, R>
 where
