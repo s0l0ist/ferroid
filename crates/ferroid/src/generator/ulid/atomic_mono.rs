@@ -41,7 +41,7 @@ where
     R: RandSource<ID::Ty>,
 {
     state: AtomicU128,
-    clock: T,
+    time: T,
     rng: R,
     _id: PhantomData<ID>,
 }
@@ -56,7 +56,7 @@ where
     /// and RNG.
     ///
     /// # Parameters
-    /// - `clock`: A [`TimeSource`] used to retrieve the current timestamp
+    /// - `time`: A [`TimeSource`] used to retrieve the current timestamp
     /// - `rng`: A [`RandSource`] used to generate random bits
     ///
     /// # Returns
@@ -82,8 +82,8 @@ where
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
-    pub fn new(clock: T, rng: R) -> Self {
-        Self::from_components(ID::ZERO, ID::ZERO, clock, rng)
+    pub fn new(time: T, rng: R) -> Self {
+        Self::from_components(ID::ZERO, ID::ZERO, time, rng)
     }
 
     /// Creates a new ID generator from explicit component values.
@@ -96,7 +96,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `clock`: A [`TimeSource`] implementation used to fetch the current
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current
     ///   time
     ///
     /// # Returns
@@ -105,11 +105,11 @@ where
     /// # ⚠️ Note
     /// In typical use cases, you should prefer [`Self::new`] to let the
     /// generator initialize itself from the current time.
-    pub fn from_components(timestamp: ID::Ty, random: ID::Ty, clock: T, rng: R) -> Self {
+    pub fn from_components(timestamp: ID::Ty, random: ID::Ty, time: T, rng: R) -> Self {
         let id = ID::from_components(timestamp, random);
         Self {
             state: AtomicU128::new(id.to_raw()),
-            clock,
+            time,
             rng,
             _id: PhantomData,
         }
@@ -183,7 +183,7 @@ where
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
-        let now = self.clock.current_millis();
+        let now = self.time.current_millis();
 
         let current_raw = self.state.load(Ordering::Relaxed);
         let current_id = ID::from_raw(current_raw);
@@ -236,8 +236,8 @@ where
 {
     type Err = core::convert::Infallible;
 
-    fn new(clock: T, rng: R) -> Self {
-        Self::new(clock, rng)
+    fn new(time: T, rng: R) -> Self {
+        Self::new(time, rng)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {

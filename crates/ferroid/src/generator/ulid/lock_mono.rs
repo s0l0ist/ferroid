@@ -1,10 +1,8 @@
-use crate::{rand::RandSource, Error, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
+use crate::{
+    rand::RandSource, Error, IdGenStatus, Mutex, Result, TimeSource, UlidGenerator, UlidId,
+};
 use core::cmp::Ordering;
-#[cfg(feature = "parking-lot")]
-use parking_lot::Mutex;
 use std::sync::Arc;
-#[cfg(not(feature = "parking-lot"))]
-use std::sync::Mutex;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -39,8 +37,11 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
+    #[cfg(feature = "cache")]
+    state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
+    #[cfg(not(feature = "cache"))]
     state: Arc<Mutex<ID>>,
-    clock: T,
+    time: T,
     rng: R,
 }
 
@@ -54,7 +55,7 @@ where
     /// RNG.
     ///
     /// # Parameters
-    /// - `clock`: A [`TimeSource`] used to retrieve the current timestamp
+    /// - `time`: A [`TimeSource`] used to retrieve the current timestamp
     /// - `rng`: A [`RandSource`] used to generate random bits
     ///
     /// # Returns
@@ -80,8 +81,8 @@ where
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
-    pub fn new(clock: T, rng: R) -> Self {
-        Self::from_components(ID::ZERO, ID::ZERO, clock, rng)
+    pub fn new(time: T, rng: R) -> Self {
+        Self::from_components(ID::ZERO, ID::ZERO, time, rng)
     }
 
     /// Creates a new ID generator from explicit component values.
@@ -94,7 +95,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `clock`: A [`TimeSource`] implementation used to fetch the current
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current
     ///   time
     ///
     /// # Returns
@@ -103,11 +104,14 @@ where
     /// # ⚠️ Note
     /// In typical use cases, you should prefer [`Self::new`] to let the
     /// generator initialize itself from the current time.
-    pub fn from_components(timestamp: ID::Ty, random: ID::Ty, clock: T, rng: R) -> Self {
+    pub fn from_components(timestamp: ID::Ty, random: ID::Ty, time: T, rng: R) -> Self {
         let id = ID::from_components(timestamp, random);
         Self {
+            #[cfg(feature = "cache")]
+            state: Arc::new(crossbeam_utils::CachePadded::new(Mutex::new(id))),
+            #[cfg(not(feature = "cache"))]
             state: Arc::new(Mutex::new(id)),
-            clock,
+            time,
             rng,
         }
     }
@@ -178,7 +182,7 @@ where
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
-        let now = self.clock.current_millis();
+        let now = self.time.current_millis();
         let mut id = self.state.lock();
         let current_ts = id.timestamp();
 
@@ -217,8 +221,8 @@ where
 {
     type Err = Error;
 
-    fn new(clock: T, rng: R) -> Self {
-        Self::new(clock, rng)
+    fn new(time: T, rng: R) -> Self {
+        Self::new(time, rng)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {

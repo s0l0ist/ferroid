@@ -267,8 +267,8 @@ where
     }
 }
 
-#[cfg(feature = "std")]
-#[cfg_attr(not(feature = "std"), doc(hidden))]
+#[cfg(feature = "alloc")]
+#[cfg_attr(not(feature = "alloc"), doc(hidden))]
 impl<T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatter<T>
 where
     T::Ty: BeBytes,

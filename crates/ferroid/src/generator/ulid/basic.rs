@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
+use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
 use core::marker::PhantomData;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -32,7 +32,7 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    clock: T,
+    time: T,
     rng: R,
     _id: PhantomData<ID>,
 }
@@ -47,7 +47,7 @@ where
     /// RNG.
     ///
     /// # Parameters
-    /// - `clock`: A [`TimeSource`] used to retrieve the current timestamp
+    /// - `time`: A [`TimeSource`] used to retrieve the current timestamp
     /// - `rng`: A [`RandSource`] used to generate random bits
     ///
     /// # Returns
@@ -73,9 +73,9 @@ where
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
-    pub const fn new(clock: T, rng: R) -> Self {
+    pub const fn new(time: T, rng: R) -> Self {
         Self {
-            clock,
+            time,
             rng,
             _id: PhantomData,
         }
@@ -150,7 +150,7 @@ where
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
         Ok(IdGenStatus::Ready {
-            id: ID::from_components(self.clock.current_millis(), self.rng.rand()),
+            id: ID::from_components(self.time.current_millis(), self.rng.rand()),
         })
     }
 }
@@ -163,8 +163,8 @@ where
 {
     type Err = core::convert::Infallible;
 
-    fn new(clock: T, rng: R) -> Self {
-        Self::new(clock, rng)
+    fn new(time: T, rng: R) -> Self {
+        Self::new(time, rng)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {

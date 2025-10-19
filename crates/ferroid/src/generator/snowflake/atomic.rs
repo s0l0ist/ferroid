@@ -48,7 +48,7 @@ where
     /// time and a given machine ID.
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
-    /// uses the provided `clock` to fetch the current time during ID
+    /// uses the provided `time` to fetch the current time during ID
     /// generation. It is the recommended way to create a new atomic generator
     /// for typical use cases.
     ///
@@ -56,7 +56,7 @@ where
     ///
     /// - `machine_id`: A unique identifier for the node or instance generating
     ///   IDs. This value will be encoded into every generated ID.
-    /// - `clock`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
+    /// - `time`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
     ///   that determines how timestamps are generated.
     ///
     /// # Returns
@@ -84,8 +84,8 @@ where
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`MonotonicClock`]: crate::MonotonicClock
-    pub fn new(machine_id: ID::Ty, clock: T) -> Self {
-        Self::from_components(ID::ZERO, machine_id, ID::ZERO, clock)
+    pub fn new(machine_id: ID::Ty, time: T) -> Self {
+        Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
     }
 
     /// Creates a new ID generator from explicit component values.
@@ -98,7 +98,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `clock`: A [`TimeSource`] implementation used to fetch the current
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current
     ///   time
     ///
     /// # Returns
@@ -111,13 +111,13 @@ where
         timestamp: ID::Ty,
         machine_id: ID::Ty,
         sequence: ID::Ty,
-        clock: T,
+        time: T,
     ) -> Self {
         let initial = ID::from_components(timestamp, machine_id, sequence);
         Self {
             state: AtomicU64::new(initial.to_raw()),
             machine_id,
-            time: clock,
+            time: time,
             _id: PhantomData,
         }
     }
@@ -126,7 +126,7 @@ where
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
     /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// clock has not advanced, or CAS fails), it returns
+    /// time has not advanced, or CAS fails), it returns
     /// [`IdGenStatus::Pending`].
     ///
     /// # Panics
@@ -248,8 +248,8 @@ where
 {
     type Err = core::convert::Infallible;
 
-    fn new(machine_id: ID::Ty, clock: T) -> Self {
-        Self::new(machine_id, clock)
+    fn new(machine_id: ID::Ty, time: T) -> Self {
+        Self::new(machine_id, time)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {

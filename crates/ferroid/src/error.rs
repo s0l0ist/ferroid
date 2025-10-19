@@ -22,7 +22,8 @@ pub enum Error<E = core::convert::Infallible> {
     ///
     /// This can happen if another thread panicked while holding a shared lock.
     /// Only available when the `std` feature is enabled.
-    #[cfg(feature = "std")]
+    //TODO: parking-log doesn't return poisoned.
+    #[cfg(all(feature = "std", not(feature = "parking-lot")))]
     LockPoisoned(core::marker::PhantomData<E>),
 
     /// An error occurred during Crockford Base32 decoding.
@@ -49,9 +50,9 @@ impl<E: fmt::Debug> fmt::Display for Error<E> {
 
 impl<E: fmt::Debug> core::error::Error for Error<E> {}
 
-#[cfg(feature = "std")]
-use std::sync::{MutexGuard, PoisonError};
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "parking-lot")))]
+use crate::{MutexGuard, PoisonError};
+#[cfg(all(feature = "std", not(feature = "parking-lot")))]
 // Convert all poisoned lock errors to a simplified `LockPoisoned`
 impl<T, E: fmt::Debug> From<PoisonError<MutexGuard<'_, T>>> for Error<E> {
     fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {

@@ -1,10 +1,6 @@
-use crate::{Error, IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
+use crate::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
-#[cfg(feature = "parking-lot")]
-use parking_lot::Mutex;
-#[cfg(not(feature = "parking-lot"))]
-use std::sync::Mutex;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -38,9 +34,6 @@ where
     state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
     #[cfg(not(feature = "cache"))]
     state: Arc<Mutex<ID>>,
-    #[cfg(feature = "cache")]
-    time: crossbeam_utils::CachePadded<T>,
-    #[cfg(not(feature = "cache"))]
     time: T,
 }
 
@@ -53,7 +46,7 @@ where
     /// time and a given machine ID.
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
-    /// uses the provided `clock` to fetch the current time during ID
+    /// uses the provided `time` to fetch the current time during ID
     /// generation. It is the recommended way to create a new atomic generator
     /// for typical use cases.
     ///
@@ -61,7 +54,7 @@ where
     ///
     /// - `machine_id`: A unique identifier for the node or instance generating
     ///   IDs. This value will be encoded into every generated ID.
-    /// - `clock`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
+    /// - `time`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
     ///   that determines how timestamps are generated.
     ///
     /// # Returns
@@ -89,8 +82,8 @@ where
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`MonotonicClock`]: crate::MonotonicClock
-    pub fn new(machine_id: ID::Ty, clock: T) -> Self {
-        Self::from_components(ID::ZERO, machine_id, ID::ZERO, clock)
+    pub fn new(machine_id: ID::Ty, time: T) -> Self {
+        Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
     }
 
     /// Creates a new ID generator from explicit component values.
@@ -103,7 +96,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `clock`: A [`TimeSource`] implementation used to fetch the current
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current
     ///   time
     ///
     /// # Returns
@@ -116,7 +109,7 @@ where
         timestamp: ID::Ty,
         machine_id: ID::Ty,
         sequence: ID::Ty,
-        clock: T,
+        time: T,
     ) -> Self {
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
@@ -124,10 +117,7 @@ where
             state: Arc::new(crossbeam_utils::CachePadded::new(Mutex::new(id))),
             #[cfg(not(feature = "cache"))]
             state: Arc::new(Mutex::new(id)),
-            #[cfg(feature = "cache")]
-            time: crossbeam_utils::CachePadded::new(clock),
-            #[cfg(not(feature = "cache"))]
-            time: clock,
+            time,
         }
     }
 
@@ -135,7 +125,7 @@ where
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
     /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// clock has not advanced), it returns [`IdGenStatus::Pending`].
+    /// time has not advanced), it returns [`IdGenStatus::Pending`].
     ///
     /// # Panics
     /// Panics if the lock is poisoned. For explicitly fallible behavior, use
@@ -236,8 +226,8 @@ where
 {
     type Err = Error;
 
-    fn new(machine_id: ID::Ty, clock: T) -> Self {
-        Self::new(machine_id, clock)
+    fn new(machine_id: ID::Ty, time: T) -> Self {
+        Self::new(machine_id, time)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {

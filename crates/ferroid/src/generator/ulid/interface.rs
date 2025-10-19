@@ -11,7 +11,7 @@ where
     type Err: fmt::Debug;
 
     // Creates a new generator
-    fn new(clock: T, rng: R) -> Self;
+    fn new(time: T, rng: R) -> Self;
 
     /// Returns the next available ID
     fn next_id(&self) -> IdGenStatus<ID>;
