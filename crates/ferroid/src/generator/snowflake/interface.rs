@@ -10,7 +10,7 @@ where
     type Err: fmt::Debug;
 
     // Creates a new generator
-    fn new(machine_id: ID::Ty, clock: T) -> Self;
+    fn new(machine_id: ID::Ty, time: T) -> Self;
 
     /// Returns the next available ID
     fn next_id(&self) -> IdGenStatus<ID>;

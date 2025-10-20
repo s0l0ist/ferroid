@@ -11,24 +11,20 @@ use crate::Id;
 /// This allows non-blocking generation loops and clean backoff strategies.
 ///
 /// # Example
-///
 /// ```
-/// #[cfg(feature = "snowflake")]
-/// {
-///     use ferroid::{SnowflakeId, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+/// use ferroid::{SnowflakeId, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
 ///
-///     struct FixedTime;
-///     impl ferroid::TimeSource<u64> for FixedTime {
-///         fn current_millis(&self) -> u64 {
-///             1
-///         }
+/// struct FixedTime;
+/// impl ferroid::TimeSource<u64> for FixedTime {
+///     fn current_millis(&self) -> u64 {
+///         1
 ///     }
+/// }
 ///
-///     let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
-///     match generator.next_id() {
-///         IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
-///         IdGenStatus::Pending { yield_for } => println!("Back off until: {yield_for}"),
-///     }
+/// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
+/// match generator.next_id() {
+///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
+///     IdGenStatus::Pending { yield_for } => println!("Back off for: {yield_for}"),
 /// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

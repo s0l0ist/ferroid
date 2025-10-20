@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
+use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
 use core::marker::PhantomData;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -10,21 +10,21 @@ use tracing::instrument;
 /// probabiliy than it's monotonic counterpart.
 ///
 /// ## Features
-///
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
 /// - ✅ Time-ordered (not monotonically increasing, random per millisecond)
 ///
 /// ## Recommended When
-///
 /// - You're in a single or multi-threaded environment
 /// - You require purely random IDs (even within the same millisecond)
 ///
 /// ## See Also
 /// - [`BasicMonoUlidGenerator`]
 /// - [`LockMonoUlidGenerator`]
+/// - [`AtomicMonoUlidGenerator`]
 ///
 /// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
+/// [`AtomicMonoUlidGenerator`]: crate::AtomicMonoUlidGenerator
 /// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
 pub struct BasicUlidGenerator<ID, T, R>
 where
@@ -32,7 +32,7 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    clock: T,
+    time: T,
     rng: R,
     _id: PhantomData<ID>,
 }
@@ -47,7 +47,7 @@ where
     /// RNG.
     ///
     /// # Parameters
-    /// - `clock`: A [`TimeSource`] used to retrieve the current timestamp
+    /// - `time`: A [`TimeSource`] used to retrieve the current timestamp
     /// - `rng`: A [`RandSource`] used to generate random bits
     ///
     /// # Returns
@@ -56,26 +56,23 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
-    ///     
-    ///     let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    ///     let id: ULID = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///     }
+    /// };
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`RandSource`]: crate::RandSource
-    pub const fn new(clock: T, rng: R) -> Self {
+    pub const fn new(time: T, rng: R) -> Self {
         Self {
-            clock,
+            time,
             rng,
             _id: PhantomData,
         }
@@ -94,19 +91,16 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
-    ///     
-    ///     let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    ///     let id: ULID = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => std::thread::yield_now(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
+    ///     }
+    /// };
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
@@ -129,28 +123,25 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
     ///
-    ///     let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    ///     // Attempt to generate a new ID
-    ///     let id: ULID = loop {
-    ///         match generator.try_next_id() {
-    ///             Ok(IdGenStatus::Ready { id }) => break id,
-    ///             Ok(IdGenStatus::Pending { yield_for }) => {
-    ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///             }
-    ///             Err(_) => unreachable!(),
+    /// // Attempt to generate a new ID
+    /// let id: ULID = loop {
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => break id,
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///         }
-    ///     };
-    /// }
+    ///         Err(_) => unreachable!(),
+    ///     }
+    /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
         Ok(IdGenStatus::Ready {
-            id: ID::from_components(self.clock.current_millis(), self.rng.rand()),
+            id: ID::from_components(self.time.current_millis(), self.rng.rand()),
         })
     }
 }
@@ -163,8 +154,8 @@ where
 {
     type Err = core::convert::Infallible;
 
-    fn new(clock: T, rng: R) -> Self {
-        Self::new(clock, rng)
+    fn new(time: T, rng: R) -> Self {
+        Self::new(time, rng)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {

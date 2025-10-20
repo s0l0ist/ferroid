@@ -7,8 +7,9 @@ use alloc::sync::Arc;
 use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use std::collections::HashSet;
+use std::panic;
 use std::sync::Mutex;
-use std::thread::scope;
+use std::thread::{self, scope};
 
 struct MockTime {
     millis: u64,
@@ -339,4 +340,48 @@ fn atomic_generator_threaded_monotonic() {
     run_generator_monotonic_threaded(move || {
         AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock.clone())
     });
+}
+
+#[cfg(not(feature = "parking-lot"))]
+#[test]
+fn lock_is_poisoned_on_panic_std_mutex() {
+    // Arrange
+    let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+        LockSnowflakeGenerator::new(0u64.into(), MonotonicClock::default());
+
+    {
+        let state = Arc::clone(&generator.state);
+        let _ = thread::spawn(move || {
+            let _g = state.lock();
+            panic!("boom: poison the mutex");
+        })
+        .join();
+    }
+
+    let err = generator
+        .try_next_id()
+        .expect_err("expected an error after poison");
+    assert!(matches!(err, crate::Error::LockPoisoned(_)));
+}
+
+#[cfg(feature = "parking-lot")]
+#[test]
+#[should_panic]
+fn lock_is_poisoned_on_panic_parking_lot_mutex() {
+    // Arrange
+    let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+        LockSnowflakeGenerator::new(0u64.into(), MonotonicClock::default());
+
+    {
+        let state = Arc::clone(&generator.state);
+        let _ = thread::spawn(move || {
+            let _g = state.lock();
+            panic!("boom: poison the mutex");
+        })
+        .join();
+    }
+
+    generator
+        .try_next_id()
+        .expect_err("parking_lot::Mutex cannot be poisoned");
 }

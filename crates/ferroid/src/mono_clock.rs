@@ -1,11 +1,9 @@
 use crate::{TimeSource, UNIX_EPOCH};
 use alloc::sync::Arc;
 use core::time::Duration;
+use portable_atomic::{AtomicU64, Ordering};
 use std::{
-    sync::{
-        OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::OnceLock,
     thread::{self, JoinHandle},
     time::{Instant, SystemTime},
 };
@@ -62,7 +60,6 @@ impl MonotonicClock {
     /// - `epoch`: The origin timestamp, as a [`Duration`] since 1970-01-01 UTC.
     ///
     /// # Example
-    ///
     /// ```
     /// use std::time::{Duration, Instant};
     /// use ferroid::{MonotonicClock, TimeSource};

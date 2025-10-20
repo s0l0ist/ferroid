@@ -46,13 +46,14 @@ and parsing **Snowflake** and **ULID** identifiers.
 | -------------------------- | --------- | ----------- | --------- | ---------- | --------------------------------------- |
 | `BasicSnowflakeGenerator`  | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
 | `LockSnowflakeGenerator`   | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
-| `AtomicSnowflakeGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation (less fair)  |
+| `AtomicSnowflakeGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation              |
 
-| Ulid Generator           | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
-| ------------------------ | --------- | ----------- | --------- | ---------- | --------------------------------------- |
-| `BasicUlidGenerator`     | ❌        | ✅          | ❌        | Slow       | Thread-safe, always random, but slow    |
-| `BasicMonoUlidGenerator` | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
-| `LockMonoUlidGenerator`  | ✅        | ✅          | ❌        | High       | Fair multithreaded access               |
+| Ulid Generator            | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
+| ------------------------- | --------- | ----------- | --------- | ---------- | --------------------------------------- |
+| `BasicUlidGenerator`      | ❌        | ✅          | ❌        | Slow       | Thread-safe, always random, but slow    |
+| `BasicMonoUlidGenerator`  | ✅        | ❌          | ❌        | Highest    | Single-threaded or generator per thread |
+| `LockMonoUlidGenerator`   | ✅        | ✅          | ❌        | Medium     | Fair multithreaded access               |
+| `AtomicMonoUlidGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation              |
 
 ## 🚀 Usage
 
@@ -62,16 +63,13 @@ The simplest way to generate a ULID is via `Ulid`, which provides a thread-local
 generator that can produce both non-monotonic and monotonic ULIDs:
 
 ```rust
-#[cfg(all(feature = "ulid", feature = "thread_local"))]
-{
-    use ferroid::{ULID, Ulid};
+use ferroid::{ULID, Ulid};
 
-    // A ULID (slower, always random within the same millisecond)
-    let id: ULID = Ulid::new_ulid();
+// A ULID (slower, always random within the same millisecond)
+let id: ULID = Ulid::new_ulid();
 
-    // A monotonic ULID (faster, increments within the same millisecond)
-    let id: ULID = Ulid::new_mono_ulid();
-}
+// A monotonic ULID (faster, increments within the same millisecond)
+let id: ULID = Ulid::new_mono_ulid();
 ```
 
 Thread-local generators are not currently available for `SnowflakeId`-style IDs
@@ -96,33 +94,25 @@ stack-allocated buffer and avoids heap allocation by default. To enable
 `.to_string()` and other owned string functionality, enable the `alloc` feature.
 
 ```rust
-#[cfg(all(feature = "base32", feature = "snowflake"))]
-{
-    use ferroid::{Base32SnowExt, Base32SnowFormatter, SnowflakeId, SnowflakeTwitterId};
-    use core::str::FromStr;
+use core::str::FromStr;
+use ferroid::{
+    Base32SnowExt, Base32SnowFormatter, Base32UlidExt, Base32UlidFormatter, SnowflakeId,
+    SnowflakeTwitterId, UlidId, ULID,
+};
 
-    let id = SnowflakeTwitterId::from(123_456, 0, 42);
+let id = SnowflakeTwitterId::from(123_456, 0, 42);
+assert_eq!(format!("{id}"), "00000F280001A");
+assert_eq!(id.encode(), "00000F280001A");
+assert_eq!(SnowflakeTwitterId::decode("00000F280001A").unwrap(), id);
+assert_eq!(SnowflakeTwitterId::try_from("00000F280001A").unwrap(), id);
+assert_eq!(SnowflakeTwitterId::from_str("00000F280001A").unwrap(), id);
 
-    assert_eq!(format!("{id}"), "00000F280001A");
-    assert_eq!(id.encode(), "00000F280001A");
-    assert_eq!(SnowflakeTwitterId::decode("00000F280001A").unwrap(), id);
-    assert_eq!(SnowflakeTwitterId::try_from("00000F280001A").unwrap(), id);
-    assert_eq!(SnowflakeTwitterId::from_str("00000F280001A").unwrap(), id);
-}
-
-#[cfg(all(feature = "base32", feature = "ulid"))]
-{
-    use ferroid::{Base32UlidExt, Base32UlidFormatter, UlidId, ULID};
-    use core::str::FromStr;
-
-    let id = ULID::from(123_456, 42);
-
-    assert_eq!(format!("{id}"), "0000003RJ0000000000000001A");
-    assert_eq!(id.encode(), "0000003RJ0000000000000001A");
-    assert_eq!(ULID::decode("0000003RJ0000000000000001A").unwrap(), id);
-    assert_eq!(ULID::try_from("0000003RJ0000000000000001A").unwrap(), id);
-    assert_eq!(ULID::from_str("0000003RJ0000000000000001A").unwrap(), id);
-}
+let id = ULID::from(123_456, 42);
+assert_eq!(format!("{id}"), "0000003RJ0000000000000001A");
+assert_eq!(id.encode(), "0000003RJ0000000000000001A");
+assert_eq!(ULID::decode("0000003RJ0000000000000001A").unwrap(), id);
+assert_eq!(ULID::try_from("0000003RJ0000000000000001A").unwrap(), id);
+assert_eq!(ULID::from_str("0000003RJ0000000000000001A").unwrap(), id);
 ```
 
 ⚠️ Decoding and Overflow: ULID Spec vs. Ferroid
@@ -186,16 +176,13 @@ use `TWITTER_EPOCH`, which begins at **Thursday, November 4, 2010, 01:42:54.657
 UTC** (millisecond zero).
 
 ```rust
-#[cfg(all(feature = "std", feature = "alloc"))]
-{
-    use ferroid::{MonotonicClock, UNIX_EPOCH};
+use ferroid::{MonotonicClock, UNIX_EPOCH};
 
-    // Same as MonotonicClock::default();
-    let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
+// Same as MonotonicClock::default();
+let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
 
-    // let generator0 = BasicSnowflakeGenerator::new(0, clock.clone());
-    // let generator1 = BasicSnowflakeGenerator::new(1, clock.clone());
-}
+// let generator0 = BasicSnowflakeGenerator::new(0, clock.clone());
+// let generator1 = BasicSnowflakeGenerator::new(1, clock.clone());
 ```
 
 #### Synchronous Generators
@@ -206,47 +193,42 @@ you must be generating enough IDs **per millisecond** to draw out the `Pending`
 path. You may spin, yield, or sleep depending on your environment:
 
 ```rust
-#[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
-{
-    use ferroid::{MonotonicClock, IdGenStatus, TWITTER_EPOCH, BasicSnowflakeGenerator, SnowflakeTwitterId};
+use ferroid::{
+    BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus,
+    MonotonicClock, SnowflakeTwitterId, ThreadRandom, TWITTER_EPOCH, ULID,
+};
 
-    let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+let snow_gne = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
 
-    let id: SnowflakeTwitterId = loop {
-        match generator.next_id() {
-            IdGenStatus::Ready { id } => break id,
-            IdGenStatus::Pending { yield_for } => {
-                println!("Exhausted; wait for: {}ms", yield_for);
-                core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
-                // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
-                // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
-                //
-                // For non-blocking ID generation, use the async API (see below).
-            }
+let id: SnowflakeTwitterId = loop {
+    match snow_gne.next_id() {
+        IdGenStatus::Ready { id } => break id,
+        IdGenStatus::Pending { yield_for } => {
+            println!("Exhausted; wait for: {}ms", yield_for);
+            core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
+                                        // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
+                                        // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
+                                        //
+                                        // For non-blocking ID generation, use the async API (see below).
         }
-    };
-}
+    }
+};
 
-#[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
-{
-    use ferroid::{MonotonicClock, IdGenStatus, ThreadRandom, BasicUlidGenerator, ULID};
+let ulid_gen = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
 
-    let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-
-    let id: ULID = loop {
-        match generator.next_id() {
-            IdGenStatus::Ready { id } => break id,
-            IdGenStatus::Pending { yield_for } => {
-                println!("Exhausted; wait for: {}ms", yield_for);
-                core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
-                // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
-                // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
-                //
-                // For non-blocking ID generation, use the async API (see below).
-            }
+let id: ULID = loop {
+    match ulid_gen.next_id() {
+        IdGenStatus::Ready { id } => break id,
+        IdGenStatus::Pending { yield_for } => {
+            println!("Exhausted; wait for: {}ms", yield_for);
+            core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
+                                        // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
+                                        // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
+                                        //
+                                        // For non-blocking ID generation, use the async API (see below).
         }
-    };
-}
+    }
+};
 ```
 
 #### Asynchronous Generators
@@ -265,72 +247,41 @@ slightly due to OS or executor timing precision, potentially reducing peak
 throughput.
 
 ```rust
-#[cfg(feature = "async-tokio")]
-{
-    use ferroid::{Result, MonotonicClock, MASTODON_EPOCH, UNIX_EPOCH};
+use ferroid::{
+    BasicSnowflakeGenerator, BasicUlidGenerator, MonotonicClock, Result,
+    SnowflakeGeneratorAsyncTokioExt, SnowflakeMastodonId, ThreadRandom, UlidGeneratorAsyncTokioExt,
+    MASTODON_EPOCH, ULID, UNIX_EPOCH,
+};
 
-    #[tokio::main]
-    async fn main() -> Result<()> {
-        #[cfg(feature = "snowflake")]
-        {
-            use ferroid::{
-                BasicSnowflakeGenerator, SnowflakeMastodonId,
-                SnowflakeGeneratorAsyncTokioExt
-            };
+async fn run() -> Result<()> {
+    let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
+    let id: SnowflakeMastodonId = snow_gen.try_next_id_async().await?;
+    println!("Generated ID: {}", id);
 
-            let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
-
-            let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
-            println!("Generated ID: {}", id);
-        }
-
-        #[cfg(feature = "ulid")]
-        {
-            use ferroid::{ThreadRandom, UlidGeneratorAsyncTokioExt, BasicUlidGenerator, ULID};
-
-            let generator = BasicUlidGenerator::new(MonotonicClock::with_epoch(UNIX_EPOCH), ThreadRandom::default());
-
-            let id: ULID = generator.try_next_id_async().await?;
-            println!("Generated ID: {}", id);
-        }
-        Ok(())
-    }
-    main().expect("failed to run")
+    let ulid_gen = BasicUlidGenerator::new(
+        MonotonicClock::with_epoch(UNIX_EPOCH),
+        ThreadRandom::default(),
+    );
+    let id: ULID = ulid_gen.try_next_id_async().await?;
+    println!("Generated ID: {}", id);
+    Ok(())
 }
 
-#[cfg(feature = "async-smol")]
-{
-    use ferroid::{Result, MonotonicClock};
+fn async_tokio_main() -> Result<()> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build Tokio runtime")
+        .block_on(run())
+}
 
-    fn main() -> Result<()> {
-        smol::block_on(async {
-            #[cfg(feature = "snowflake")]
-            {
-                use ferroid::{
-                    BasicSnowflakeGenerator, SnowflakeMastodonId,
-                    SnowflakeGeneratorAsyncSmolExt, MASTODON_EPOCH
-                };
+fn async_smol_main() -> Result<()> {
+    smol::block_on(run())
+}
 
-                let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
-
-                let id: SnowflakeMastodonId = generator.try_next_id_async().await?;
-                println!("Generated ID: {}", id);
-            }
-
-            #[cfg(feature = "ulid")]
-            {
-                use ferroid::{ThreadRandom, UlidGeneratorAsyncSmolExt, BasicUlidGenerator, ULID, UNIX_EPOCH};
-
-                let generator = BasicUlidGenerator::new(MonotonicClock::with_epoch(UNIX_EPOCH), ThreadRandom::default());
-
-                let id: ULID = generator.try_next_id_async().await?;
-                println!("Generated ID: {}", id);
-            }
-
-            Ok(())
-        })
-    }
-    main().expect("failed to run")
+fn main() {
+    async_tokio_main().expect("tokio failed to run");
+    async_smol_main().expect("smol failed to run");
 }
 ```
 
@@ -345,48 +296,40 @@ or `ULID`, with no extra setup required and full compatibility with the existing
 API.
 
 ```rust
-#[cfg(feature = "snowflake")]
-{
-    use ferroid::{define_snowflake_id};
+use ferroid::{define_snowflake_id, define_ulid};
 
-    // Example: a 64-bit Twitter-like ID layout
-    //
-    //  Bit Index:  63           63 62            22 21             12 11             0
-    //              +--------------+----------------+-----------------+---------------+
-    //  Field:      | reserved (1) | timestamp (41) | machine ID (10) | sequence (12) |
-    //              +--------------+----------------+-----------------+---------------+
-    //              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
-    define_snowflake_id!(
-        MyCustomId, u64,
-        reserved: 1,
-        timestamp: 41,
-        machine_id: 10,
-        sequence: 12
-    );
-}
+// Example: a 64-bit Twitter-like ID layout
+//
+//  Bit Index:  63           63 62            22 21             12 11             0
+//              +--------------+----------------+-----------------+---------------+
+//  Field:      | reserved (1) | timestamp (41) | machine ID (10) | sequence (12) |
+//              +--------------+----------------+-----------------+---------------+
+//              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
+define_snowflake_id!(
+    MyCustomId, u64,
+    reserved: 1,
+    timestamp: 41,
+    machine_id: 10,
+    sequence: 12
+);
 
-#[cfg(feature = "ulid")]
-{
-    use ferroid::define_ulid;
-
-    // Example: a 128-bit ULID using the Ulid layout
-    //
-    // - 0 bits reserved
-    // - 48 bits timestamp
-    // - 80 bits random
-    //
-    //  Bit Index:  127            80 79           0
-    //              +----------------+-------------+
-    //  Field:      | timestamp (48) | random (80) |
-    //              +----------------+-------------+
-    //              |<-- MSB -- 128 bits -- LSB -->|
-    define_ulid!(
-        MyULID, u128,
-        reserved: 0,
-        timestamp: 48,
-        random: 80
-    );
-}
+// Example: a 128-bit ULID using the Ulid layout
+//
+// - 0 bits reserved
+// - 48 bits timestamp
+// - 80 bits random
+//
+//  Bit Index:  127            80 79           0
+//              +----------------+-------------+
+//  Field:      | timestamp (48) | random (80) |
+//              +----------------+-------------+
+//              |<-- MSB -- 128 bits -- LSB -->|
+define_ulid!(
+    MyULID, u128,
+    reserved: 0,
+    timestamp: 48,
+    random: 80
+);
 ```
 
 ⚠️ Note: When using the snowflake macro, you must specify all four sections (in
@@ -397,6 +340,49 @@ The reserved bits are always set to **zero** and can be reserved for future use.
 
 Similarly, the ulid macro requires all three fields: `reserved`, `timestamp`,
 and `random`.
+
+### Feature flags
+
+Ferroid has many features flags to enable only what you need. You should
+determine your runtime and pick at least one ID family and generator style:
+
+- Determine your runtime: `std` (+ `alloc`), `no_std`, or `no_std` + `alloc`
+- ID family: `snowflake` or `ulid` (or `thread-local` ULID generator)
+- Generator: `basic`, `lock`, or `atomic`
+
+Prefer `basic` or `atomic` generators. `lock` is a fallback for targets without
+viable atomics. `cache-padded` and `parking-lot` only matter for lock-based
+generators.
+
+In `no_std`, you're currently limited to using the `basic` and `atomic`
+generators provided the target platform supports the correct atomic widths for
+`snowflake` (`AtomicU64`), or `ulid` (`AtomicU128`). You also must create your
+own implementation of `TimeSource<T>` for the generator(s). `base32` is also
+supported.
+
+- `all`: Enables all functionality (except optimizing `cache-padded`,
+  `parking-lot`).
+- `std`: Required for `MonotonicClock`, the `thread-local` (`Ulid` generator),
+  and all lock-based generators.
+- `alloc`: Enables `ToString` and allocating String functions when `base32` is
+  also enabled.
+- `cache-padded`: Pads contended generators to reduce false sharing. Benchmark
+  to confirm benefit.
+- `parking-lot`: Use `parking_lot` mutexes for lock generators (implies `std`,
+  `alloc`).
+- `thread-local`: Per-thread ULID generator (implies `std`, `alloc`, `ulid`,
+  `basic`).
+- `snowflake`: Enable Snowflake ID generators.
+- `ulid`: Enable ULID ID generators.
+- `basic`: Enable basic (fast-path) generators.
+- `lock`: Enable lock-based generators (implies `std`, `alloc`).
+- `atomic`: Enable lock-free/atomic generators.
+- `async-tokio`: Async extensions for Tokio (implies `std`, `alloc`, `futures`).
+- `async-smol`: Async extensions for smol (implies `std`, `alloc`, `futures`).
+- `futures`: Internal glue for the async features.
+- `base32`: Crockford Base32 encode/decode support.
+- `tracing`: Emit tracing spans during ID generation.
+- `serde`: Not used.
 
 ### Behavior
 
@@ -535,35 +521,38 @@ efficiency).
 
 | Generator                  | Time per ID  | Throughput    |
 | -------------------------- | ------------ | ------------- |
-| `BasicSnowflakeGenerator`  | **~2.8 ns**  | ~353M IDs/sec |
-| `LockSnowflakeGenerator`   | **~8.9 ns**  | ~111M IDs/sec |
-| `AtomicSnowflakeGenerator` | **~3.1 ns**  | ~320M IDs/sec |
-| `BasicUlidGenerator`       | **~20.4 ns** | ~44M IDs/sec  |
-| `BasicMonoUlidGenerator`   | **~3.4 ns**  | ~288M IDs/sec |
-| `LockMonoUlidGenerator`    | **~9.2 ns**  | ~109M IDs/sec |
+| `BasicSnowflakeGenerator`  | **~2.2 ns**  | ~450M IDs/sec |
+| `LockSnowflakeGenerator`   | **~8.5 ns**  | ~118M IDs/sec |
+| `AtomicSnowflakeGenerator` | **~3.4 ns**  | ~297M IDs/sec |
+| `BasicUlidGenerator`       | **~21.7 ns** | ~46M IDs/sec  |
+| `BasicMonoUlidGenerator`   | **~3.6 ns**  | ~281M IDs/sec |
+| `LockMonoUlidGenerator`    | **~8.5 ns**  | ~118M IDs/sec |
+| `AtomicMonoUlidGenerator`  | **~5.1 ns**  | ~194M IDs/sec |
 
 #### Thread Local Generators
 
-| Generator             | Time per ID | Throughput     |
-| --------------------- | ----------- | -------------- |
-| `Ulid::new_ulid`      | **~24 ns**  | ~41.7M IDs/sec |
-| `Ulid::new_mono_ulid` | **~5.6 ns** | ~178M IDs/sec  |
+| Generator             | Time per ID  | Throughput     |
+| --------------------- | ------------ | -------------- |
+| `Ulid::new_ulid`      | **~23.5 ns** | ~42.6M IDs/sec |
+| `Ulid::new_mono_ulid` | **~5.1 ns**  | ~195M IDs/sec  |
 
 #### Async (Tokio Runtime) - Peak throughput
 
 | Generator                  | Generators | Time per ID  | Throughput     |
 | -------------------------- | ---------- | ------------ | -------------- |
-| `LockSnowflakeGenerator`   | 1024       | **~1.46 ns** | ~687M IDs/sec  |
-| `AtomicSnowflakeGenerator` | 1024       | **~0.86 ns** | ~1.17B IDs/sec |
-| `LockMonoUlidGenerator`    | 1024       | **~1.57 ns** | ~635M IDs/sec  |
+| `LockSnowflakeGenerator`   | 1024       | **~1.24 ns** | ~804M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.82 ns** | ~1.22B IDs/sec |
+| `LockMonoUlidGenerator`    | 1024       | **~1.17 ns** | ~855M IDs/sec  |
+| `AtomicMonoUlidGenerator`  | 1024       | **~1.02 ns** | ~983M IDs/sec  |
 
 #### Async (Smol Runtime) - Peak throughput
 
 | Generator                  | Generators | Time per ID  | Throughput     |
 | -------------------------- | ---------- | ------------ | -------------- |
-| `LockSnowflakeGenerator`   | 1024       | **~1.40 ns** | ~710M IDs/sec  |
-| `AtomicSnowflakeGenerator` | 1024       | **~0.62 ns** | ~1.61B IDs/sec |
-| `LockMonoUlidGenerator`    | 1024       | **~1.32 ns** | ~756M IDs/sec  |
+| `LockSnowflakeGenerator`   | 1024       | **~1.26 ns** | ~791M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.77 ns** | ~1.31B IDs/sec |
+| `LockMonoUlidGenerator`    | 1024       | **~1.16 ns** | ~859M IDs/sec  |
+| `AtomicMonoUlidGenerator`  | 1024       | **~0.97 ns** | ~1.03B IDs/sec |
 
 To run all benchmarks:
 
@@ -576,7 +565,7 @@ cargo criterion --all-features
 Run all tests with:
 
 ```sh
-cargo test --all-features
+cargo test --features all
 ```
 
 ## 📄 License

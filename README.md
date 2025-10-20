@@ -28,6 +28,7 @@ The core library provides:
   - `BasicUlidGenerator`: thread-safe, high-entropy ULID generation
   - `BasicMonoUlidGenerator`: single-threaded, monotonic, high-entropy ULID generation
   - `LockMonoUlidGenerator`: multi-threaded, monotonic, high-entropy ULID generation
+  - `AtomicMonoUlidGenerator`: multi-threaded, monotonic, high-entropy ULID generation, lock-free
 
 - **Async Support**: Integrates with `tokio` and `smol`
 - **Encoding Support**: Crockford base32 encoding/decoding for compact, sortable
@@ -69,7 +70,7 @@ cargo run -p ferroid-tonic-server --features tracing
 Run all tests
 
 ```bash
-cargo test --all-features
+cargo test --features all
 ```
 
 Run all benchmarks

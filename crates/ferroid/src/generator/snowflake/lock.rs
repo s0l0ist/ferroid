@@ -1,7 +1,6 @@
-use crate::{Error, IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
+use crate::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
-use std::sync::Mutex;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -12,13 +11,13 @@ use tracing::instrument;
 /// safe shared use across threads.
 ///
 /// ## Features
-///
 /// - ✅ Thread-safe
 /// - ✅ Safely implement any [`SnowflakeId`] layout
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
 /// - Fair access across threads is important
+/// - Your target doesn't support atomics.
 ///
 /// ## See Also
 /// - [`BasicSnowflakeGenerator`]
@@ -31,8 +30,11 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    state: Arc<Mutex<ID>>,
-    time: T,
+    #[cfg(feature = "cache-padded")]
+    pub(crate) state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
+    #[cfg(not(feature = "cache-padded"))]
+    pub(crate) state: Arc<Mutex<ID>>,
+    pub(crate) time: T,
 }
 
 impl<ID, T> LockSnowflakeGenerator<ID, T>
@@ -44,7 +46,7 @@ where
     /// time and a given machine ID.
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
-    /// uses the provided `clock` to fetch the current time during ID
+    /// uses the provided `time` to fetch the current time during ID
     /// generation. It is the recommended way to create a new atomic generator
     /// for typical use cases.
     ///
@@ -52,7 +54,7 @@ where
     ///
     /// - `machine_id`: A unique identifier for the node or instance generating
     ///   IDs. This value will be encoded into every generated ID.
-    /// - `clock`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
+    /// - `time`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
     ///   that determines how timestamps are generated.
     ///
     /// # Returns
@@ -61,27 +63,23 @@ where
     /// IDs.
     ///
     /// # Example
-    ///
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
-    /// {
-    ///     use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
-    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
-    ///     let id: SnowflakeTwitterId = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///
+    /// let id: SnowflakeTwitterId = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///     }
+    /// };
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
     /// [`MonotonicClock`]: crate::MonotonicClock
-    pub fn new(machine_id: ID::Ty, clock: T) -> Self {
-        Self::from_components(ID::ZERO, machine_id, ID::ZERO, clock)
+    pub fn new(machine_id: ID::Ty, time: T) -> Self {
+        Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
     }
 
     /// Creates a new ID generator from explicit component values.
@@ -94,7 +92,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `clock`: A [`TimeSource`] implementation used to fetch the current
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current
     ///   time
     ///
     /// # Returns
@@ -107,12 +105,15 @@ where
         timestamp: ID::Ty,
         machine_id: ID::Ty,
         sequence: ID::Ty,
-        clock: T,
+        time: T,
     ) -> Self {
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
+            #[cfg(feature = "cache-padded")]
+            state: Arc::new(crossbeam_utils::CachePadded::new(Mutex::new(id))),
+            #[cfg(not(feature = "cache-padded"))]
             state: Arc::new(Mutex::new(id)),
-            time: clock,
+            time,
         }
     }
 
@@ -120,7 +121,7 @@ where
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
     /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// clock has not advanced), it returns [`IdGenStatus::Pending`].
+    /// time has not advanced), it returns [`IdGenStatus::Pending`].
     ///
     /// # Panics
     /// Panics if the lock is poisoned. For explicitly fallible behavior, use
@@ -128,19 +129,16 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
-    /// {
-    ///     use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
-    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
-    ///     let id: SnowflakeTwitterId = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => std::thread::yield_now(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///
+    /// let id: SnowflakeTwitterId = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
+    ///     }
+    /// };
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
@@ -165,51 +163,54 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
-    /// {
-    ///     use ferroid::{LockSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
-    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// use ferroid::{LockSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
-    ///     // Attempt to generate a new ID
-    ///     let id: SnowflakeTwitterId = loop {
-    ///         match generator.try_next_id() {
-    ///             Ok(IdGenStatus::Ready { id }) => break id,
-    ///             Ok(IdGenStatus::Pending { yield_for }) => {
-    ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///             }
-    ///             Err(e) => panic!("Generator error: {}", e),
+    /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///
+    /// // Attempt to generate a new ID
+    /// let id: SnowflakeTwitterId = loop {
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => break id,
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///         }
-    ///     };
-    /// }
+    ///         Err(e) => panic!("Generator error: {}", e),
+    ///     }
+    /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
         let now = self.time.current_millis();
-        let mut id = self.state.lock()?;
-        let current_ts = id.timestamp();
 
-        let status = match now.cmp(&current_ts) {
-            Ordering::Less => {
-                let yield_for = current_ts - now;
-                debug_assert!(yield_for >= ID::ZERO);
-                IdGenStatus::Pending { yield_for }
-            }
-            Ordering::Greater => {
-                *id = id.rollover_to_timestamp(now);
-                IdGenStatus::Ready { id: *id }
-            }
+        #[cfg(feature = "parking-lot")]
+        let mut id = self.state.lock();
+        #[cfg(not(feature = "parking-lot"))]
+        let mut id = self.state.lock()?;
+
+        let current_ts = id.timestamp();
+        match now.cmp(&current_ts) {
             Ordering::Equal => {
                 if id.has_sequence_room() {
                     *id = id.increment_sequence();
-                    IdGenStatus::Ready { id: *id }
+                    Ok(IdGenStatus::Ready { id: *id })
                 } else {
-                    IdGenStatus::Pending { yield_for: ID::ONE }
+                    Ok(IdGenStatus::Pending { yield_for: ID::ONE })
                 }
             }
-        };
+            Ordering::Greater => {
+                *id = id.rollover_to_timestamp(now);
+                Ok(IdGenStatus::Ready { id: *id })
+            }
+            Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
+        }
+    }
 
-        Ok(status)
+    #[cold]
+    #[inline(never)]
+    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> IdGenStatus<ID> {
+        let yield_for = current_ts - now;
+        debug_assert!(yield_for >= ID::ZERO);
+        IdGenStatus::Pending { yield_for }
     }
 }
 
@@ -220,8 +221,8 @@ where
 {
     type Err = Error;
 
-    fn new(machine_id: ID::Ty, clock: T) -> Self {
-        Self::new(machine_id, clock)
+    fn new(machine_id: ID::Ty, time: T) -> Self {
+        Self::new(machine_id, time)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {

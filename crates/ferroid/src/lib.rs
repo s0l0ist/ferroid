@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![no_std]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -17,6 +18,8 @@ mod generator;
 mod id;
 #[cfg(all(feature = "std", feature = "alloc"))]
 mod mono_clock;
+#[cfg(feature = "std")]
+mod mutex;
 mod rand;
 #[cfg(any(feature = "async-tokio", feature = "async-smol"))]
 mod runtime;
@@ -42,3 +45,5 @@ pub use crate::status::*;
 #[cfg(feature = "std")]
 pub use crate::thread_random::*;
 pub use crate::time::*;
+#[cfg(feature = "std")]
+pub use mutex::*;

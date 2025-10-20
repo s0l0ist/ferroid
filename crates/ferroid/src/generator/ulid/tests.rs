@@ -1,6 +1,7 @@
 use crate::{
-    BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus, LockMonoUlidGenerator,
-    MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64, ULID, UlidGenerator, UlidId,
+    AtomicMonoUlidGenerator, BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus,
+    LockMonoUlidGenerator, MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64,
+    UlidGenerator, UlidId, ULID,
 };
 use alloc::rc::Rc;
 use alloc::sync::Arc;
@@ -260,6 +261,16 @@ fn lock_generator_mono_sequence_test() {
 }
 
 #[test]
+fn atomic_generator_mono_sequence_test() {
+    let mock_time = MockTime { millis: 42 };
+    let mock_rand = MockRand { rand: 42 };
+
+    let generator: AtomicMonoUlidGenerator<ULID, _, _> =
+        AtomicMonoUlidGenerator::new(mock_time, mock_rand);
+    run_id_sequence_increments_within_same_tick(&generator);
+}
+
+#[test]
 fn basic_generator_mono_pending_test() {
     let generator: BasicMonoUlidGenerator<ULID, _, _> =
         BasicMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
@@ -270,6 +281,13 @@ fn basic_generator_mono_pending_test() {
 fn lock_generator_mono_pending_test() {
     let generator: LockMonoUlidGenerator<ULID, _, _> =
         LockMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
+    run_generator_returns_pending_when_sequence_exhausted(&generator);
+}
+
+#[test]
+fn atomic_generator_mono_pending_test() {
+    let generator: AtomicMonoUlidGenerator<ULID, _, _> =
+        AtomicMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
     run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
@@ -290,6 +308,14 @@ fn lock_generator_mono_rollover_test() {
 }
 
 #[test]
+fn atomic_generator_mono_rollover_test() {
+    let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
+    let generator: AtomicMonoUlidGenerator<ULID, _, _> =
+        AtomicMonoUlidGenerator::new(shared_time.clone(), MaxRand);
+    run_generator_handles_rollover(&generator, &shared_time);
+}
+
+#[test]
 fn basic_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
@@ -306,10 +332,27 @@ fn lock_generator_monotonic_clock_random_increments() {
 }
 
 #[test]
+fn atomic_generator_monotonic_clock_random_increments() {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom;
+    let generator: AtomicMonoUlidGenerator<ULID, _, _> = AtomicMonoUlidGenerator::new(clock, rand);
+    run_generator_monotonic(&generator);
+}
+
+#[test]
 fn lock_generator_threaded_monotonic() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
     run_generator_monotonic_threaded(move || {
         LockMonoUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
+    });
+}
+
+#[test]
+fn atomic_generator_threaded_monotonic() {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom;
+    run_generator_monotonic_threaded(move || {
+        AtomicMonoUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
     });
 }

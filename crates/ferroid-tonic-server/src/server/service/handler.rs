@@ -31,10 +31,8 @@ use ferroid_tonic_core::{
     Error,
 };
 use futures::TryStreamExt;
-use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
-    Arc,
-};
+use portable_atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::{wrappers::ReceiverStream, Stream};
 use tokio_util::sync::CancellationToken;

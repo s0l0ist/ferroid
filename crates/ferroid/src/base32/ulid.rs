@@ -32,20 +32,16 @@ where
     /// buffer that implements [`core::fmt::Display`] and [`AsRef<str>`].
     ///
     /// # Example
-    ///
     /// ```
-    /// #[cfg(all(feature = "base32", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{Base32UlidExt, ULID};
-    ///     use std::fmt::Write;
+    /// use ferroid::{Base32UlidExt, ULID};
+    /// use std::fmt::Write;
     ///
-    ///     let id = ULID::from_raw(2_424_242_424_242_424_242);
+    /// let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
-    ///     // Formatter is a view over the internal encoded buffer
-    ///     let formatter = id.encode();
+    /// // Formatter is a view over the internal encoded buffer
+    /// let formatter = id.encode();
     ///
-    ///     assert_eq!(formatter, "000000000000023953MG16DJDJ");
-    /// }
+    /// assert_eq!(formatter, "000000000000023953MG16DJDJ");
     /// ```
     fn encode(&self) -> Base32UlidFormatter<Self> {
         Base32UlidFormatter::new(self)
@@ -58,26 +54,22 @@ where
     /// guaranteed at compile time when using [`Base32UlidExt::buf`].
     ///
     /// # Example
-    ///
     /// ```
-    /// #[cfg(all(feature = "base32", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{Base32UlidExt, BeBytes, Id, ULID};
+    /// use ferroid::{Base32UlidExt, BeBytes, Id, ULID};
     ///
-    ///     let id = ULID::from_raw(2_424_242_424_242_424_242);
+    /// let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
-    ///     // Stack-allocated buffer of the correct size.
-    ///     let mut buf = ULID::buf();
+    /// // Stack-allocated buffer of the correct size.
+    /// let mut buf = ULID::buf();
     ///
-    ///     // Formatter is a view over the external buffer
-    ///     let formatter = id.encode_to_buf(&mut buf);
+    /// // Formatter is a view over the external buffer
+    /// let formatter = id.encode_to_buf(&mut buf);
     ///
-    ///     assert_eq!(formatter, "000000000000023953MG16DJDJ");
+    /// assert_eq!(formatter, "000000000000023953MG16DJDJ");
     ///
-    ///     // Or access the raw bytes directly:
-    ///     let as_str = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
-    ///     assert_eq!(as_str, "000000000000023953MG16DJDJ");
-    /// }
+    /// // Or access the raw bytes directly:
+    /// let as_str = unsafe { core::str::from_utf8_unchecked(buf.as_ref()) };
+    /// assert_eq!(as_str, "000000000000023953MG16DJDJ");
     /// ```
     ///
     /// See also: [`Base32UlidExt::encode`] for a version that manages its own
@@ -119,37 +111,32 @@ where
     ///   type
     ///
     /// # Example
-    ///
     /// ```
-    /// #[cfg(all(feature = "base32", feature = "ulid"))]
-    /// {
-    ///    use ferroid::{Base32Error, Base32UlidExt, Error, Id, ULID, UlidId};
+    /// use ferroid::{Base32Error, Base32UlidExt, Error, Id, ULID, UlidId};
     ///
-    ///    // Crockford Base32 encodes values in 5-bit chunks, so encoding a u128 (128
-    ///    // bits) requires 26 characters (26 × 5 = 130 bits). Since u128 can only hold
-    ///    // 128 bits, the highest 2 bits are discarded during decoding.
-    ///    //
-    ///    // This means *any* 26-character Base32 string will decode into a u128, even
-    ///    // if it represents a value that exceeds the canonical range of a specific
-    ///    // ID type.
-    ///    //
-    ///    // Other ID formats may reserve one or more high bits for future use. These
-    ///    // reserved bits **must remain unset** for the decoded value to be
-    ///    // considered valid.
-    ///    //
-    ///    // For example, in a `ULID`, "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" represents the
-    ///    // largest lexicographically valid encoding that fills all 128 bits with
-    ///    // ones. Lexicographically larger values like "ZZZZZZZZZZZZZZZZZZZZZZZZZZ"
-    ///    // decode to the *same* ID because their first character differs only in the
-    ///    // highest bits (129th & 130th), which are discarded:
-    ///    // - '7' = 0b00111 → top bits 00, rest = 111...
-    ///    // - 'Z' = 0b11111 → top bits 11, rest = 111...
-    ///    //             ↑↑↑ identical after discarding MSBs
-    ///    let id1 = ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
-    ///    let id2 = ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
-    ///    assert_eq!(id1, id2);
-    ///
-    /// }
+    /// // Crockford Base32 encodes values in 5-bit chunks, so encoding a u128 (128
+    /// // bits) requires 26 characters (26 × 5 = 130 bits). Since u128 can only hold
+    /// // 128 bits, the highest 2 bits are discarded during decoding.
+    /// //
+    /// // This means *any* 26-character Base32 string will decode into a u128, even
+    /// // if it represents a value that exceeds the canonical range of a specific
+    /// // ID type.
+    /// //
+    /// // Other ID formats may reserve one or more high bits for future use. These
+    /// // reserved bits **must remain unset** for the decoded value to be
+    /// // considered valid.
+    /// //
+    /// // For example, in a `ULID`, "7ZZZZZZZZZZZZZZZZZZZZZZZZZ" represents the
+    /// // largest lexicographically valid encoding that fills all 128 bits with
+    /// // ones. Lexicographically larger values like "ZZZZZZZZZZZZZZZZZZZZZZZZZZ"
+    /// // decode to the *same* ID because their first character differs only in the
+    /// // highest bits (129th & 130th), which are discarded:
+    /// // - '7' = 0b00111 → top bits 00, rest = 111...
+    /// // - 'Z' = 0b11111 → top bits 11, rest = 111...
+    /// //             ↑↑↑ identical after discarding MSBs
+    /// let id1 = ULID::decode("7ZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
+    /// let id2 = ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
+    /// assert_eq!(id1, id2);
     /// ```
     fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;

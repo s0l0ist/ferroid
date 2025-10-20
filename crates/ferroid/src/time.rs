@@ -24,7 +24,6 @@ pub const MASTODON_EPOCH: Duration = UNIX_EPOCH;
 /// is expected to be **milliseconds** relative to a configurable origin.
 ///
 /// # Example
-///
 /// ```
 /// use ferroid::TimeSource;
 ///

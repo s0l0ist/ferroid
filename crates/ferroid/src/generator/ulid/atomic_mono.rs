@@ -1,79 +1,78 @@
-use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
-use core::{cmp, marker::PhantomData};
-use portable_atomic::{AtomicU64, Ordering};
+use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
+use core::cmp;
+use core::marker::PhantomData;
+use portable_atomic::{AtomicU128, Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
-/// A lock-free Snowflake ID generator suitable for multi-threaded environments.
+/// A lock-free *monotonic* ULID-style ID generator suitable for single-threaded
+/// environments.
 ///
-/// This generator stores the Snowflake state in an [`AtomicU64`], allowing safe
-/// shared use across threads.
+/// This generator stores the ULID in an [`AtomicU128`], allowing safe shared
+/// use across threads.
 ///
 /// ## Features
 /// - ✅ Thread-safe
-/// - ❌ Safely implement any [`SnowflakeId`] layout
+/// - ✅ Probabilistically unique (no coordination required)
+/// - ✅ Time-ordered (monotonically increasing per millisecond)
 ///
 /// ## Caveats
-/// This implementation uses an [`AtomicU64`] internally, so it only supports ID
-/// layouts where the underlying type is [`u64`]. You cannot use layouts with
-/// larger or smaller representations (i.e., `ID::Ty` must be [`u64`]).
+/// This implementation uses an [`AtomicU128`] internally, so it only supports
+/// ID layouts where the underlying type is [`u128`]. You cannot use layouts
+/// with larger or smaller representations (i.e., `ID::Ty` must be [`u128`]).
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
-/// - Fair access is sacrificed for higher throughput
+/// - You need require monotonically increasing IDs (ID generated within the
+///   same millisecond increment a sequence counter)
 ///
 /// ## See Also
-/// - [`BasicSnowflakeGenerator`]
-/// - [`LockSnowflakeGenerator`]
+/// - [`BasicUlidGenerator`]
+/// - [`BasicMonoUlidGenerator`]
+/// - [`LockMonoUlidGenerator`]
 ///
-/// [`BasicSnowflakeGenerator`]: crate::BasicSnowflakeGenerator
-/// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
-pub struct AtomicSnowflakeGenerator<ID, T>
+/// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
+/// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
+/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
+pub struct AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: SnowflakeId<Ty = u64>,
+    ID: UlidId<Ty = u128>,
     T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
 {
     #[cfg(feature = "cache-padded")]
-    state: crossbeam_utils::CachePadded<AtomicU64>,
+    state: crossbeam_utils::CachePadded<AtomicU128>,
     #[cfg(not(feature = "cache-padded"))]
-    state: AtomicU64,
+    state: AtomicU128,
     time: T,
-    machine_id: u64,
+    rng: R,
     _id: PhantomData<ID>,
 }
 
-impl<ID, T> AtomicSnowflakeGenerator<ID, T>
+impl<ID, T, R> AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: SnowflakeId<Ty = u64>,
+    ID: UlidId<Ty = u128>,
     T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`AtomicSnowflakeGenerator`] initialized with the current
-    /// time and a given machine ID.
-    ///
-    /// This constructor sets the initial timestamp and sequence to zero, and
-    /// uses the provided `time` to fetch the current time during ID
-    /// generation. It is the recommended way to create a new atomic generator
-    /// for typical use cases.
+    /// Creates a new [`AtomicMonoUlidGenerator`] with the provided time source
+    /// and RNG.
     ///
     /// # Parameters
-    ///
-    /// - `machine_id`: A unique identifier for the node or instance generating
-    ///   IDs. This value will be encoded into every generated ID.
-    /// - `time`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
-    ///   that determines how timestamps are generated.
+    /// - `time`: A [`TimeSource`] used to retrieve the current timestamp
+    /// - `rng`: A [`RandSource`] used to generate random bits
     ///
     /// # Returns
-    ///
-    /// A new [`AtomicSnowflakeGenerator`] ready to produce unique, time-ordered
+    /// A ready-to-use ULID generator suitable for producing unique, sortable
     /// IDs.
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
-    /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let id: SnowflakeTwitterId = loop {
+    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = loop {
     ///     match generator.next_id() {
     ///         IdGenStatus::Ready { id } => break id,
     ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
@@ -82,9 +81,9 @@ where
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
-    /// [`MonotonicClock`]: crate::MonotonicClock
-    pub fn new(machine_id: ID::Ty, time: T) -> Self {
-        Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
+    /// [`RandSource`]: crate::RandSource
+    pub fn new(time: T, rng: R) -> Self {
+        Self::from_components(ID::ZERO, ID::ZERO, time, rng)
     }
 
     /// Creates a new ID generator from explicit component values.
@@ -106,30 +105,24 @@ where
     /// # ⚠️ Note
     /// In typical use cases, you should prefer [`Self::new`] to let the
     /// generator initialize itself from the current time.
-    pub fn from_components(
-        timestamp: ID::Ty,
-        machine_id: ID::Ty,
-        sequence: ID::Ty,
-        time: T,
-    ) -> Self {
-        let initial = ID::from_components(timestamp, machine_id, sequence);
+    pub fn from_components(timestamp: ID::Ty, random: ID::Ty, time: T, rng: R) -> Self {
+        let id = ID::from_components(timestamp, random);
         Self {
             #[cfg(feature = "cache-padded")]
-            state: crossbeam_utils::CachePadded::new(AtomicU64::new(initial.to_raw())),
+            state: crossbeam_utils::CachePadded::new(AtomicU128::new(id.to_raw())),
             #[cfg(not(feature = "cache-padded"))]
-            state: AtomicU64::new(initial.to_raw()),
+            state: AtomicU128::new(id.to_raw()),
             time,
-            machine_id,
+            rng,
             _id: PhantomData,
         }
     }
 
-    /// Attempts to generate the next available ID.
+    /// Generates a new ULID.
     ///
-    /// Returns a new, time-ordered, unique ID if generation succeeds. If the
-    /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// time has not advanced, or CAS fails), it returns
-    /// [`IdGenStatus::Pending`].
+    /// Internally calls [`Self::try_next_id`] and unwraps the result. This
+    /// method will panic on error, so prefer the fallible version if you want
+    /// explicit control over error handling.
     ///
     /// # Panics
     /// This method currently has no fallible code paths, but may panic if an
@@ -138,11 +131,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    /// let id: SnowflakeTwitterId = loop {
+    /// let id: ULID = loop {
     ///     match generator.next_id() {
     ///         IdGenStatus::Ready { id } => break id,
     ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
@@ -153,13 +146,10 @@ where
         self.try_next_id().unwrap()
     }
 
-    /// A fallible version of [`Self::next_id`] that returns a [`Result`].
+    /// Attempts to generate a new ULID with fallible error handling.
     ///
-    /// This method attempts to generate the next ID based on the current time
-    /// and internal state. If successful, it returns [`IdGenStatus::Ready`]
-    /// with a newly generated ID. If the generator is temporarily exhausted or
-    /// CAS fails, it returns [`IdGenStatus::Pending`]. If an internal failure
-    /// occurs (e.g., a time source or lock error), it returns an error.
+    /// Combines the current timestamp with a freshly generated random value to
+    /// produce a unique identifier. Returns [`IdGenStatus::Ready`] on success.
     ///
     /// # Returns
     /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
@@ -173,12 +163,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
     ///
-    /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// // Attempt to generate a new ID
-    /// let id: SnowflakeTwitterId = loop {
+    /// let id: ULID = loop {
     ///     match generator.try_next_id() {
     ///         Ok(IdGenStatus::Ready { id }) => break id,
     ///         Ok(IdGenStatus::Pending { yield_for }) => {
@@ -196,21 +186,19 @@ where
         let current_id = ID::from_raw(current_raw);
         let current_ts = current_id.timestamp();
 
-        let (next_ts, next_seq) = match now.cmp(&current_ts) {
+        let (next_ts, next_rand) = match now.cmp(&current_ts) {
             cmp::Ordering::Equal => {
-                if current_id.has_sequence_room() {
-                    (current_ts, current_id.next_sequence())
+                if current_id.has_random_room() {
+                    (current_ts, current_id.next_random())
                 } else {
                     return Ok(IdGenStatus::Pending { yield_for: ID::ONE });
                 }
             }
-            cmp::Ordering::Greater => (now, ID::ZERO),
-            cmp::Ordering::Less => {
-                return Ok(Self::cold_clock_behind(now, current_ts));
-            }
+            cmp::Ordering::Greater => (now, self.rng.rand()),
+            cmp::Ordering::Less => return Ok(Self::cold_clock_behind(now, current_ts)),
         };
 
-        let next_id = ID::from_components(next_ts, self.machine_id, next_seq);
+        let next_id = ID::from_components(next_ts, next_rand);
         let next_raw = next_id.to_raw();
 
         if self
@@ -237,15 +225,16 @@ where
     }
 }
 
-impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
+impl<ID, T, R> UlidGenerator<ID, T, R> for AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: SnowflakeId<Ty = u64>,
+    ID: UlidId<Ty = u128>,
     T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
 {
     type Err = core::convert::Infallible;
 
-    fn new(machine_id: ID::Ty, time: T) -> Self {
-        Self::new(machine_id, time)
+    fn new(time: T, rng: R) -> Self {
+        Self::new(time, rng)
     }
 
     fn next_id(&self) -> IdGenStatus<ID> {
