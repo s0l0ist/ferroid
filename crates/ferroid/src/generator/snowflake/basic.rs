@@ -104,7 +104,7 @@ where
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
             state: Cell::new(id),
-            time: time,
+            time,
         }
     }
 
