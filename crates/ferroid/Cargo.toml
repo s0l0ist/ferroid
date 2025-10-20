@@ -19,7 +19,8 @@ documentation.workspace = true
 keywords = ["no_std", "id", "snowflake", "ulid", "monotonic"]
 
 [package.metadata.docs.rs]
-all-features = true
+features = ["all"]
+no-default-features = true
 
 [lib]
 crate-type = ["rlib"]
@@ -50,7 +51,7 @@ name = "bench"
 harness = false
 
 [features]
-default = ["all"]
+default = []
 all = ["std", "alloc", "snowflake", "ulid", "thread-local", "basic", "lock", "atomic", "base32", "async-tokio", "async-smol"]
 
 std = ["dep:rand", "portable-atomic/std"]

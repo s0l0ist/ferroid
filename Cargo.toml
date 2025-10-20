@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.6.6"
+version = "0.7.0"
 edition = "2021"
 rust-version = "1.81"
 license = "MIT OR Apache-2.0"
@@ -46,7 +46,7 @@ rand = { version = "0.9", default-features = false }
 serde = { version = "1.0", default-features = false }
 smol = { version = "2.0", default-features = false }
 thiserror = { version = "2.0", default-features = false }
-tokio = { version = "1.47", default-features = false }
+tokio = { version = "1.48", default-features = false }
 tokio-stream = { version = "0.1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 tonic = { version = "0.14", default-features = false }

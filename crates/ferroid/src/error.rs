@@ -6,24 +6,27 @@ use core::fmt;
 /// enabled behind feature flags like `std` or `base32`.
 pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, E>;
 
-/// All possible errors that `ferroid` can produce.
+/// All error variants that `ferroid` can emit.
 ///
-/// The generic parameter `E` is only used when the `base32` feature is enabled,
-/// in the `Base32Error<E>` variant. To preserve the generic across all feature
-/// combinations, other variants carry a `PhantomData<E>`, even if unused.
+/// The generic parameter `E` is only *material* when the `base32` feature is
+/// enabled, where it appears in [`Error::Base32Error`]. In all other cases, the
+/// enum carries a `PhantomData<E>` to keep the public type stable across
+/// feature combinations.
 ///
-/// When both `std` and `base32` are disabled, `ferroid` is effectively
-/// infallible. The `Infallible` variant exists only to satisfy the type system
-/// and is never expected to surface in practice.
+/// When **`base32` is disabled** and either **`lock` is disabled** *or*
+/// **`parking-lot` is enabled** (no poisoning), the crate is effectively
+/// infallible at runtime. In that configuration, the [`Error::Infallible`]
+/// variant exists solely to satisfy the `Result<T, Error<E>>` API and should
+/// never be observed in practice.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum Error<E = core::convert::Infallible> {
-    /// The operation failed due to a poisoned lock.
+    /// The operation failed because the lock was **poisoned**.
     ///
-    /// This can happen if another thread panicked while holding a shared lock.
-    /// Only available when the `std` feature is enabled.
-    //TODO: parking-log doesn't return poisoned.
-    #[cfg(all(feature = "std", not(feature = "parking-lot")))]
+    /// This occurs when a thread panics while holding the lock. When the
+    /// `parking-lot` feature is enabled, mutexes do **not** poison, so this
+    /// variant is not available.
+    #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
     LockPoisoned(core::marker::PhantomData<E>),
 
     /// An error occurred during Crockford Base32 decoding.
@@ -33,12 +36,19 @@ pub enum Error<E = core::convert::Infallible> {
     #[cfg(feature = "base32")]
     Base32Error(crate::Base32Error<E>),
 
-    /// Placeholder variant for `no_std` builds without the `base32` feature.
+    /// Placeholder variant for builds where this crate is effectively
+    /// **infallible**.
     ///
-    /// When both the `std` and `base32` features are disabled, `ferroid` is
-    /// infallible at runtime. This variant exists to satisfy the API's use of
-    /// `Result<T, Error<E>>`, but should never be constructed or observed.
-    #[cfg(not(all(feature = "std", feature = "base32")))]
+    /// `ferroid` only produces errors from:
+    /// - **Base32** decoding (`base32` feature), or
+    /// - **Lock poisoning** when using a std mutex (`lock` **without**
+    ///   `parking-lot`).
+    ///
+    /// If neither of those error sources is enabled (i.e., no `base32`, or
+    /// `lock` is disabled, or `parking-lot` is enabled), there is nothing
+    /// fallible at runtime. This variant exists solely to satisfy `Result<T,
+    /// Error<E>>` and should never be constructed.
+    #[cfg(not(all(feature = "lock", feature = "base32")))]
     Infallible(core::marker::PhantomData<E>),
 }
 
@@ -50,9 +60,9 @@ impl<E: fmt::Debug> fmt::Display for Error<E> {
 
 impl<E: fmt::Debug> core::error::Error for Error<E> {}
 
-#[cfg(all(feature = "std", not(feature = "parking-lot")))]
+#[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 use crate::{MutexGuard, PoisonError};
-#[cfg(all(feature = "std", not(feature = "parking-lot")))]
+#[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 // Convert all poisoned lock errors to a simplified `LockPoisoned`
 impl<T, E: fmt::Debug> From<PoisonError<MutexGuard<'_, T>>> for Error<E> {
     fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {
