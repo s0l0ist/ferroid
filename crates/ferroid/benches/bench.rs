@@ -186,7 +186,7 @@ fn bench_generator_threaded<ID, G, T>(
                             .unwrap();
 
                         total_elapsed += elapsed;
-                    })
+                    });
                 }
 
                 total_elapsed
@@ -269,7 +269,7 @@ fn bench_generator_contended<ID, G, T>(
                             .unwrap();
 
                         total_elapsed += elapsed;
-                    })
+                    });
                 }
 
                 total_elapsed
@@ -499,7 +499,7 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                             .unwrap();
 
                         total_elapsed += elapsed;
-                    })
+                    });
                 }
 
                 total_elapsed
@@ -585,7 +585,7 @@ fn bench_generator_ulid_contended<ID, G, T, R>(
                             .unwrap();
 
                         total_elapsed += elapsed;
-                    })
+                    });
                 }
 
                 total_elapsed

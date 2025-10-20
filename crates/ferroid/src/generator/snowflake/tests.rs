@@ -366,11 +366,11 @@ fn lock_is_poisoned_on_panic_std_mutex() {
 
 #[cfg(feature = "parking-lot")]
 #[test]
-#[should_panic]
+#[should_panic(expected = "parking_lot::Mutex cannot be poisoned")]
 fn lock_is_poisoned_on_panic_parking_lot_mutex() {
     // Arrange
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-        LockSnowflakeGenerator::new(0u64.into(), MonotonicClock::default());
+        LockSnowflakeGenerator::new(0u64, MonotonicClock::default());
 
     {
         let state = Arc::clone(&generator.state);

@@ -105,7 +105,7 @@ impl WorkerPool {
         })
         .await;
 
-        if let Ok(()) = drain_result {
+        if drain_result == Ok(()) {
             #[cfg(feature = "tracing")]
             tracing::debug!("All in-flight streams drained successfully");
         }
