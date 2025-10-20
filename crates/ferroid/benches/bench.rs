@@ -127,9 +127,10 @@ fn bench_generator_threaded<ID, G, T>(
 {
     let mut group = c.benchmark_group(group_name);
     for thread_count in [1, 2, 4, 8, 16] {
-        let ids_per_thread = TOTAL_IDS / thread_count;
-        group.throughput(Throughput::Elements(TOTAL_IDS as u64));
-        group.bench_function(format!("elems/{TOTAL_IDS}/threads/{thread_count}"), |b| {
+        let total_ids = TOTAL_IDS * 16; // 65k IDs
+        let ids_per_thread = total_ids / thread_count;
+        group.throughput(Throughput::Elements(total_ids as u64));
+        group.bench_function(format!("elems/{total_ids}/threads/{thread_count}"), |b| {
             b.iter_custom(|iters| {
                 let mut total_elapsed = Duration::ZERO;
 
@@ -208,9 +209,10 @@ fn bench_generator_contended<ID, G, T>(
 {
     let mut group = c.benchmark_group(group_name);
     for thread_count in [1, 2, 4, 8, 16] {
-        let ids_per_thread = TOTAL_IDS / thread_count;
-        group.throughput(Throughput::Elements(TOTAL_IDS as u64));
-        group.bench_function(format!("elems/{TOTAL_IDS}/threads/{thread_count}"), |b| {
+        let total_ids = TOTAL_IDS * 16; // 65k IDs
+        let ids_per_thread = total_ids / thread_count;
+        group.throughput(Throughput::Elements(total_ids as u64));
+        group.bench_function(format!("elems/{total_ids}/threads/{thread_count}"), |b| {
             b.iter_custom(|iters| {
                 let mut total_elapsed = Duration::ZERO;
 
@@ -449,7 +451,7 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                     scope(|s| {
                         let start_signal = Arc::new(Barrier::new(thread_count + 1));
                         let handles: Vec<_> = (0..thread_count)
-                            .map(|i| {
+                            .map(|_| {
                                 let start = start_signal.clone();
                                 let clock = clock.clone();
                                 let rand = rand.clone();
@@ -958,7 +960,7 @@ fn benchmark_mono_sequential_atomic(c: &mut Criterion) {
 /// Multi-threaded benchmark for `BasicSnowflakeGenerator` with
 /// `MonotonicClock`.
 fn bench_generator_threaded_basic(c: &mut Criterion) {
-    bench_generator_threaded::<SnowflakeTwitterId, _, _>(
+    bench_generator_threaded::<SnowflakeMastodonId, _, _>(
         c,
         "mono/threaded/basic",
         BasicSnowflakeGenerator::new,
@@ -967,7 +969,7 @@ fn bench_generator_threaded_basic(c: &mut Criterion) {
 }
 /// Multi-threaded benchmark for `LockSnowflakeGenerator` with `MonotonicClock`.
 fn bench_generator_threaded_lock(c: &mut Criterion) {
-    bench_generator_threaded::<SnowflakeTwitterId, _, _>(
+    bench_generator_threaded::<SnowflakeMastodonId, _, _>(
         c,
         "mono/threaded/lock",
         LockSnowflakeGenerator::new,
@@ -977,7 +979,7 @@ fn bench_generator_threaded_lock(c: &mut Criterion) {
 /// Multi-threaded benchmark for `AtomicSnowflakeGenerator` with
 /// `MonotonicClock`.
 fn bench_generator_threaded_atomic(c: &mut Criterion) {
-    bench_generator_threaded::<SnowflakeTwitterId, _, _>(
+    bench_generator_threaded::<SnowflakeMastodonId, _, _>(
         c,
         "mono/threaded/atomic",
         AtomicSnowflakeGenerator::new,
@@ -987,7 +989,7 @@ fn bench_generator_threaded_atomic(c: &mut Criterion) {
 
 /// Contended benchmark for `LockSnowflakeGenerator` with `MonotonicClock`.
 fn bench_generator_contended_lock(c: &mut Criterion) {
-    bench_generator_contended::<SnowflakeTwitterId, _, _>(
+    bench_generator_contended::<SnowflakeMastodonId, _, _>(
         c,
         "mono/contended/lock",
         LockSnowflakeGenerator::new,
@@ -996,7 +998,7 @@ fn bench_generator_contended_lock(c: &mut Criterion) {
 }
 /// Contended benchmark for `AtomicSnowflakeGenerator` with `MonotonicClock`
 fn bench_generator_contended_atomic(c: &mut Criterion) {
-    bench_generator_contended::<SnowflakeTwitterId, _, _>(
+    bench_generator_contended::<SnowflakeMastodonId, _, _>(
         c,
         "mono/contended/atomic",
         AtomicSnowflakeGenerator::new,
@@ -1223,60 +1225,60 @@ fn bench_constructors(c: &mut Criterion) {
 
 criterion_group!(
     benches,
-    // // --- Base32 ---
-    // bench_base32,
-    // // --- Clock ---
-    // bench_mono_clock,
-    // // --- RNG ---
-    // bench_thread_rand,
-    // // --- Thread locals ---
-    // bench_thread_local,
-    // // --- Constructors ---
-    // bench_constructors,
-    // // --- Snowflake ---
-    // //
-    // // Mock clock
-    // benchmark_mock_sequential_basic,
-    // benchmark_mock_sequential_lock,
-    // benchmark_mock_sequential_atomic,
-    // // Monotonic clocks
-    // benchmark_mono_sequential_basic,
-    // benchmark_mono_sequential_lock,
-    // benchmark_mono_sequential_atomic,
-    // // Multithreaded (generator per thread)
-    // bench_generator_threaded_basic,
-    bench_generator_threaded_lock,
-    // bench_generator_threaded_atomic,
-    // // Contended benchmark
-    bench_generator_contended_lock,
-    // bench_generator_contended_atomic,
-    // // Async multi worker, multi generator
-    // benchmark_mono_tokio_lock,
-    // benchmark_mono_tokio_atomic,
-    // benchmark_mono_smol_lock,
-    // benchmark_mono_smol_atomic,
-    // // --- Ulid ---
-    // //
-    // // Mock clock
-    // benchmark_mock_sequential_ulid_basic,
-    // benchmark_mock_sequential_ulid_lock,
-    // benchmark_mock_sequential_ulid_atomic,
-    // // Monotonic clocks
-    // benchmark_mono_sequential_ulid_basic,
-    // benchmark_mono_sequential_ulid_lock,
-    // benchmark_mono_sequential_ulid_atomic,
+    // --- Base32 ---
+    bench_base32,
+    // --- Clock ---
+    bench_mono_clock,
+    // --- RNG ---
+    bench_thread_rand,
+    // --- Thread locals ---
+    bench_thread_local,
+    // --- Constructors ---
+    bench_constructors,
+    // --- Snowflake ---
+    //
+    // Mock clock
+    benchmark_mock_sequential_basic,
+    benchmark_mock_sequential_lock,
+    benchmark_mock_sequential_atomic,
+    // Monotonic clocks
+    benchmark_mono_sequential_basic,
+    benchmark_mono_sequential_lock,
+    benchmark_mono_sequential_atomic,
     // Multithreaded (generator per thread)
-    // benchmark_mono_threaded_ulid_basic,
+    bench_generator_threaded_basic,
+    bench_generator_threaded_lock,
+    bench_generator_threaded_atomic,
+    // Contended benchmark
+    bench_generator_contended_lock,
+    bench_generator_contended_atomic,
+    // Async multi worker, multi generator
+    benchmark_mono_tokio_lock,
+    benchmark_mono_tokio_atomic,
+    benchmark_mono_smol_lock,
+    benchmark_mono_smol_atomic,
+    // --- Ulid ---
+    //
+    // Mock clock
+    benchmark_mock_sequential_ulid_basic,
+    benchmark_mock_sequential_ulid_lock,
+    benchmark_mock_sequential_ulid_atomic,
+    // Monotonic clocks
+    benchmark_mono_sequential_ulid_basic,
+    benchmark_mono_sequential_ulid_lock,
+    benchmark_mono_sequential_ulid_atomic,
+    // Multithreaded (generator per thread)
+    benchmark_mono_threaded_ulid_basic,
     benchmark_mono_threaded_ulid_lock,
-    // benchmark_mono_threaded_ulid_atomic,
+    benchmark_mono_threaded_ulid_atomic,
     // Contended (generator per thread)
-    // benchmark_mono_contended_ulid_basic,
+    benchmark_mono_contended_ulid_basic,
     benchmark_mono_contended_ulid_lock,
-    // benchmark_mono_contended_ulid_atomic,
-    // // Async multi worker, multi generator
-    // benchmark_mono_tokio_ulid_lock,
-    // benchmark_mono_tokio_ulid_atomic,
-    // benchmark_mono_smol_ulid_lock,
-    // benchmark_mono_smol_ulid_atomic,
+    benchmark_mono_contended_ulid_atomic,
+    // Async multi worker, multi generator
+    benchmark_mono_tokio_ulid_lock,
+    benchmark_mono_tokio_ulid_atomic,
+    benchmark_mono_smol_ulid_lock,
+    benchmark_mono_smol_ulid_atomic,
 );
 criterion_main!(benches);
