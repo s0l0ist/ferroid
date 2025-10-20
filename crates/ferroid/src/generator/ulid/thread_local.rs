@@ -66,8 +66,6 @@ pub enum Backoff {
 /// Provides fast, per-thread ULID generation using a shared monotonic clock and
 /// thread-local RNG. Monotonic overflows are handled with configurable
 /// [`Backoff`] strategies.
-///
-/// Requires the `ulid` and `thread_local` features.
 pub struct Ulid;
 
 impl Ulid {
@@ -76,11 +74,8 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
-    /// {
-    ///     use ferroid::Ulid;
-    ///     let id = Ulid::new_ulid();
-    /// }
+    /// use ferroid::Ulid;
+    /// let id = Ulid::new_ulid();
     /// ```
     #[must_use]
     pub fn new_ulid() -> ULID {
@@ -97,11 +92,8 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
-    /// {
-    ///     use ferroid::Ulid;
-    ///     let id = Ulid::new_mono_ulid();
-    /// }
+    /// use ferroid::Ulid;
+    /// let id = Ulid::new_mono_ulid();
     /// ```
     #[must_use]
     pub fn new_mono_ulid() -> ULID {
@@ -116,11 +108,8 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
-    /// {
-    ///     use ferroid::{Ulid, Backoff};
-    ///     let id = Ulid::with_mono_backoff(Backoff::Spin);
-    /// }
+    /// use ferroid::{Ulid, Backoff};
+    /// let id = Ulid::with_mono_backoff(Backoff::Spin);
     /// ```
     #[must_use]
     pub fn with_mono_backoff(strategy: Backoff) -> ULID {
@@ -147,12 +136,10 @@ impl Ulid {
     /// retrying due to ULID monotonic overflow. The `yield_for` argument
     /// indicates the recommended wait time in milliseconds.
     fn ulid_mono_with_backoff(f: impl Fn(<ULID as Id>::Ty)) -> ULID {
-        BASIC_MONO_ULID.with(|g| {
-            loop {
-                match g.next_id() {
-                    IdGenStatus::Ready { id } => break id,
-                    IdGenStatus::Pending { yield_for } => f(yield_for),
-                }
+        BASIC_MONO_ULID.with(|g| loop {
+            match g.next_id() {
+                IdGenStatus::Ready { id } => break id,
+                IdGenStatus::Pending { yield_for } => f(yield_for),
             }
         })
     }
@@ -164,11 +151,8 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
-    /// {
-    ///     use ferroid::Ulid;
-    ///     let id = Ulid::from_timestamp(1_694_201_234_000);
-    /// }
+    /// use ferroid::Ulid;
+    /// let id = Ulid::from_timestamp(1_694_201_234_000);
     /// ```
     #[must_use]
     pub fn from_timestamp(timestamp: <ULID as Id>::Ty) -> ULID {
@@ -182,11 +166,8 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
-    /// {
-    ///     use ferroid::{Ulid, ThreadRandom};
-    ///     let id = Ulid::from_timestamp_and_rand(0, &ThreadRandom);
-    /// }
+    ///  use ferroid::{Ulid, ThreadRandom};
+    ///  let id = Ulid::from_timestamp_and_rand(0, &ThreadRandom);
     /// ```
     pub fn from_timestamp_and_rand<R>(timestamp: <ULID as Id>::Ty, rng: &R) -> ULID
     where
@@ -202,11 +183,8 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
-    /// {
-    ///     use ferroid::Ulid;
-    ///     let id = Ulid::from_datetime(std::time::SystemTime::now());
-    /// }
+    /// use ferroid::Ulid;
+    /// let id = Ulid::from_datetime(std::time::SystemTime::now());
     /// ```
     #[must_use]
     pub fn from_datetime(datetime: std::time::SystemTime) -> ULID {
@@ -217,12 +195,9 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "ulid", feature = "thread_local"))]
-    /// {
-    ///     use ferroid::{Ulid, ThreadRandom};
-    ///     let now = std::time::SystemTime::now();
-    ///     let id = Ulid::from_datetime_and_rand(now, &ThreadRandom);
-    /// }
+    /// use ferroid::{Ulid, ThreadRandom};
+    /// let now = std::time::SystemTime::now();
+    /// let id = Ulid::from_datetime_and_rand(now, &ThreadRandom);
     /// ```
     pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> ULID
     where

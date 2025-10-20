@@ -60,7 +60,6 @@ impl MonotonicClock {
     /// - `epoch`: The origin timestamp, as a [`Duration`] since 1970-01-01 UTC.
     ///
     /// # Example
-    ///
     /// ```
     /// use std::time::{Duration, Instant};
     /// use ferroid::{MonotonicClock, TimeSource};

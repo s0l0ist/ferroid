@@ -68,19 +68,16 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
-    ///     
-    ///     let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    ///     let id: ULID = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///     }
+    /// };
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -134,19 +131,16 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
-    ///     
-    ///     let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    ///     let id: ULID = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => std::thread::yield_now(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
+    ///     }
+    /// };
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
@@ -169,23 +163,20 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
     ///
-    ///     let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    ///     // Attempt to generate a new ID
-    ///     let id: ULID = loop {
-    ///         match generator.try_next_id() {
-    ///             Ok(IdGenStatus::Ready { id }) => break id,
-    ///             Ok(IdGenStatus::Pending { yield_for }) => {
-    ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///             }
-    ///             Err(_) => unreachable!(),
+    /// // Attempt to generate a new ID
+    /// let id: ULID = loop {
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => break id,
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///         }
-    ///     };
-    /// }
+    ///         Err(_) => unreachable!(),
+    ///     }
+    /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {

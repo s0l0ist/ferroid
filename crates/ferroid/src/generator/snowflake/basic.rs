@@ -57,21 +57,17 @@ where
     /// IDs.
     ///
     /// # Example
-    ///
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
-    /// {
-    ///     use ferroid::{BasicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
-    ///     let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
-    ///     let id: SnowflakeTwitterId = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///
+    /// let id: SnowflakeTwitterId = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///     }
+    /// };
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -125,19 +121,16 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
-    /// {
-    ///     use ferroid::{BasicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
-    ///     let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
-    ///     let id: SnowflakeTwitterId = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => std::thread::yield_now(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///
+    /// let id: SnowflakeTwitterId = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
+    ///     }
+    /// };
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
@@ -163,23 +156,20 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "alloc", feature = "snowflake"))]
-    /// {
-    ///     use ferroid::{BasicSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
-    ///     let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// use ferroid::{BasicSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
-    ///     // Attempt to generate a new ID
-    ///     let id: SnowflakeTwitterId = loop {
-    ///         match generator.try_next_id() {
-    ///             Ok(IdGenStatus::Ready { id }) => break id,
-    ///             Ok(IdGenStatus::Pending { yield_for }) => {
-    ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///             }
-    ///             Err(_) => unreachable!(),
+    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///
+    /// // Attempt to generate a new ID
+    /// let id: SnowflakeTwitterId = loop {
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => break id,
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///         }
-    ///     };
-    /// }
+    ///         Err(_) => unreachable!(),
+    ///     }
+    /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {

@@ -6,7 +6,6 @@
 /// The random type `T` is generic (typically `u64` or `u128`)
 ///
 /// # Example
-///
 /// ```
 /// use ferroid::RandSource;
 ///

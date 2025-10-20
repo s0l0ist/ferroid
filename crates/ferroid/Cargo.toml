@@ -50,14 +50,19 @@ name = "bench"
 harness = false
 
 [features]
-default = ["cache"]
+default = ["all"]
+all = ["std", "alloc", "snowflake", "ulid", "thread-local", "basic", "lock", "atomic", "base32", "async-tokio", "async-smol"]
+
 std = ["dep:rand", "portable-atomic/std"]
 alloc = []
 cache = ["dep:crossbeam-utils"]
 parking-lot = ["std", "alloc", "dep:parking_lot"]
-thread-local = ["std", "alloc"]
+thread-local = ["std", "alloc", "ulid", "basic"]
 snowflake = []
 ulid = []
+basic = []
+lock = ["std", "alloc"]
+atomic = []
 
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]

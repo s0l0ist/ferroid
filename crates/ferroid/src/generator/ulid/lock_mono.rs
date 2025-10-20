@@ -1,8 +1,8 @@
 use crate::{
     rand::RandSource, Error, IdGenStatus, Mutex, Result, TimeSource, UlidGenerator, UlidId,
 };
+use alloc::sync::Arc;
 use core::cmp::Ordering;
-use std::sync::Arc;
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
@@ -64,19 +64,16 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
-    ///     
-    ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    ///     let id: ULID = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///     }
+    /// };
     /// ```
     ///
     /// [`TimeSource`]: crate::TimeSource
@@ -128,19 +125,16 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
-    ///     
-    ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
     ///
-    ///     let id: ULID = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => std::thread::yield_now(),
-    ///         }
-    ///     };
-    /// }
+    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = loop {
+    ///     match generator.next_id() {
+    ///         IdGenStatus::Ready { id } => break id,
+    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
+    ///     }
+    /// };
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
         self.try_next_id().unwrap()
@@ -162,28 +156,30 @@ where
     ///
     /// # Example
     /// ```
-    /// #[cfg(all(feature = "std", feature = "ulid"))]
-    /// {
-    ///     use ferroid::{BasicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
     ///
-    ///     let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    ///     // Attempt to generate a new ID
-    ///     let id: ULID = loop {
-    ///         match generator.try_next_id() {
-    ///             Ok(IdGenStatus::Ready { id }) => break id,
-    ///             Ok(IdGenStatus::Pending { yield_for }) => {
-    ///                 std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///             }
-    ///             Err(e) => panic!("Generator error: {}", e),
+    /// // Attempt to generate a new ID
+    /// let id: ULID = loop {
+    ///     match generator.try_next_id() {
+    ///         Ok(IdGenStatus::Ready { id }) => break id,
+    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///         }
-    ///     };
-    /// }
+    ///         Err(e) => panic!("Generator error: {}", e),
+    ///     }
+    /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
         let now = self.time.current_millis();
+
+        #[cfg(feature = "parking-lot")]
         let mut id = self.state.lock();
+        #[cfg(not(feature = "parking-lot"))]
+        let mut id = self.state.lock()?;
+
         let current_ts = id.timestamp();
 
         match now.cmp(&current_ts) {
