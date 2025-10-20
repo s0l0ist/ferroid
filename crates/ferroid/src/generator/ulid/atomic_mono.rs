@@ -40,9 +40,9 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    #[cfg(feature = "cache")]
+    #[cfg(feature = "cache-padded")]
     state: crossbeam_utils::CachePadded<AtomicU128>,
-    #[cfg(not(feature = "cache"))]
+    #[cfg(not(feature = "cache-padded"))]
     state: AtomicU128,
     time: T,
     rng: R,
@@ -108,9 +108,9 @@ where
     pub fn from_components(timestamp: ID::Ty, random: ID::Ty, time: T, rng: R) -> Self {
         let id = ID::from_components(timestamp, random);
         Self {
-            #[cfg(feature = "cache")]
+            #[cfg(feature = "cache-padded")]
             state: crossbeam_utils::CachePadded::new(AtomicU128::new(id.to_raw())),
-            #[cfg(not(feature = "cache"))]
+            #[cfg(not(feature = "cache-padded"))]
             state: AtomicU128::new(id.to_raw()),
             time,
             rng,

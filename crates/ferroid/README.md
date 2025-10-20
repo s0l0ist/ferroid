@@ -346,28 +346,32 @@ and `random`.
 Ferroid has many features flags to enable only what you need. You should
 determine your runtime and pick at least one ID family and generator style:
 
-- Determine your runtime: `std` (`alloc`), `no_std`, or `no_std` + `alloc`
+- Determine your runtime: `std` (+ `alloc`), `no_std`, or `no_std` + `alloc`
 - ID family: `snowflake` or `ulid` (or `thread-local` ULID generator)
 - Generator: `basic`, `lock`, or `atomic`
 
 Prefer `basic` or `atomic` generators. `lock` is a fallback for targets without
-viable atomics. `cache` and `parking-lot` only matter for lock-based generators.
+viable atomics. `cache-padded` and `parking-lot` only matter for lock-based
+generators.
 
 In `no_std`, you're currently limited to using the `basic` and `atomic`
 generators provided the target platform supports the correct atomic widths for
 `snowflake` (`AtomicU64`), or `ulid` (`AtomicU128`). You also must create your
-own implementation of `TimeSource<T>` for the generator(s).
+own implementation of `TimeSource<T>` for the generator(s). `base32` is also
+supported.
 
-- `all`: Enables all functionality (except `cache`, `parking-lot`).
+- `all`: Enables all functionality (except optimizing `cache-padded`,
+  `parking-lot`).
 - `std`: Required for `MonotonicClock`, the `thread-local` (`Ulid` generator),
   and all lock-based generators.
 - `alloc`: Enables `ToString` and allocating String functions when `base32` is
   also enabled.
-- `cache`: Pads contended generators to reduce false sharing. Benchmark to
-  confirm benefit.
+- `cache-padded`: Pads contended generators to reduce false sharing. Benchmark
+  to confirm benefit.
 - `parking-lot`: Use `parking_lot` mutexes for lock generators (implies `std`,
   `alloc`).
-- `thread-local`: Per-thread ULID generator (implies `std`, `alloc`, `ulid`, `basic`).
+- `thread-local`: Per-thread ULID generator (implies `std`, `alloc`, `ulid`,
+  `basic`).
 - `snowflake`: Enable Snowflake ID generators.
 - `ulid`: Enable ULID ID generators.
 - `basic`: Enable basic (fast-path) generators.

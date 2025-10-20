@@ -30,9 +30,9 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    #[cfg(feature = "cache")]
+    #[cfg(feature = "cache-padded")]
     pub(crate) state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
-    #[cfg(not(feature = "cache"))]
+    #[cfg(not(feature = "cache-padded"))]
     pub(crate) state: Arc<Mutex<ID>>,
     pub(crate) time: T,
 }
@@ -109,9 +109,9 @@ where
     ) -> Self {
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
-            #[cfg(feature = "cache")]
+            #[cfg(feature = "cache-padded")]
             state: Arc::new(crossbeam_utils::CachePadded::new(Mutex::new(id))),
-            #[cfg(not(feature = "cache"))]
+            #[cfg(not(feature = "cache-padded"))]
             state: Arc::new(Mutex::new(id)),
             time,
         }

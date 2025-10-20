@@ -33,9 +33,9 @@ where
     ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
-    #[cfg(feature = "cache")]
+    #[cfg(feature = "cache-padded")]
     state: crossbeam_utils::CachePadded<AtomicU64>,
-    #[cfg(not(feature = "cache"))]
+    #[cfg(not(feature = "cache-padded"))]
     state: AtomicU64,
     time: T,
     machine_id: u64,
@@ -114,9 +114,9 @@ where
     ) -> Self {
         let initial = ID::from_components(timestamp, machine_id, sequence);
         Self {
-            #[cfg(feature = "cache")]
+            #[cfg(feature = "cache-padded")]
             state: crossbeam_utils::CachePadded::new(AtomicU64::new(initial.to_raw())),
-            #[cfg(not(feature = "cache"))]
+            #[cfg(not(feature = "cache-padded"))]
             state: AtomicU64::new(initial.to_raw()),
             time,
             machine_id,

@@ -55,7 +55,7 @@ all = ["std", "alloc", "snowflake", "ulid", "thread-local", "basic", "lock", "at
 
 std = ["dep:rand", "portable-atomic/std"]
 alloc = []
-cache = ["dep:crossbeam-utils"]
+cache-padded = ["dep:crossbeam-utils"]
 parking-lot = ["std", "alloc", "dep:parking_lot"]
 thread-local = ["std", "alloc", "ulid", "basic"]
 snowflake = []

@@ -37,9 +37,9 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    #[cfg(feature = "cache")]
+    #[cfg(feature = "cache-padded")]
     state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
-    #[cfg(not(feature = "cache"))]
+    #[cfg(not(feature = "cache-padded"))]
     state: Arc<Mutex<ID>>,
     time: T,
     rng: R,
@@ -104,9 +104,9 @@ where
     pub fn from_components(timestamp: ID::Ty, random: ID::Ty, time: T, rng: R) -> Self {
         let id = ID::from_components(timestamp, random);
         Self {
-            #[cfg(feature = "cache")]
+            #[cfg(feature = "cache-padded")]
             state: Arc::new(crossbeam_utils::CachePadded::new(Mutex::new(id))),
-            #[cfg(not(feature = "cache"))]
+            #[cfg(not(feature = "cache-padded"))]
             state: Arc::new(Mutex::new(id)),
             time,
             rng,
