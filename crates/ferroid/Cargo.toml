@@ -42,7 +42,6 @@ tracing = { workspace = true, optional = true, features = ["attributes"] }
 async-lock = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
 futures = { workspace = true, features = ["alloc"] }
-hdrhistogram = { workspace = true }
 num_cpus = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"] }
 

@@ -194,7 +194,7 @@ path. You may spin, yield, or sleep depending on your environment:
 
 ```rust
 use ferroid::{
-    BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus, IdGenStatus, MonotonicClock,
+    BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus,
     MonotonicClock, SnowflakeTwitterId, ThreadRandom, TWITTER_EPOCH, ULID,
 };
 
@@ -253,32 +253,36 @@ use ferroid::{
     MASTODON_EPOCH, ULID, UNIX_EPOCH,
 };
 
-#[tokio::main]
-async fn async_tokio_main() -> Result<()> {
+async fn run() -> Result<()> {
     let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
     let id: SnowflakeMastodonId = snow_gen.try_next_id_async().await?;
     println!("Generated ID: {}", id);
 
-    let ulid_gen = BasicUlidGenerator::new(MonotonicClock::with_epoch(UNIX_EPOCH), ThreadRandom::default());
+    let ulid_gen = BasicUlidGenerator::new(
+        MonotonicClock::with_epoch(UNIX_EPOCH),
+        ThreadRandom::default(),
+    );
     let id: ULID = ulid_gen.try_next_id_async().await?;
     println!("Generated ID: {}", id);
     Ok(())
 }
-async_tokio_main().expect("failed to run")
+
+fn async_tokio_main() -> Result<()> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build Tokio runtime")
+        .block_on(run())
+}
 
 fn async_smol_main() -> Result<()> {
-    smol::block_on(async {
-        let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
-        let id: SnowflakeMastodonId = snow_gen.try_next_id_async().await?;
-        println!("Generated ID: {}", id);
-
-        let ulid_gen = BasicUlidGenerator::new(MonotonicClock::with_epoch(UNIX_EPOCH), ThreadRandom::default());
-        let id: ULID = ulid_gen.try_next_id_async().await?;
-        println!("Generated ID: {}", id);
-        Ok(())
-    })
+    smol::block_on(run())
 }
-async_smol_main().expect("failed to run")
+
+fn main() {
+    async_tokio_main().expect("tokio failed to run");
+    async_smol_main().expect("smol failed to run");
+}
 ```
 
 ### Custom Layouts
