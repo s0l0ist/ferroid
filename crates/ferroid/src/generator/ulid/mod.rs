@@ -7,7 +7,14 @@ mod basic_mono;
 mod interface;
 #[cfg(feature = "lock")]
 mod lock_mono;
-#[cfg(all(test, feature = "std", feature = "alloc"))]
+#[cfg(all(
+    test,
+    feature = "std",
+    feature = "alloc",
+    feature = "basic",
+    feature = "lock",
+    feature = "atomic"
+))]
 mod tests;
 #[cfg(feature = "thread-local")]
 mod thread_local;
