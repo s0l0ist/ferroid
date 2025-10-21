@@ -16,7 +16,7 @@ mod futures;
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 mod generator;
 mod id;
-#[cfg(all(feature = "std", feature = "alloc"))]
+#[cfg(all(feature = "std", feature = "alloc", target_has_atomic = "64"))]
 mod mono_clock;
 #[cfg(feature = "std")]
 mod mutex;
@@ -39,8 +39,11 @@ pub use crate::futures::*;
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 pub use crate::generator::*;
 pub use crate::id::*;
-#[cfg_attr(docsrs, doc(cfg(all(feature = "std", feature = "alloc"))))]
-#[cfg(all(feature = "std", feature = "alloc"))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(all(feature = "std", feature = "alloc", target_has_atomic = "64")))
+)]
+#[cfg(all(feature = "std", feature = "alloc", target_has_atomic = "64"))]
 pub use crate::mono_clock::*;
 pub use crate::rand::*;
 #[cfg_attr(docsrs, doc(cfg(any(feature = "async-tokio", feature = "async-smol"))))]
