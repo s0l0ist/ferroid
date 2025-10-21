@@ -1,4 +1,3 @@
-use crate::Error;
 use core::fmt;
 
 /// Errors that can occur while decoding Crockford Base32 strings.
@@ -52,8 +51,3 @@ impl<E: core::fmt::Debug> fmt::Display for Base32Error<E> {
     }
 }
 impl<E: core::fmt::Debug> core::error::Error for Base32Error<E> {}
-impl<E: core::fmt::Debug> From<Base32Error<E>> for Error<E> {
-    fn from(err: Base32Error<E>) -> Self {
-        Self::Base32Error(err)
-    }
-}

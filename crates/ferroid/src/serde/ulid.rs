@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod as_native_ulid {
     use super::*;
-    use crate::{Error, SerdeError, UlidId};
+    use crate::{SerdeError, UlidId};
 
     pub fn serialize<ID, S>(id: &ID, s: S) -> Result<S::Ok, S::Error>
     where
@@ -22,9 +22,7 @@ pub mod as_native_ulid {
         let n = <ID::Ty>::deserialize(d)?;
         let id = ID::from_raw(n);
         if !id.is_valid() {
-            return Err(serde::de::Error::custom(Error::SerdeError(
-                SerdeError::DecodeOverflow { id },
-            )));
+            return Err(serde::de::Error::custom(SerdeError::DecodeOverflow { id }));
         }
         Ok(id)
     }
@@ -68,10 +66,7 @@ pub mod as_base32_ulid {
             where
                 E: serde::de::Error,
             {
-                ID::decode(v).map_err(|e| {
-                    let err = SerdeError::Base32Error(e);
-                    serde::de::Error::custom(err)
-                })
+                ID::decode(v).map_err(|e| serde::de::Error::custom(SerdeError::Base32Error(e)))
             }
         }
 

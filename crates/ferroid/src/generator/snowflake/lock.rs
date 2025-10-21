@@ -179,7 +179,7 @@ where
     /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error> {
         let now = self.time.current_millis();
 
         #[cfg(feature = "parking-lot")]

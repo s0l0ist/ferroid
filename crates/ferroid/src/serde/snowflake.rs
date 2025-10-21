@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod as_native_snow {
     use super::*;
-    use crate::{Error, SerdeError, SnowflakeId};
+    use crate::{SerdeError, SnowflakeId};
 
     pub fn serialize<ID, S>(id: &ID, s: S) -> Result<S::Ok, S::Error>
     where
@@ -22,9 +22,7 @@ pub mod as_native_snow {
         let n = <ID::Ty>::deserialize(d)?;
         let id = ID::from_raw(n);
         if !id.is_valid() {
-            return Err(serde::de::Error::custom(Error::SerdeError(
-                SerdeError::DecodeOverflow { id },
-            )));
+            return Err(serde::de::Error::custom(SerdeError::DecodeOverflow { id }));
         }
         Ok(id)
     }
@@ -68,10 +66,7 @@ pub mod as_base32_snow {
             where
                 E: serde::de::Error,
             {
-                ID::decode(v).map_err(|e| {
-                    let err = SerdeError::Base32Error(e);
-                    serde::de::Error::custom(err)
-                })
+                ID::decode(v).map_err(|e| serde::de::Error::custom(SerdeError::Base32Error(e)))
             }
         }
 
@@ -82,7 +77,7 @@ pub mod as_base32_snow {
 #[cfg(all(test, feature = "alloc", feature = "snowflake"))]
 mod tests {
     use super::*;
-    use crate::{Error, SerdeError, SnowflakeTwitterId};
+    use crate::{SerdeError, SnowflakeTwitterId};
     use alloc::string::ToString;
     use core::u64;
     use serde_json::json;
@@ -115,9 +110,9 @@ mod tests {
         let err = serde_json::from_value::<Row>(json).expect_err("should fail");
         assert_eq!(
             err.to_string(),
-            Error::SerdeError(SerdeError::DecodeOverflow {
+            SerdeError::DecodeOverflow {
                 id: SnowflakeTwitterId::from_raw(u64::MAX)
-            })
+            }
             .to_string()
         );
     }

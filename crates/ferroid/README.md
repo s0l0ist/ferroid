@@ -77,6 +77,38 @@ because they rely on a valid `machine_id` to avoid collisions. Mapping unique
 `machine_id`s across threads requires coordination beyond what `thread_local!`
 alone can guarantee.
 
+## Serde
+
+Users must explicitly choose a serialization strategy using `#[serde(with =
+"...")]`:
+
+There are two serialization strategies:
+
+- `as_native_snow`/`as_native_ulid`: Serialize as native integer types
+  (u64/u128)
+- `as_base32_snow`/`as_base32_ulid`: Serialize as Crockford base32 encoded
+  strings
+
+Both strategies validate during deserialization and return errors for invalid
+IDs. This prevents overflow scenarios where the underlying integer value exceeds
+the valid range for the ID type. For example, `SnowflakeTwitterId` reserves 1
+bit, making `u64::MAX` invalid. This validation behavior is consistent with
+`Base32Error::DecodeOverflow` used in the base32 decoding path (see next
+section).
+
+```rust
+use ferroid::{SnowflakeTwitterId, as_base32_snow, as_native_snow};
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize)]
+struct Event {
+    #[serde(with = "as_native_snow")]
+    id_snow_int: SnowflakeTwitterId, // Serializes as an int: 123456789
+    #[serde(with = "as_base32_snow")]
+    id_snow_base32: SnowflakeTwitterId, // Serializes as a base32 string: "000000000001A"
+}
+```
+
 ### Crockford Base32
 
 Enable the `base32` feature to support Crockford Base32 encoding and decoding of

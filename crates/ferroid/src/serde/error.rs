@@ -1,4 +1,3 @@
-use crate::Error;
 use core::fmt;
 
 /// Errors that can occur while decoding native integers.
@@ -32,8 +31,3 @@ impl<E: fmt::Debug> fmt::Display for SerdeError<E> {
     }
 }
 impl<E: core::fmt::Debug> core::error::Error for SerdeError<E> {}
-impl<E: core::fmt::Debug> From<SerdeError<E>> for Error<E> {
-    fn from(err: SerdeError<E>) -> Self {
-        Self::SerdeError(err)
-    }
-}
