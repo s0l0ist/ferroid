@@ -194,38 +194,32 @@ path. You may spin, yield, or sleep depending on your environment:
 
 ```rust
 use ferroid::{
-    BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus,
-    MonotonicClock, SnowflakeTwitterId, ThreadRandom, TWITTER_EPOCH, ULID,
+    BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus, MonotonicClock,
+    SnowflakeTwitterId, TWITTER_EPOCH, ThreadRandom, ULID, ToU64
 };
 
-let snow_gne = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
-
+let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
 let id: SnowflakeTwitterId = loop {
-    match snow_gne.next_id() {
+    match snow_gen.next_id() {
         IdGenStatus::Ready { id } => break id,
         IdGenStatus::Pending { yield_for } => {
-            println!("Exhausted; wait for: {}ms", yield_for);
-            core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
-                                        // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
-                                        // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
-                                        //
-                                        // For non-blocking ID generation, use the async API (see below).
+            // Spin: lowest latency, but generally avoid.
+            core::hint::spin_loop();
+            // Yield to the scheduler: lets another thread run; still may busy-wait.
+            std::thread::yield_now();
+            // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
+            std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
+            // For use in runtimes such as `tokio` or `smol`, use the async API (see below).
         }
     }
 };
 
 let ulid_gen = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-
 let id: ULID = loop {
     match ulid_gen.next_id() {
         IdGenStatus::Ready { id } => break id,
         IdGenStatus::Pending { yield_for } => {
-            println!("Exhausted; wait for: {}ms", yield_for);
-            core::hint::spin_loop(); // Blocking spin: burns CPU, but yields the lowest latency.
-                                        // std::thread::yield_now(); // Optional: yields to OS, still busy-waits.
-                                        // std::thread::sleep(Duration::from_millis(yield_for.to_u64())); // Lowest CPU use, but imprecise and may oversleep.
-                                        //
-                                        // For non-blocking ID generation, use the async API (see below).
+            std::thread::yield_now();
         }
     }
 };
@@ -248,17 +242,17 @@ throughput.
 
 ```rust
 use ferroid::{
-    BasicSnowflakeGenerator, BasicUlidGenerator, MonotonicClock, Result,
-    SnowflakeGeneratorAsyncTokioExt, SnowflakeMastodonId, ThreadRandom, UlidGeneratorAsyncTokioExt,
-    MASTODON_EPOCH, ULID, UNIX_EPOCH,
+    Error, LockMonoUlidGenerator, LockSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result,
+    SnowflakeGeneratorAsyncTokioExt, SnowflakeMastodonId, ThreadRandom, ULID, UNIX_EPOCH,
+    UlidGeneratorAsyncTokioExt,
 };
 
-async fn run() -> Result<()> {
-    let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
+async fn run() -> Result<(), Error> {
+    let snow_gen = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
     let id: SnowflakeMastodonId = snow_gen.try_next_id_async().await?;
     println!("Generated ID: {}", id);
 
-    let ulid_gen = BasicUlidGenerator::new(
+    let ulid_gen = LockMonoUlidGenerator::new(
         MonotonicClock::with_epoch(UNIX_EPOCH),
         ThreadRandom::default(),
     );
@@ -267,7 +261,7 @@ async fn run() -> Result<()> {
     Ok(())
 }
 
-fn async_tokio_main() -> Result<()> {
+fn async_tokio_main() -> Result<(), Error> {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -275,13 +269,17 @@ fn async_tokio_main() -> Result<()> {
         .block_on(run())
 }
 
-fn async_smol_main() -> Result<()> {
+fn async_smol_main() -> Result<(), Error> {
     smol::block_on(run())
 }
 
-fn main() {
-    async_tokio_main().expect("tokio failed to run");
-    async_smol_main().expect("smol failed to run");
+fn main() -> Result<(), Error> {
+    let t1 = std::thread::spawn(async_tokio_main);
+    let t2 = std::thread::spawn(async_smol_main);
+
+    t1.join().expect("tokio thread panicked")?;
+    t2.join().expect("smol thread panicked")?;
+    Ok(())
 }
 ```
 

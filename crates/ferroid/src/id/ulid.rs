@@ -112,6 +112,7 @@ macro_rules! define_ulid {
     ) => {
         $(#[$meta])*
         #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[repr(transparent)]
         pub struct $name {
             id: $int,
         }
@@ -305,7 +306,7 @@ macro_rules! define_ulid {
             }
 
             impl core::convert::TryFrom<&str> for $name {
-                type Error = $crate::Error<$name>;
+                type Error = $crate::Base32Error<$name>;
 
                 fn try_from(s: &str) -> Result<Self, Self::Error> {
                     use $crate::Base32UlidExt;
@@ -314,7 +315,7 @@ macro_rules! define_ulid {
             }
 
             impl core::str::FromStr for $name {
-                type Err = $crate::Error<$name>;
+                type Err = $crate::Base32Error<$name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     use $crate::Base32UlidExt;

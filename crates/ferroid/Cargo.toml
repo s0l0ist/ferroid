@@ -43,6 +43,7 @@ async-lock = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
 futures = { workspace = true, features = ["alloc"] }
 num_cpus = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"] }
 
 [[bench]]

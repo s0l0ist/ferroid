@@ -23,6 +23,8 @@ mod mutex;
 mod rand;
 #[cfg(any(feature = "async-tokio", feature = "async-smol"))]
 mod runtime;
+#[cfg(feature = "serde")]
+mod serde;
 mod status;
 #[cfg(feature = "std")]
 mod thread_random;
@@ -49,6 +51,9 @@ pub use crate::rand::*;
 #[cfg_attr(docsrs, doc(cfg(any(feature = "async-tokio", feature = "async-smol"))))]
 #[cfg(any(feature = "async-tokio", feature = "async-smol"))]
 pub use crate::runtime::*;
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+#[cfg(feature = "serde")]
+pub use crate::serde::*;
 pub use crate::status::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 #[cfg(feature = "std")]

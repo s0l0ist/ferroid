@@ -38,6 +38,14 @@ pub enum Error<E = core::convert::Infallible> {
     #[cfg(feature = "base32")]
     Base32Error(crate::Base32Error<E>),
 
+    /// An error occurred during serde decoding.
+    ///
+    /// This wraps the [`crate::SerdeError`] type and is only available when
+    /// the `serde` feature is enabled.
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+    #[cfg(feature = "serde")]
+    SerdeError(crate::SerdeError<E>),
+
     /// Placeholder variant for builds where this crate is effectively
     /// **infallible**.
     ///

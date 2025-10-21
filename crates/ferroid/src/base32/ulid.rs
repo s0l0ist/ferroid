@@ -1,5 +1,5 @@
 use super::interface::Base32Ext;
-use crate::{Base32Error, BeBytes, Error, Id, Result, UlidId};
+use crate::{Base32Error, BeBytes, Id, Result, UlidId};
 use core::fmt;
 use core::marker::PhantomData;
 
@@ -138,12 +138,10 @@ where
     /// let id2 = ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
     /// assert_eq!(id1, id2);
     /// ```
-    fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
+    fn decode(s: impl AsRef<str>) -> Result<Self, Base32Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow {
-                id: decoded,
-            }));
+            return Err(Base32Error::DecodeOverflow { id: decoded });
         }
         Ok(decoded)
     }
@@ -343,7 +341,7 @@ mod alloc_test {
 
 #[cfg(all(test, feature = "ulid"))]
 mod test {
-    use crate::{Base32Error, Base32UlidExt, Error, UlidId, ULID};
+    use crate::{Base32Error, Base32UlidExt, ULID, UlidId};
 
     #[test]
     fn ulid_try_from() {
@@ -424,10 +422,10 @@ mod test {
         let res = ULID::decode(invalid);
         assert_eq!(
             res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidAscii {
+            Base32Error::DecodeInvalidAscii {
                 byte: b'@',
                 index: 12,
-            })
+            }
         );
     }
 
@@ -436,18 +434,12 @@ mod test {
         // Shorter than 26-byte base32 for u128
         let too_short = "0123456789012345678901234";
         let res = ULID::decode(too_short);
-        assert_eq!(
-            res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 25 })
-        );
+        assert_eq!(res.unwrap_err(), Base32Error::DecodeInvalidLen { len: 25 });
 
         // Longer than 26-byte base32 for u128
         let too_long = "012345678901234567890123456";
         let res = ULID::decode(too_long);
 
-        assert_eq!(
-            res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 27 })
-        );
+        assert_eq!(res.unwrap_err(), Base32Error::DecodeInvalidLen { len: 27 });
     }
 }

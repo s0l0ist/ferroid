@@ -1,4 +1,3 @@
-mod be_bytes;
 mod crockford;
 mod error;
 mod interface;
@@ -7,8 +6,6 @@ mod snowflake;
 #[cfg(feature = "ulid")]
 mod ulid;
 
-#[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
-pub use be_bytes::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
 use crockford::{decode_base32, encode_base32};
 #[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
