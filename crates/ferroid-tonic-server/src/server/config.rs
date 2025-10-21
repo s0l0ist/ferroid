@@ -1,6 +1,6 @@
 use anyhow::bail;
 use clap::Parser;
-use ferroid_tonic_core::types::{SnowflakeId, SNOWFLAKE_ID_SIZE};
+use ferroid_tonic_core::types::{SNOWFLAKE_ID_SIZE, SnowflakeId};
 
 /// Runtime configuration for the `ferroid-tonic-server` binary.
 ///

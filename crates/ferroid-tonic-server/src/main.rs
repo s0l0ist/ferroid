@@ -3,11 +3,11 @@
 mod server;
 
 use clap::Parser;
-use ferroid_tonic_core::proto::{id_generator_server::IdGeneratorServer, FILE_DESCRIPTOR_SET};
+use ferroid_tonic_core::proto::{FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer};
 use futures::Stream;
 use server::config::{CliArgs, ServerConfig};
 use server::service::handler::IdService;
-use server::telemetry::{init_telemetry, TelemetryProviders};
+use server::telemetry::{TelemetryProviders, init_telemetry};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 use tokio::signal;

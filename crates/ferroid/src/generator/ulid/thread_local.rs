@@ -136,10 +136,12 @@ impl Ulid {
     /// retrying due to ULID monotonic overflow. The `yield_for` argument
     /// indicates the recommended wait time in milliseconds.
     fn ulid_mono_with_backoff(f: impl Fn(<ULID as Id>::Ty)) -> ULID {
-        BASIC_MONO_ULID.with(|g| loop {
-            match g.next_id() {
-                IdGenStatus::Ready { id } => break id,
-                IdGenStatus::Pending { yield_for } => f(yield_for),
+        BASIC_MONO_ULID.with(|g| {
+            loop {
+                match g.next_id() {
+                    IdGenStatus::Ready { id } => break id,
+                    IdGenStatus::Pending { yield_for } => f(yield_for),
+                }
             }
         })
     }

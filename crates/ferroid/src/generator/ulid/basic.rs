@@ -1,4 +1,4 @@
-use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
+use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
 use core::marker::PhantomData;
 #[cfg(feature = "tracing")]
 use tracing::instrument;

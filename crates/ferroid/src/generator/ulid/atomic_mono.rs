@@ -1,4 +1,4 @@
-use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
+use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
 use core::cmp;
 use core::marker::PhantomData;
 use portable_atomic::{AtomicU128, Ordering};

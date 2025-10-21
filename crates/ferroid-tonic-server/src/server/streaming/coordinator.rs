@@ -1,6 +1,6 @@
 use super::request::WorkRequest;
 use crate::server::{config::ServerConfig, pool::manager::WorkerPool};
-use ferroid_tonic_core::{proto::IdChunk, Error};
+use ferroid_tonic_core::{Error, proto::IdChunk};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tonic::Status;

@@ -1,8 +1,8 @@
 use core::{fmt, hint::black_box};
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid_tonic_core::{
-    proto::{id_generator_client::IdGeneratorClient, StreamIdsRequest},
-    types::{SnowflakeId, SnowflakeIdTy, SNOWFLAKE_ID_SIZE},
+    proto::{StreamIdsRequest, id_generator_client::IdGeneratorClient},
+    types::{SNOWFLAKE_ID_SIZE, SnowflakeId, SnowflakeIdTy},
 };
 
 use futures::stream::FuturesUnordered;

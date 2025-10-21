@@ -25,16 +25,16 @@ use crate::server::{
 };
 use core::pin::Pin;
 use ferroid_tonic_core::{
-    ferroid::Id,
-    proto::{id_generator_server::IdGenerator, IdChunk, StreamIdsRequest},
-    types::{Clock, Generator, SnowflakeId, EPOCH, SNOWFLAKE_ID_SIZE},
     Error,
+    ferroid::Id,
+    proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
+    types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
 };
 use futures::TryStreamExt;
 use portable_atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tokio_stream::{wrappers::ReceiverStream, Stream};
+use tokio_stream::{Stream, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 

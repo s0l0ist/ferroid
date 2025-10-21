@@ -72,7 +72,7 @@ compile_error!(
 );
 
 // Core imports - always needed
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 // Honeycomb-specific imports
 #[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]

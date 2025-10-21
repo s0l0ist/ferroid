@@ -1,8 +1,8 @@
 use ferroid_tonic_core::{
+    Error,
     ferroid::IdGenStatus,
     proto::IdChunk,
     types::{Generator, SNOWFLAKE_ID_SIZE},
-    Error,
 };
 use tokio::sync::mpsc;
 use tonic::Status;
