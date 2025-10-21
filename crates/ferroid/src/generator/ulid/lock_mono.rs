@@ -1,5 +1,5 @@
 use crate::{
-    rand::RandSource, Error, IdGenStatus, Mutex, Result, TimeSource, UlidGenerator, UlidId,
+    Error, IdGenStatus, Mutex, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource,
 };
 use alloc::sync::Arc;
 use core::cmp::Ordering;
@@ -38,11 +38,11 @@ where
     R: RandSource<ID::Ty>,
 {
     #[cfg(feature = "cache-padded")]
-    state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
+    pub(crate) state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
     #[cfg(not(feature = "cache-padded"))]
-    state: Arc<Mutex<ID>>,
-    time: T,
-    rng: R,
+    pub(crate) state: Arc<Mutex<ID>>,
+    pub(crate) time: T,
+    pub(crate) rng: R,
 }
 
 impl<ID, T, R> LockMonoUlidGenerator<ID, T, R>

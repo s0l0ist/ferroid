@@ -8,7 +8,7 @@ use alloc::{vec, vec::Vec};
 use core::cell::Cell;
 use std::collections::HashSet;
 use std::sync::Mutex;
-use std::thread::scope;
+use std::thread::{self, scope};
 
 struct MockTime {
     millis: u128,
@@ -369,4 +369,50 @@ fn atomic_generator_threaded_monotonic() {
     run_generator_monotonic_threaded(move || {
         AtomicMonoUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
     });
+}
+
+#[cfg(not(feature = "parking-lot"))]
+#[test]
+fn lock_is_poisoned_on_panic_std_mutex() {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom;
+
+    let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
+
+    {
+        let state = Arc::clone(&generator.state);
+        let _ = thread::spawn(move || {
+            let _g = state.lock();
+            panic!("boom: poison the mutex");
+        })
+        .join();
+    }
+
+    let err = generator
+        .try_next_id()
+        .expect_err("expected an error after poison");
+    assert!(matches!(err, crate::Error::LockPoisoned(_)));
+}
+
+#[cfg(feature = "parking-lot")]
+#[test]
+#[should_panic(expected = "parking_lot::Mutex cannot be poisoned")]
+fn lock_is_poisoned_on_panic_parking_lot_mutex() {
+    let clock = MonotonicClock::default();
+    let rand = ThreadRandom;
+
+    let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
+
+    {
+        let state = Arc::clone(&generator.state);
+        let _ = thread::spawn(move || {
+            let _g = state.lock();
+            panic!("boom: poison the mutex");
+        })
+        .join();
+    }
+
+    generator
+        .try_next_id()
+        .expect_err("parking_lot::Mutex cannot be poisoned");
 }
