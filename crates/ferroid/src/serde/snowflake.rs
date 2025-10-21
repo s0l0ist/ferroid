@@ -1,9 +1,14 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod as_native_snow {
-    use super::*;
+    use super::{Deserialize, Deserializer, Serialize, Serializer};
     use crate::{SerdeError, SnowflakeId};
 
+    /// Serialize a snowflake ID as its native integer representation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying serializer fails.
     pub fn serialize<ID, S>(id: &ID, s: S) -> Result<S::Ok, S::Error>
     where
         ID: SnowflakeId,
@@ -13,6 +18,14 @@ pub mod as_native_snow {
         id.to_raw().serialize(s)
     }
 
+    /// Deserialize a snowflake ID from its native integer representation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The underlying deserializer fails
+    /// - The deserialized value is not a valid snowflake ID (e.g., exceeds the
+    ///   valid range)
     pub fn deserialize<'de, ID, D>(d: D) -> Result<ID, D::Error>
     where
         ID: SnowflakeId,
@@ -30,9 +43,14 @@ pub mod as_native_snow {
 
 #[cfg(feature = "base32")]
 pub mod as_base32_snow {
-    use super::*;
+    use super::{Deserializer, Serializer};
     use crate::{Base32SnowExt, BeBytes, SerdeError};
 
+    /// Serialize a snowflake ID as a Crockford base32 encoded string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying serializer fails.
     pub fn serialize<ID, S>(id: &ID, s: S) -> Result<S::Ok, S::Error>
     where
         ID: Base32SnowExt,
@@ -42,6 +60,15 @@ pub mod as_base32_snow {
         s.serialize_str(id.encode().as_str())
     }
 
+    /// Deserialize a snowflake ID from a Crockford base32 encoded string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The underlying deserializer fails
+    /// - The string is not valid Crockford base32 (invalid length or ascii)
+    /// - The decoded value is not a valid snowflake ID (e.g., exceeds the valid
+    ///   range)
     pub fn deserialize<'de, ID, D>(d: D) -> Result<ID, D::Error>
     where
         ID: Base32SnowExt,
@@ -50,7 +77,7 @@ pub mod as_base32_snow {
     {
         struct Base32Visitor<ID>(core::marker::PhantomData<ID>);
 
-        impl<'de, ID> serde::de::Visitor<'de> for Base32Visitor<ID>
+        impl<ID> serde::de::Visitor<'_> for Base32Visitor<ID>
         where
             ID: Base32SnowExt,
             ID::Ty: BeBytes,
