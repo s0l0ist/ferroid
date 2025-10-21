@@ -1,12 +1,11 @@
 #[cfg(feature = "async-smol")]
 mod smol;
-#[cfg(feature = "async-tokio")]
-mod tokio;
-
 #[cfg(all(feature = "async-smol", feature = "snowflake"))]
 mod smol_snowflake;
 #[cfg(all(feature = "async-smol", feature = "ulid"))]
 mod smol_ulid;
+#[cfg(feature = "async-tokio")]
+mod tokio;
 #[cfg(all(feature = "async-tokio", feature = "snowflake"))]
 mod tokio_snowflake;
 #[cfg(all(feature = "async-tokio", feature = "ulid"))]

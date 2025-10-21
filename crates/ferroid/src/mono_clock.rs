@@ -98,7 +98,7 @@ impl MonotonicClock {
         let start = Instant::now();
         let system_now = SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or(core::time::Duration::ZERO);
+            .unwrap_or(Duration::ZERO);
         #[allow(clippy::cast_possible_truncation)]
         let offset = system_now.saturating_sub(epoch).as_millis() as u64;
 
@@ -138,10 +138,7 @@ impl MonotonicClock {
             }
         });
 
-        inner
-            .handle
-            .set(handle)
-            .expect("failed to set thread handle");
+        let _ = inner.handle.set(handle);
 
         Self {
             inner,
