@@ -36,8 +36,8 @@ jobs:
           version: "32.1"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust 1.85.1
+        uses: dtolnay/rust-toolchain@1.85.1
 
       - name: Restore Cargo Cache
         id: cargo-cache-restore

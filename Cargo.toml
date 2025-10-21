@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/ferroid",
     "crates/ferroid-tonic-core",
@@ -8,8 +8,8 @@ members = [
 
 [workspace.package]
 version = "0.7.2"
-edition = "2021"
-rust-version = "1.81"
+edition = "2024"
+rust-version = "1.85.1"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Angelou <angelou.nick@gmail.com>"]
 readme = "README.md"
