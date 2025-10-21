@@ -1,6 +1,6 @@
 use crate::{
-    AtomicSnowflakeGenerator, BasicSnowflakeGenerator, Id, IdGenStatus, LockSnowflakeGenerator,
-    MonotonicClock, SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource, ToU64,
+    BasicSnowflakeGenerator, Id, IdGenStatus, LockSnowflakeGenerator, MonotonicClock,
+    SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource, ToU64,
 };
 use alloc::rc::Rc;
 use alloc::sync::Arc;
@@ -220,7 +220,10 @@ fn lock_generator_sequence_test() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "64")]
 fn atomic_generator_sequence_test() {
+    use crate::AtomicSnowflakeGenerator;
+
     let mock_time = MockTime { millis: 42 };
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
         AtomicSnowflakeGenerator::new(0, mock_time);
@@ -252,7 +255,10 @@ fn lock_generator_pending_test() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "64")]
 fn atomic_generator_pending_test() {
+    use crate::AtomicSnowflakeGenerator;
+
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
         AtomicSnowflakeGenerator::from_components(
             0,
@@ -290,7 +296,10 @@ fn lock_generator_rollover_test() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "64")]
 fn atomic_generator_rollover_test() {
+    use crate::AtomicSnowflakeGenerator;
+
     let shared_time = SharedMockStepTime {
         clock: Rc::new(MockStepTime {
             values: vec![42, 43],
@@ -319,7 +328,10 @@ fn lock_generator_monotonic_clock_sequence_increments() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "64")]
 fn atomic_generator_monotonic_clock_sequence_increments() {
+    use crate::AtomicSnowflakeGenerator;
+
     let clock = MonotonicClock::default();
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
         AtomicSnowflakeGenerator::new(1, clock);
@@ -335,7 +347,10 @@ fn lock_generator_threaded_monotonic() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "64")]
 fn atomic_generator_threaded_monotonic() {
+    use crate::AtomicSnowflakeGenerator;
+
     let clock = MonotonicClock::default();
     run_generator_monotonic_threaded(move || {
         AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock.clone())

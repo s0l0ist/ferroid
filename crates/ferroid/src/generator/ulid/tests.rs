@@ -1,7 +1,6 @@
 use crate::{
-    AtomicMonoUlidGenerator, BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus,
-    LockMonoUlidGenerator, MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64,
-    UlidGenerator, UlidId, ULID,
+    BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus, LockMonoUlidGenerator,
+    MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64, ULID, UlidGenerator, UlidId,
 };
 use alloc::rc::Rc;
 use alloc::sync::Arc;
@@ -261,7 +260,10 @@ fn lock_generator_mono_sequence_test() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_sequence_test() {
+    use crate::AtomicMonoUlidGenerator;
+
     let mock_time = MockTime { millis: 42 };
     let mock_rand = MockRand { rand: 42 };
 
@@ -285,7 +287,10 @@ fn lock_generator_mono_pending_test() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_pending_test() {
+    use crate::AtomicMonoUlidGenerator;
+
     let generator: AtomicMonoUlidGenerator<ULID, _, _> =
         AtomicMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
     run_generator_returns_pending_when_sequence_exhausted(&generator);
@@ -308,7 +313,10 @@ fn lock_generator_mono_rollover_test() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_rollover_test() {
+    use crate::AtomicMonoUlidGenerator;
+
     let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
     let generator: AtomicMonoUlidGenerator<ULID, _, _> =
         AtomicMonoUlidGenerator::new(shared_time.clone(), MaxRand);
@@ -332,7 +340,10 @@ fn lock_generator_monotonic_clock_random_increments() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "128")]
 fn atomic_generator_monotonic_clock_random_increments() {
+    use crate::AtomicMonoUlidGenerator;
+
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
     let generator: AtomicMonoUlidGenerator<ULID, _, _> = AtomicMonoUlidGenerator::new(clock, rand);
@@ -349,7 +360,10 @@ fn lock_generator_threaded_monotonic() {
 }
 
 #[test]
+#[cfg(target_has_atomic = "128")]
 fn atomic_generator_threaded_monotonic() {
+    use crate::AtomicMonoUlidGenerator;
+
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
     run_generator_monotonic_threaded(move || {
