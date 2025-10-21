@@ -540,19 +540,19 @@ efficiency).
 
 | Generator                  | Generators | Time per ID  | Throughput     |
 | -------------------------- | ---------- | ------------ | -------------- |
-| `LockSnowflakeGenerator`   | 1024       | **~1.24 ns** | ~804M IDs/sec  |
-| `AtomicSnowflakeGenerator` | 1024       | **~0.82 ns** | ~1.22B IDs/sec |
-| `LockMonoUlidGenerator`    | 1024       | **~1.17 ns** | ~855M IDs/sec  |
-| `AtomicMonoUlidGenerator`  | 1024       | **~1.02 ns** | ~983M IDs/sec  |
+| `LockSnowflakeGenerator`   | 1024       | **~1.18 ns** | ~849M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.80 ns** | ~1.25B IDs/sec |
+| `LockMonoUlidGenerator`    | 1024       | **~1.19 ns** | ~838M IDs/sec  |
+| `AtomicMonoUlidGenerator`  | 1024       | **~1.01 ns** | ~992M IDs/sec  |
 
 #### Async (Smol Runtime) - Peak throughput
 
 | Generator                  | Generators | Time per ID  | Throughput     |
 | -------------------------- | ---------- | ------------ | -------------- |
-| `LockSnowflakeGenerator`   | 1024       | **~1.26 ns** | ~791M IDs/sec  |
-| `AtomicSnowflakeGenerator` | 1024       | **~0.77 ns** | ~1.31B IDs/sec |
-| `LockMonoUlidGenerator`    | 1024       | **~1.16 ns** | ~859M IDs/sec  |
-| `AtomicMonoUlidGenerator`  | 1024       | **~0.97 ns** | ~1.03B IDs/sec |
+| `LockSnowflakeGenerator`   | 1024       | **~1.17 ns** | ~852M IDs/sec  |
+| `AtomicSnowflakeGenerator` | 1024       | **~0.76 ns** | ~1.32B IDs/sec |
+| `LockMonoUlidGenerator`    | 1024       | **~1.19 ns** | ~842M IDs/sec  |
+| `AtomicMonoUlidGenerator`  | 1024       | **~0.98 ns** | ~1.02B IDs/sec |
 
 To run all benchmarks:
 

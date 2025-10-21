@@ -34,14 +34,13 @@ where
 
 impl<G, ID, T, R> UlidGeneratorAsyncSmolExt<ID, T, R> for G
 where
-    G: UlidGenerator<ID, T, R>,
-    ID: UlidId,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
+    G: UlidGenerator<ID, T, R> + Sync,
+    ID: UlidId + Send,
+    T: TimeSource<ID::Ty> + Send,
+    R: RandSource<ID::Ty> + Send,
 {
     type Err = G::Err;
 
-    #[allow(clippy::future_not_send)]
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<SmolSleep>(self)
     }
@@ -52,7 +51,7 @@ mod tests {
     use super::*;
     use crate::{
         LockMonoUlidGenerator, MonotonicClock, RandSource, Result, SleepProvider, SmolYield,
-        ThreadRandom, TimeSource, UlidGenerator, UlidId, ULID,
+        ThreadRandom, TimeSource, ULID, UlidGenerator, UlidId,
     };
     use futures::future::try_join_all;
     use smol::Task;

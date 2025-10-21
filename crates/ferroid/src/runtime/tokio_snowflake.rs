@@ -33,13 +33,12 @@ where
 
 impl<G, ID, T> SnowflakeGeneratorAsyncTokioExt<ID, T> for G
 where
-    G: SnowflakeGenerator<ID, T>,
-    ID: SnowflakeId,
-    T: TimeSource<ID::Ty>,
+    G: SnowflakeGenerator<ID, T> + Sync,
+    ID: SnowflakeId + Send,
+    T: TimeSource<ID::Ty> + Send,
 {
     type Err = G::Err;
 
-    #[allow(clippy::future_not_send)]
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<TokioSleep>(self)
     }

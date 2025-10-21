@@ -1,19 +1,21 @@
-use core::fmt;
-use core::hint::black_box;
-use core::time::Duration;
-use criterion::async_executor::SmolExecutor;
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use core::{fmt, hint::black_box, time::Duration};
+use criterion::{
+    Criterion, Throughput, async_executor::SmolExecutor, criterion_group, criterion_main,
+};
 use ferroid::{
     AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt,
     BasicMonoUlidGenerator, BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes, Id, IdGenStatus,
     LockMonoUlidGenerator, LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep,
     SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeId, SnowflakeMastodonId,
-    SnowflakeTwitterId, ThreadRandom, TimeSource, ToU64, TokioSleep, Ulid, UlidGenerator,
-    UlidGeneratorAsyncExt, UlidId, ULID,
+    SnowflakeTwitterId, ThreadRandom, TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator,
+    UlidGeneratorAsyncExt, UlidId,
 };
 use futures::future::try_join_all;
-use std::sync::{Arc, Barrier};
-use std::{thread::scope, time::Instant};
+use std::{
+    sync::{Arc, Barrier},
+    thread::scope,
+    time::Instant,
+};
 use tokio::runtime::Builder;
 
 struct FixedMockTime {
@@ -138,6 +140,7 @@ fn bench_generator_threaded<ID, G, T>(
                     let clock = clock_factory();
                     scope(|s| {
                         let start_signal = Arc::new(Barrier::new(thread_count + 1));
+                        #[allow(clippy::needless_collect)]
                         let handles: Vec<_> = (0..thread_count)
                             .map(|i| {
                                 let start = start_signal.clone();
@@ -222,7 +225,7 @@ fn bench_generator_contended<ID, G, T>(
 
                     scope(|s| {
                         let start_signal = Arc::new(Barrier::new(thread_count + 1));
-
+                        #[allow(clippy::needless_collect)]
                         let handles: Vec<_> = (0..thread_count)
                             .map(|_| {
                                 let start = start_signal.clone();
@@ -286,10 +289,10 @@ fn bench_generator_async_tokio<ID, G, T>(
     generator_fn: impl Fn(u64, T) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
 ) where
-    ID: SnowflakeId + Send + Sync + 'static,
-    G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-    G::Err: Send + Sync + 'static,
-    T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
+    ID: SnowflakeId + Send,
+    G: SnowflakeGenerator<ID, T> + Send + Sync,
+    G::Err: Send + 'static,
+    T: TimeSource<ID::Ty> + Clone + Send + 'static,
 {
     let mut group = c.benchmark_group(group_name);
     group.sample_size(10);
@@ -340,10 +343,10 @@ pub fn bench_generator_async_smol<ID, G, T>(
     generator_fn: impl Fn(u64, T) -> G + Copy + Send + 'static,
     clock_factory: impl Fn() -> T + Copy,
 ) where
-    ID: SnowflakeId + Send + Sync + 'static,
-    G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-    G::Err: Send + Sync + 'static,
-    T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
+    ID: SnowflakeId + Send,
+    G: SnowflakeGenerator<ID, T> + Send + Sync,
+    G::Err: Send + 'static,
+    T: TimeSource<ID::Ty> + Clone + Send + 'static,
 {
     // Use all CPUs
     unsafe { std::env::set_var("SMOL_THREADS", num_cpus::get().to_string()) };
@@ -450,6 +453,7 @@ fn bench_generator_ulid_threaded<ID, G, T, R>(
                     let rand = rand_factory();
                     scope(|s| {
                         let start_signal = Arc::new(Barrier::new(thread_count + 1));
+                        #[allow(clippy::needless_collect)]
                         let handles: Vec<_> = (0..thread_count)
                             .map(|_| {
                                 let start = start_signal.clone();
@@ -538,7 +542,7 @@ fn bench_generator_ulid_contended<ID, G, T, R>(
 
                     scope(|s| {
                         let start_signal = Arc::new(Barrier::new(thread_count + 1));
-
+                        #[allow(clippy::needless_collect)]
                         let handles: Vec<_> = (0..thread_count)
                             .map(|_| {
                                 let start = start_signal.clone();
@@ -604,11 +608,11 @@ fn bench_ulid_generator_async_tokio<ID, G, T, R>(
     clock_factory: impl Fn() -> T + Copy,
     rand_factory: impl Fn() -> R + Copy,
 ) where
-    ID: UlidId + Send + Sync + 'static,
-    G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-    G::Err: Send + Sync + 'static,
-    T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
-    R: RandSource<ID::Ty> + Clone + Send + Sync + 'static,
+    ID: UlidId + Send,
+    G: UlidGenerator<ID, T, R> + Send + Sync,
+    G::Err: Send + 'static,
+    T: TimeSource<ID::Ty> + Clone + Send + 'static,
+    R: RandSource<ID::Ty> + Clone + Send + 'static,
 {
     let mut group = c.benchmark_group(group_name);
     group.sample_size(10);
@@ -659,11 +663,11 @@ fn bench_ulid_generator_async_smol<ID, G, T, R>(
     clock_factory: impl Fn() -> T + Copy,
     rand_factory: impl Fn() -> R + Copy,
 ) where
-    ID: UlidId + Send + Sync + 'static,
-    G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
-    G::Err: Send + Sync + 'static,
-    T: TimeSource<ID::Ty> + Clone + Send + Sync + 'static,
-    R: RandSource<ID::Ty> + Clone + Send + Sync + 'static,
+    ID: UlidId + Send,
+    G: UlidGenerator<ID, T, R> + Send + Sync,
+    G::Err: Send + 'static,
+    T: TimeSource<ID::Ty> + Clone + Send + 'static,
+    R: RandSource<ID::Ty> + Clone + Send + 'static,
 {
     // Use all CPUs
     unsafe { std::env::set_var("SMOL_THREADS", num_cpus::get().to_string()) };
