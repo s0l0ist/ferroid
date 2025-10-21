@@ -28,22 +28,29 @@ mod status;
 mod thread_random;
 mod time;
 
+#[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
 #[cfg(feature = "base32")]
 pub use crate::base32::*;
 pub use crate::error::*;
+#[cfg_attr(docsrs, doc(cfg(feature = "futures")))]
 #[cfg(feature = "futures")]
 pub use crate::futures::*;
+#[cfg_attr(docsrs, doc(cfg(any(feature = "snowflake", feature = "ulid"))))]
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 pub use crate::generator::*;
 pub use crate::id::*;
+#[cfg_attr(docsrs, doc(cfg(all(feature = "std", feature = "alloc"))))]
 #[cfg(all(feature = "std", feature = "alloc"))]
 pub use crate::mono_clock::*;
 pub use crate::rand::*;
+#[cfg_attr(docsrs, doc(cfg(any(feature = "async-tokio", feature = "async-smol"))))]
 #[cfg(any(feature = "async-tokio", feature = "async-smol"))]
 pub use crate::runtime::*;
 pub use crate::status::*;
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 #[cfg(feature = "std")]
 pub use crate::thread_random::*;
 pub use crate::time::*;
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 #[cfg(feature = "std")]
 pub use mutex::*;

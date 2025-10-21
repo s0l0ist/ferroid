@@ -100,6 +100,7 @@ pub trait UlidId: Id {
 ///              +----------------+-------------+
 ///              |<-- MSB -- 128 bits -- LSB -->|
 /// ```
+#[cfg_attr(docsrs, doc(cfg(feature = "ulid")))]
 #[macro_export]
 macro_rules! define_ulid {
     (

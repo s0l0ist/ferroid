@@ -117,6 +117,7 @@ pub trait SnowflakeId: Id {
 ///              +--------------+----------------+-----------------+---------------+
 ///              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
 /// ```
+#[cfg_attr(docsrs, doc(cfg(feature = "snowflake")))]
 #[macro_export]
 macro_rules! define_snowflake_id {
     (

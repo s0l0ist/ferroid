@@ -15,7 +15,7 @@ pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, E>;
 ///
 /// When **`base32` is disabled** and either **`lock` is disabled** *or*
 /// **`parking-lot` is enabled** (no poisoning), the crate is effectively
-/// infallible at runtime. In that configuration, the [`Error::Infallible`]
+/// infallible at runtime. In that configuration, the `Error::Infallible`
 /// variant exists solely to satisfy the `Result<T, Error<E>>` API and should
 /// never be observed in practice.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -26,6 +26,7 @@ pub enum Error<E = core::convert::Infallible> {
     /// This occurs when a thread panics while holding the lock. When the
     /// `parking-lot` feature is enabled, mutexes do **not** poison, so this
     /// variant is not available.
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
     #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
     LockPoisoned(core::marker::PhantomData<E>),
 
@@ -33,6 +34,7 @@ pub enum Error<E = core::convert::Infallible> {
     ///
     /// This wraps the [`crate::Base32Error`] type and is only available when
     /// the `base32` feature is enabled.
+    #[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
     #[cfg(feature = "base32")]
     Base32Error(crate::Base32Error<E>),
 
@@ -48,6 +50,7 @@ pub enum Error<E = core::convert::Infallible> {
     /// `lock` is disabled, or `parking-lot` is enabled), there is nothing
     /// fallible at runtime. This variant exists solely to satisfy `Result<T,
     /// Error<E>>` and should never be constructed.
+    #[cfg_attr(docsrs, doc(cfg(not(all(feature = "lock", feature = "base32")))))]
     #[cfg(not(all(feature = "lock", feature = "base32")))]
     Infallible(core::marker::PhantomData<E>),
 }
@@ -60,10 +63,11 @@ impl<E: fmt::Debug> fmt::Display for Error<E> {
 
 impl<E: fmt::Debug> core::error::Error for Error<E> {}
 
+#[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
 #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 use crate::{MutexGuard, PoisonError};
+#[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
 #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
-// Convert all poisoned lock errors to a simplified `LockPoisoned`
 impl<T, E: fmt::Debug> From<PoisonError<MutexGuard<'_, T>>> for Error<E> {
     fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {
         Self::LockPoisoned(core::marker::PhantomData)

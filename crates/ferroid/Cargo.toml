@@ -31,7 +31,7 @@ crossbeam-utils = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 parking_lot = { workspace = true, optional = true }
 pin-project-lite = { workspace = true, optional = true }
-portable-atomic = { workspace = true, features = ["require-cas"] }
+portable-atomic = { workspace = true, optional = true }
 rand = { workspace = true, optional = true, features = ["thread_rng"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
 smol = { workspace = true, optional = true }
@@ -53,7 +53,7 @@ harness = false
 default = []
 all = ["std", "alloc", "snowflake", "ulid", "thread-local", "basic", "lock", "atomic", "base32", "async-tokio", "async-smol"]
 
-std = ["dep:rand", "portable-atomic/std"]
+std = ["dep:rand"]
 alloc = []
 cache-padded = ["dep:crossbeam-utils"]
 parking-lot = ["std", "alloc", "dep:parking_lot"]
@@ -62,7 +62,7 @@ snowflake = []
 ulid = []
 basic = []
 lock = ["std", "alloc"]
-atomic = []
+atomic = ["dep:portable-atomic"]
 
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
