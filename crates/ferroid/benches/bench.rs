@@ -3,12 +3,12 @@ use criterion::{
     Criterion, Throughput, async_executor::SmolExecutor, criterion_group, criterion_main,
 };
 use ferroid::{
-    AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, Base32SnowExt, Base32UlidExt,
-    BasicMonoUlidGenerator, BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes, Id, IdGenStatus,
-    LockMonoUlidGenerator, LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep,
-    SnowflakeGenerator, SnowflakeGeneratorAsyncExt, SnowflakeId, SnowflakeMastodonId,
-    SnowflakeTwitterId, ThreadRandom, TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator,
-    UlidGeneratorAsyncExt, UlidId,
+    AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, BasicMonoUlidGenerator,
+    BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes, Id, IdGenStatus, LockMonoUlidGenerator,
+    LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep, SnowflakeGenerator,
+    SnowflakeGeneratorAsyncExt, SnowflakeId, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom,
+    TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, UlidId,
+    base32::{Base32SnowExt, Base32UlidExt},
 };
 use futures::future::try_join_all;
 use std::{

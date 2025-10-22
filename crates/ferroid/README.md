@@ -97,7 +97,7 @@ bit, making `u64::MAX` invalid. This validation behavior is consistent with
 section).
 
 ```rust
-use ferroid::{SnowflakeTwitterId, as_base32_snow, as_native_snow};
+use ferroid::{SnowflakeTwitterId, serde::{as_base32_snow, as_native_snow}};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -128,9 +128,10 @@ stack-allocated buffer and avoids heap allocation by default. To enable
 ```rust
 use core::str::FromStr;
 use ferroid::{
-    Base32SnowExt, Base32SnowFormatter, Base32UlidExt, Base32UlidFormatter, SnowflakeId,
-    SnowflakeTwitterId, UlidId, ULID,
+    SnowflakeId, SnowflakeTwitterId, ULID, UlidId,
+    base32::{Base32SnowExt, Base32SnowFormatter, Base32UlidExt, Base32UlidFormatter},
 };
+
 
 let id = SnowflakeTwitterId::from(123_456, 0, 42);
 assert_eq!(format!("{id}"), "00000F280001A");
@@ -412,7 +413,7 @@ supported.
 - `futures`: Internal glue for the async features.
 - `base32`: Crockford Base32 encode/decode support.
 - `tracing`: Emit tracing spans during ID generation.
-- `serde`: Not used.
+- `serde`: Enable serde on ID types.
 
 ### Behavior
 

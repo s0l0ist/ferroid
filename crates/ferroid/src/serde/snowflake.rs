@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod as_native_snow {
     use super::{Deserialize, Deserializer, Serialize, Serializer};
-    use crate::{SerdeError, SnowflakeId};
+    use crate::{SnowflakeId, serde::Error};
 
     /// Serialize a snowflake ID as its native integer representation.
     ///
@@ -35,7 +35,7 @@ pub mod as_native_snow {
         let n = <ID::Ty>::deserialize(d)?;
         let id = ID::from_raw(n);
         if !id.is_valid() {
-            return Err(serde::de::Error::custom(SerdeError::DecodeOverflow { id }));
+            return Err(serde::de::Error::custom(Error::DecodeOverflow { id }));
         }
         Ok(id)
     }
@@ -48,7 +48,7 @@ pub mod as_native_snow {
 #[cfg(feature = "base32")]
 pub mod as_base32_snow {
     use super::{Deserializer, Serializer};
-    use crate::{Base32SnowExt, BeBytes, SerdeError};
+    use crate::{BeBytes, base32::Base32SnowExt, serde::Error};
 
     /// Serialize a snowflake ID as a Crockford base32 encoded string.
     ///
@@ -97,7 +97,7 @@ pub mod as_base32_snow {
             where
                 E: serde::de::Error,
             {
-                ID::decode(v).map_err(|e| serde::de::Error::custom(SerdeError::Base32Error(e)))
+                ID::decode(v).map_err(|e| serde::de::Error::custom(Error::Base32Error(e)))
             }
         }
 
@@ -108,7 +108,7 @@ pub mod as_base32_snow {
 #[cfg(all(test, feature = "alloc", feature = "snowflake"))]
 mod tests {
     use super::*;
-    use crate::{SerdeError, SnowflakeTwitterId};
+    use crate::{SnowflakeTwitterId, serde::Error};
     use alloc::string::ToString;
     use core::u64;
     use serde_json::json;
@@ -141,7 +141,7 @@ mod tests {
         let err = serde_json::from_value::<Row>(json).expect_err("should fail");
         assert_eq!(
             err.to_string(),
-            SerdeError::DecodeOverflow {
+            Error::DecodeOverflow {
                 id: SnowflakeTwitterId::from_raw(u64::MAX)
             }
             .to_string()
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     #[cfg(feature = "base32")]
     fn base32_snow_roundtrip_decode_overflow() {
-        use crate::Base32Error;
+        use crate::{base32::Error as Base32Error, serde::Error as SerdeError};
 
         #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
         struct Row {

@@ -6,7 +6,7 @@ use core::fmt;
 /// including the decoded ID in case of overflow. This can help callers inspect
 /// or log invalid IDs during error handling.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Base32Error<E> {
+pub enum Error<E> {
     /// The input string length was invalid.
     ///
     /// Crockford Base32 decodes values in 5-bit chunks. Strings of unexpected
@@ -39,7 +39,7 @@ pub enum Base32Error<E> {
     },
 }
 
-impl<E: core::fmt::Debug> fmt::Display for Base32Error<E> {
+impl<E: core::fmt::Debug> fmt::Display for Error<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::DecodeInvalidAscii { byte, index } => {
@@ -50,4 +50,4 @@ impl<E: core::fmt::Debug> fmt::Display for Base32Error<E> {
         }
     }
 }
-impl<E: core::fmt::Debug> core::error::Error for Base32Error<E> {}
+impl<E: core::fmt::Debug> core::error::Error for Error<E> {}

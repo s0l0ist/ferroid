@@ -1,4 +1,4 @@
-use crate::{Base32Error, BeBytes, Result};
+use crate::{BeBytes, Result, base32::Error};
 
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const NO_VALUE: u8 = 255;
@@ -84,7 +84,7 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 ///   always in-bounds.
 #[inline(always)]
 #[allow(clippy::inline_always)]
-pub fn decode_base32<T, E>(encoded: &str) -> Result<T, Base32Error<E>>
+pub fn decode_base32<T, E>(encoded: &str) -> Result<T, Error<E>>
 where
     T: BeBytes
         + Default
@@ -97,7 +97,7 @@ where
         // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
         let val = unsafe { *LOOKUP.get_unchecked(b as usize) };
         if val == NO_VALUE {
-            return Err(Base32Error::DecodeInvalidAscii { byte: b, index: i });
+            return Err(Error::DecodeInvalidAscii { byte: b, index: i });
         }
         acc = (acc << BITS_PER_CHAR) | T::from(val);
     }
@@ -200,7 +200,7 @@ mod tests {
         let res = decode_base32::<u32, ()>(s);
         assert_eq!(
             res.unwrap_err(),
-            Base32Error::DecodeInvalidAscii {
+            Error::DecodeInvalidAscii {
                 byte: b'!',
                 index: 6,
             }

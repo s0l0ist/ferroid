@@ -300,25 +300,25 @@ macro_rules! define_ulid {
         $crate::cfg_base32! {
             impl core::fmt::Display for $name {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    use $crate::Base32UlidExt;
+                    use $crate::base32::Base32UlidExt;
                     self.encode().fmt(f)
                 }
             }
 
             impl core::convert::TryFrom<&str> for $name {
-                type Error = $crate::Base32Error<$name>;
+                type Error = $crate::base32::Error<$name>;
 
                 fn try_from(s: &str) -> Result<Self, Self::Error> {
-                    use $crate::Base32UlidExt;
+                    use $crate::base32::Base32UlidExt;
                     Self::decode(s)
                 }
             }
 
             impl core::str::FromStr for $name {
-                type Err = $crate::Base32Error<$name>;
+                type Err = $crate::base32::Error<$name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    use $crate::Base32UlidExt;
+                    use $crate::base32::Base32UlidExt;
                     Self::decode(s)
                 }
             }

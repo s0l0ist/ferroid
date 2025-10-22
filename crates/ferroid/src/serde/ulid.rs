@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod as_native_ulid {
     use super::{Deserialize, Deserializer, Serialize, Serializer};
-    use crate::{SerdeError, UlidId};
+    use crate::{UlidId, serde::Error};
 
     /// Serialize a ULID as its native integer representation.
     ///
@@ -35,7 +35,7 @@ pub mod as_native_ulid {
         let n = <ID::Ty>::deserialize(d)?;
         let id = ID::from_raw(n);
         if !id.is_valid() {
-            return Err(serde::de::Error::custom(SerdeError::DecodeOverflow { id }));
+            return Err(serde::de::Error::custom(Error::DecodeOverflow { id }));
         }
         Ok(id)
     }
@@ -48,7 +48,7 @@ pub mod as_native_ulid {
 #[cfg(feature = "base32")]
 pub mod as_base32_ulid {
     use super::{Deserializer, Serializer};
-    use crate::{Base32UlidExt, BeBytes, SerdeError};
+    use crate::{BeBytes, base32::Base32UlidExt, serde::Error};
 
     /// Serialize a ULID as a Crockford base32 encoded string.
     ///
@@ -96,7 +96,7 @@ pub mod as_base32_ulid {
             where
                 E: serde::de::Error,
             {
-                ID::decode(v).map_err(|e| serde::de::Error::custom(SerdeError::Base32Error(e)))
+                ID::decode(v).map_err(|e| serde::de::Error::custom(Error::Base32Error(e)))
             }
         }
 
