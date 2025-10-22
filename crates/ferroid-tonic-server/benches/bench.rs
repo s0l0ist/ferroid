@@ -1,17 +1,17 @@
 use core::{fmt, hint::black_box};
-use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use ferroid_tonic_core::{
-    proto::{StreamIdsRequest, id_generator_client::IdGeneratorClient},
-    types::{SNOWFLAKE_ID_SIZE, SnowflakeId, SnowflakeIdTy},
-};
-
-use futures::stream::FuturesUnordered;
 use std::{
     net::TcpStream,
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant},
 };
+
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use ferroid_tonic_core::{
+    proto::{StreamIdsRequest, id_generator_client::IdGeneratorClient},
+    types::{SNOWFLAKE_ID_SIZE, SnowflakeId, SnowflakeIdTy},
+};
+use futures::stream::FuturesUnordered;
 use tokio::runtime::Builder;
 use tokio_stream::StreamExt;
 use tonic::{

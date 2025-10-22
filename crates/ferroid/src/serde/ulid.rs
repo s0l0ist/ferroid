@@ -106,10 +106,12 @@ pub mod as_base32_ulid {
 
 #[cfg(all(test, feature = "ulid"))]
 mod tests {
+    use core::u64;
+
+    use serde_json::json;
+
     use super::*;
     use crate::id::ULID;
-    use core::u64;
-    use serde_json::json;
 
     #[test]
     fn native_ulid_roundtrip() {

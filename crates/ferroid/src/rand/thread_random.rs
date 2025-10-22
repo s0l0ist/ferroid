@@ -1,5 +1,6 @@
-use crate::RandSource;
 use rand::{Rng, rng};
+
+use crate::rand::RandSource;
 
 /// A `RandSource` that uses the thread-local RNG (`rand::thread_local()`).
 ///

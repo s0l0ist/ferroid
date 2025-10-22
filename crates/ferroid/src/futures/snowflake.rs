@@ -1,9 +1,3 @@
-use super::SleepProvider;
-use crate::{
-    IdGenStatus, Result, TimeSource,
-    generator::SnowflakeGenerator,
-    id::{SnowflakeId, ToU64},
-};
 use core::{
     future::Future,
     marker::PhantomData,
@@ -11,7 +5,16 @@ use core::{
     task::{Context, Poll},
     time::Duration,
 };
+
 use pin_project_lite::pin_project;
+
+use super::SleepProvider;
+use crate::{
+    Result,
+    generator::{IdGenStatus, SnowflakeGenerator},
+    id::{SnowflakeId, ToU64},
+    time::TimeSource,
+};
 
 /// Extension trait for asynchronously generating Snowflake IDs.
 ///

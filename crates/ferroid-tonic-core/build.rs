@@ -43,7 +43,6 @@
 /// ```
 ///
 /// This module will include both gRPC service traits and message types.
-///
 use std::env;
 use std::path::PathBuf;
 fn main() {

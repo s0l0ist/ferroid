@@ -209,7 +209,7 @@ use `TWITTER_EPOCH`, which begins at **Thursday, November 4, 2010, 01:42:54.657
 UTC** (millisecond zero).
 
 ```rust
-use ferroid::{MonotonicClock, UNIX_EPOCH};
+use ferroid::time::{MonotonicClock, UNIX_EPOCH};
 
 // Same as MonotonicClock::default();
 let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
@@ -227,8 +227,10 @@ path. You may spin, yield, or sleep depending on your environment:
 
 ```rust
 use ferroid::{
-    generator::{BasicSnowflakeGenerator, BasicUlidGenerator}, IdGenStatus, MonotonicClock,
-    id::{SnowflakeTwitterId, ULID, ToU64}, TWITTER_EPOCH, ThreadRandom
+    rand::ThreadRandom,
+    generator::{IdGenStatus, BasicSnowflakeGenerator, BasicUlidGenerator},
+    id::{SnowflakeTwitterId, ToU64, ULID},
+    time::{MonotonicClock, TWITTER_EPOCH},
 };
 
 let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
@@ -275,8 +277,8 @@ throughput.
 
 ```rust
 use ferroid::{
-    Error, generator::{LockMonoUlidGenerator, LockSnowflakeGenerator}, MASTODON_EPOCH, MonotonicClock, Result,
-    id::{SnowflakeMastodonId, ULID}, ThreadRandom, UNIX_EPOCH,
+    Error, generator::{LockMonoUlidGenerator, LockSnowflakeGenerator}, time::MASTODON_EPOCH, time::MonotonicClock, Result,
+    id::{SnowflakeMastodonId, ULID}, rand::ThreadRandom, time::UNIX_EPOCH,
     futures::{SnowflakeGeneratorAsyncTokioExt, UlidGeneratorAsyncTokioExt},
 };
 

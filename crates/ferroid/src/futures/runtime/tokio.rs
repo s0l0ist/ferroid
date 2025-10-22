@@ -1,7 +1,7 @@
-use crate::futures::SleepProvider;
 use alloc::boxed::Box;
-use core::future::Future;
-use core::pin::Pin;
+use core::{future::Future, pin::Pin};
+
+use crate::futures::SleepProvider;
 
 /// An implementation of [`SleepProvider`] using Tokio's timer.
 ///

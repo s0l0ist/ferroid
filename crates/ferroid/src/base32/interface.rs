@@ -34,7 +34,6 @@ where
     /// integer type.
     ///
     /// See also: [`Base32Ext::enc_to_buf`] for usage.
-    ///
     #[inline]
     fn inner_buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
         <<Self as Id>::Ty as BeBytes>::Base32Array::default()

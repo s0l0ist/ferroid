@@ -1,6 +1,6 @@
 use ferroid_tonic_core::{
     Error,
-    ferroid::IdGenStatus,
+    ferroid::generator::IdGenStatus,
     proto::IdChunk,
     types::{Generator, SNOWFLAKE_ID_SIZE},
 };

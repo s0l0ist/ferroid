@@ -1,5 +1,6 @@
-use crate::{IdGenStatus, Result, TimeSource, id::SnowflakeId};
 use core::fmt;
+
+use crate::{Result, generator::IdGenStatus, id::SnowflakeId, time::TimeSource};
 
 /// A minimal interface for generating Snowflake IDs
 pub trait SnowflakeGenerator<ID, T>

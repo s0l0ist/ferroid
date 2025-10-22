@@ -1,9 +1,11 @@
-use super::request::WorkRequest;
-use crate::server::{config::ServerConfig, pool::manager::WorkerPool};
-use ferroid_tonic_core::{Error, proto::IdChunk};
 use std::sync::Arc;
+
+use ferroid_tonic_core::{Error, proto::IdChunk};
 use tokio::sync::mpsc;
 use tonic::Status;
+
+use super::request::WorkRequest;
+use crate::server::{config::ServerConfig, pool::manager::WorkerPool};
 
 /// Splits a large ID generation request into chunks and delegates them to
 /// workers.

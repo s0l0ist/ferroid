@@ -1,24 +1,26 @@
 use core::{fmt, hint::black_box, time::Duration};
-use criterion::{
-    Criterion, Throughput, async_executor::SmolExecutor, criterion_group, criterion_main,
-};
-use ferroid::{
-    IdGenStatus, MonotonicClock, RandSource, ThreadRandom, TimeSource,
-    base32::{Base32SnowExt, Base32UlidExt},
-    futures::{SmolSleep, SnowflakeGeneratorAsyncExt, TokioSleep, UlidGeneratorAsyncExt},
-    generator::{
-        AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, BasicMonoUlidGenerator,
-        BasicSnowflakeGenerator, BasicUlidGenerator, LockMonoUlidGenerator, LockSnowflakeGenerator,
-        SnowflakeGenerator, UlidGenerator, thread_local::Ulid,
-    },
-    id::{BeBytes, Id, SnowflakeId, SnowflakeMastodonId, SnowflakeTwitterId, ToU64, ULID, UlidId},
-};
-use futures::future::try_join_all;
 use std::{
     sync::{Arc, Barrier},
     thread::scope,
     time::Instant,
 };
+
+use criterion::{
+    Criterion, Throughput, async_executor::SmolExecutor, criterion_group, criterion_main,
+};
+use ferroid::{
+    base32::{Base32SnowExt, Base32UlidExt},
+    futures::{SmolSleep, SnowflakeGeneratorAsyncExt, TokioSleep, UlidGeneratorAsyncExt},
+    generator::{
+        AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, BasicMonoUlidGenerator,
+        BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator,
+        LockSnowflakeGenerator, SnowflakeGenerator, UlidGenerator, thread_local::Ulid,
+    },
+    id::{BeBytes, Id, SnowflakeId, SnowflakeMastodonId, SnowflakeTwitterId, ToU64, ULID, UlidId},
+    rand::{RandSource, ThreadRandom},
+    time::{MonotonicClock, TimeSource},
+};
+use futures::future::try_join_all;
 use tokio::runtime::Builder;
 
 struct FixedMockTime {

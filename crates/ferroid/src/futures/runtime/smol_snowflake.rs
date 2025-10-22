@@ -1,7 +1,8 @@
-use crate::{
-    Result, TimeSource, futures::SmolSleep, generator::SnowflakeGenerator, id::SnowflakeId,
-};
 use core::future::Future;
+
+use crate::{
+    Result, futures::SmolSleep, generator::SnowflakeGenerator, id::SnowflakeId, time::TimeSource,
+};
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
@@ -50,17 +51,19 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashSet, vec::Vec};
+
+    use futures::future::try_join_all;
+    use smol::Task;
+
     use super::*;
     use crate::{
-        MonotonicClock, Result, TimeSource,
+        Result,
         futures::{SleepProvider, SmolYield},
         generator::{AtomicSnowflakeGenerator, LockSnowflakeGenerator, SnowflakeGenerator},
         id::{SnowflakeId, SnowflakeTwitterId},
+        time::{MonotonicClock, TimeSource},
     };
-    use futures::future::try_join_all;
-    use smol::Task;
-    use std::collections::HashSet;
-    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;

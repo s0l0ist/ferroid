@@ -1,5 +1,4 @@
-use core::future::Future;
-use core::time::Duration;
+use core::{future::Future, time::Duration};
 
 /// A trait that abstracts over how to sleep for a given [`Duration`] in async
 /// contexts.

@@ -1,5 +1,6 @@
-use crate::id::Id;
 use core::hash::Hash;
+
+use crate::id::Id;
 
 /// Trait for layout-compatible ULID-style identifiers.
 ///
@@ -77,7 +78,7 @@ pub trait UlidId: Id {
 ///     timestamp: <bits>,
 ///     random: <bits>
 /// );
-///```
+/// ```
 ///
 /// ## Example: A non-monotonic ULID layout
 /// ```rust
@@ -191,23 +192,23 @@ macro_rules! define_ulid {
             /// UNIX epoch, using the built-in [`ThreadRandom`] random
             /// generator.
             ///
-            /// [`ThreadRandom`]: crate::ThreadRandom
+            /// [`ThreadRandom`]: crate::rand::ThreadRandom
             #[cfg(feature = "std")]
             #[cfg_attr(not(feature = "std"), doc(hidden))]
             #[must_use]
             pub fn from_timestamp(timestamp: <Self as $crate::id::Id>::Ty) -> Self {
-                Self::from_timestamp_and_rand(timestamp, &$crate::ThreadRandom)
+                Self::from_timestamp_and_rand(timestamp, &$crate::rand::ThreadRandom)
             }
 
             /// Generates a ULID from the given timestamp in milliseconds since
             /// UNIX epoch and a custom random number generator implementing
             /// [`RandSource`]
             ///
-            /// [`RandSource`]: crate::RandSource
+            /// [`RandSource`]: crate::rand::RandSource
             #[must_use]
             pub fn from_timestamp_and_rand<R>(timestamp: <Self as $crate::id::Id>::Ty, rng: &R) -> Self
             where
-                R: $crate::RandSource<<Self as $crate::id::Id>::Ty>,
+                R: $crate::rand::RandSource<<Self as $crate::id::Id>::Ty>,
             {
                 let random = rng.rand();
                 Self::from(timestamp, random)
@@ -216,25 +217,25 @@ macro_rules! define_ulid {
             /// Generates a ULID from the given `SystemTime`, using the built-in
             /// [`ThreadRandom`] random generator.
             ///
-            /// [`ThreadRandom`]: crate::ThreadRandom
+            /// [`ThreadRandom`]: crate::rand::ThreadRandom
             #[cfg(feature = "std")]
             #[cfg_attr(not(feature = "std"), doc(hidden))]
             #[must_use]
             pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
-                Self::from_datetime_and_rand(datetime, &$crate::ThreadRandom)
+                Self::from_datetime_and_rand(datetime, &$crate::rand::ThreadRandom)
             }
 
             /// Generates a ULID from the given `SystemTime` and a custom random
             /// number generator implementing [`RandSource`]
             ///
-            /// [`RandSource`]: crate::RandSource
+            /// [`RandSource`]: crate::rand::RandSource
             ///
             #[cfg(feature = "std")]
             #[cfg_attr(not(feature = "std"), doc(hidden))]
             #[must_use]
             pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
             where
-                R: $crate::RandSource<<Self as $crate::id::Id>::Ty>,
+                R: $crate::rand::RandSource<<Self as $crate::id::Id>::Ty>,
             {
                 let timestamp = datetime
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -360,9 +361,10 @@ define_ulid!(
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use super::*;
-    use crate::RandSource;
     use std::println;
+
+    use super::*;
+    use crate::rand::RandSource;
 
     struct MockRand;
     impl RandSource<u128> for MockRand {

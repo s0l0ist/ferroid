@@ -7,7 +7,7 @@
 ///
 /// # Example
 /// ```
-/// use ferroid::RandSource;
+/// use ferroid::rand::RandSource;
 ///
 /// struct FixedRand;
 /// impl RandSource<u64> for FixedRand {

@@ -1,9 +1,3 @@
-use super::SleepProvider;
-use crate::{
-    IdGenStatus, RandSource, Result, TimeSource,
-    generator::UlidGenerator,
-    id::{ToU64, UlidId},
-};
 use core::{
     future::Future,
     marker::PhantomData,
@@ -11,7 +5,17 @@ use core::{
     task::{Context, Poll},
     time::Duration,
 };
+
 use pin_project_lite::pin_project;
+
+use super::SleepProvider;
+use crate::{
+    Result,
+    generator::{IdGenStatus, UlidGenerator},
+    id::{ToU64, UlidId},
+    rand::RandSource,
+    time::TimeSource,
+};
 
 /// Extension trait for asynchronously generating ULIDs.
 ///

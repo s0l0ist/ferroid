@@ -5,15 +5,21 @@ mod server;
 use clap::Parser;
 use ferroid_tonic_core::proto::{FILE_DESCRIPTOR_SET, id_generator_server::IdGeneratorServer};
 use futures::Stream;
-use server::config::{CliArgs, ServerConfig};
-use server::service::handler::IdService;
-use server::telemetry::{TelemetryProviders, init_telemetry};
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::TcpListener;
-use tokio::signal;
+use server::{
+    config::{CliArgs, ServerConfig},
+    service::handler::IdService,
+    telemetry::{TelemetryProviders, init_telemetry},
+};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    net::TcpListener,
+    signal,
+};
 use tokio_stream::wrappers::TcpListenerStream;
-use tonic::transport::server::Connected;
-use tonic::{codec::CompressionEncoding, transport::Server};
+use tonic::{
+    codec::CompressionEncoding,
+    transport::{Server, server::Connected},
+};
 use tonic_health::server::HealthReporter;
 use tonic_reflection::server::Builder;
 use tonic_web::GrpcWebLayer;

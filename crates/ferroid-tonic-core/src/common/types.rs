@@ -43,9 +43,9 @@
 //! > inject your own implementation.
 
 use ferroid::{
-    MonotonicClock, TWITTER_EPOCH,
     generator::BasicSnowflakeGenerator,
     id::{Id, SnowflakeTwitterId},
+    time::{MonotonicClock, TWITTER_EPOCH},
 };
 
 /// The canonical Snowflake ID type used across the system.

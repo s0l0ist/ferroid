@@ -1,11 +1,11 @@
+use core::{fmt, marker::PhantomData};
+
 use super::interface::Base32Ext;
 use crate::{
     Result,
     base32::Error,
     id::{BeBytes, Id, SnowflakeId},
 };
-use core::fmt;
-use core::marker::PhantomData;
 
 /// Extension trait for Crockford Base32 encoding and decoding of ID types.
 ///
@@ -37,8 +37,9 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{base32::Base32SnowExt, id::SnowflakeTwitterId};
     /// use std::fmt::Write;
+    ///
+    /// use ferroid::{base32::Base32SnowExt, id::SnowflakeTwitterId};
     ///
     /// let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
     ///
@@ -58,7 +59,10 @@ where
     /// guaranteed at compile time when using [`Base32SnowExt::buf`].
     /// # Example
     /// ```
-    /// use ferroid::{base32::Base32SnowExt, id::{BeBytes, Id, SnowflakeTwitterId}};
+    /// use ferroid::{
+    ///     base32::Base32SnowExt,
+    ///     id::{BeBytes, Id, SnowflakeTwitterId},
+    /// };
     ///
     /// let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
     ///
@@ -114,7 +118,10 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{base32::{Error, Base32SnowExt}, id::{Id, SnowflakeId, SnowflakeTwitterId}};
+    /// use ferroid::{
+    ///     base32::{Base32SnowExt, Error},
+    ///     id::{Id, SnowflakeId, SnowflakeTwitterId},
+    /// };
     ///
     /// // Crockford Base32 encodes values in 5-bit chunks, so encoding a u64
     /// // (64 bits)
@@ -357,11 +364,12 @@ where
 
 #[cfg(all(test, feature = "alloc", feature = "snowflake"))]
 mod alloc_test {
+    use alloc::string::ToString;
+
     use crate::{
         base32::Base32SnowExt,
         id::{SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId, SnowflakeTwitterId},
     };
-    use alloc::string::ToString;
 
     #[test]
     fn twitter_display() {

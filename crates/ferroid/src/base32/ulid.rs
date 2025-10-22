@@ -1,11 +1,11 @@
+use core::{fmt, marker::PhantomData};
+
 use super::interface::Base32Ext;
 use crate::{
     Result,
     base32::Error,
     id::{BeBytes, Id, UlidId},
 };
-use core::fmt;
-use core::marker::PhantomData;
 
 /// Extension trait for Crockford Base32 encoding and decoding of ID types.
 ///
@@ -37,8 +37,9 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{base32::Base32UlidExt, id::ULID};
     /// use std::fmt::Write;
+    ///
+    /// use ferroid::{base32::Base32UlidExt, id::ULID};
     ///
     /// let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
@@ -59,7 +60,10 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{base32::Base32UlidExt, id::{BeBytes, Id, ULID}};
+    /// use ferroid::{
+    ///     base32::Base32UlidExt,
+    ///     id::{BeBytes, Id, ULID},
+    /// };
     ///
     /// let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
@@ -116,7 +120,10 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{base32::{Error, Base32UlidExt}, id::{Id, ULID, UlidId}};
+    /// use ferroid::{
+    ///     base32::{Base32UlidExt, Error},
+    ///     id::{Id, ULID, UlidId},
+    /// };
     ///
     /// // Crockford Base32 encodes values in 5-bit chunks, so encoding a u128 (128
     /// // bits) requires 26 characters (26 × 5 = 130 bits). Since u128 can only hold
@@ -332,8 +339,9 @@ where
 
 #[cfg(all(test, feature = "alloc", feature = "ulid"))]
 mod alloc_test {
-    use crate::{base32::Base32UlidExt, id::ULID};
     use alloc::string::ToString;
+
+    use crate::{base32::Base32UlidExt, id::ULID};
 
     #[test]
     fn ulid_display() {

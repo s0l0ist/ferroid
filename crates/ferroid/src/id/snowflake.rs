@@ -1,5 +1,6 @@
-use crate::id::Id;
 use core::hash::Hash;
+
+use crate::id::Id;
 
 /// A trait representing a layout-compatible Snowflake ID generator.
 ///
@@ -93,7 +94,7 @@ pub trait SnowflakeId: Id {
 ///     machine_id: <bits>,
 ///     sequence: <bits>
 /// );
-///```
+/// ```
 ///
 /// ## Example: A Twitter-like layout
 /// ```rust
@@ -336,7 +337,7 @@ define_snowflake_id!(
     ///              +--------------+----------------+-----------------+---------------+
     ///              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
     /// ```
-    /// [`TWITTER_EPOCH`]: crate::TWITTER_EPOCH
+    /// [`TWITTER_EPOCH`]: crate::time::TWITTER_EPOCH
     SnowflakeTwitterId, u64,
     reserved: 1,
     timestamp: 41,
@@ -358,7 +359,7 @@ define_snowflake_id!(
     ///              +----------------+-----------------+---------------+
     ///              |<----- MSB ---------- 64 bits --------- LSB ----->|
     /// ```
-    /// [`DISCORD_EPOCH`]: crate::DISCORD_EPOCH
+    /// [`DISCORD_EPOCH`]: crate::time::DISCORD_EPOCH
     SnowflakeDiscordId, u64,
     reserved: 0,
     timestamp: 42,
@@ -379,7 +380,7 @@ define_snowflake_id!(
     ///              +----------------+---------------+
     ///              |<--- MSB --- 64 bits -- LSB --->|
     /// ```
-    /// [`MASTODON_EPOCH`]: crate::MASTODON_EPOCH
+    /// [`MASTODON_EPOCH`]: crate::time::MASTODON_EPOCH
     SnowflakeMastodonId, u64,
     reserved: 0,
     timestamp: 48,
@@ -401,7 +402,7 @@ define_snowflake_id!(
     ///              +----------------+-----------------+---------------+
     ///              |<----- MSB ---------- 64 bits --------- LSB ----->|
     /// ```
-    /// [`INSTAGRAM_EPOCH`]: crate::INSTAGRAM_EPOCH
+    /// [`INSTAGRAM_EPOCH`]: crate::time::INSTAGRAM_EPOCH
     SnowflakeInstagramId, u64,
     reserved: 0,
     timestamp: 41,
@@ -411,8 +412,9 @@ define_snowflake_id!(
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use super::*;
     use std::println;
+
+    use super::*;
 
     #[test]
     fn test_snowflake_twitter_id_fields_and_bounds() {

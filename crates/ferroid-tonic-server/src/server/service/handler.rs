@@ -12,6 +12,22 @@
 //! - Dispatch ID generation tasks across workers via [`feed_chunks`].
 //! - Handle backpressure, cancellation, and graceful shutdown.
 
+use core::pin::Pin;
+use std::sync::Arc;
+
+use ferroid_tonic_core::{
+    Error,
+    ferroid::id::Id,
+    proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
+    types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
+};
+use futures::TryStreamExt;
+use portable_atomic::{AtomicBool, AtomicU64, Ordering};
+use tokio::sync::mpsc;
+use tokio_stream::{Stream, wrappers::ReceiverStream};
+use tokio_util::sync::CancellationToken;
+use tonic::{Request, Response, Status};
+
 use crate::server::{
     config::ServerConfig,
     pool::{manager::WorkerPool, worker::worker_loop},
@@ -23,20 +39,6 @@ use crate::server::{
         record_stream_duration_metric,
     },
 };
-use core::pin::Pin;
-use ferroid_tonic_core::{
-    Error,
-    ferroid::id::Id,
-    proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
-    types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
-};
-use futures::TryStreamExt;
-use portable_atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio_stream::{Stream, wrappers::ReceiverStream};
-use tokio_util::sync::CancellationToken;
-use tonic::{Request, Response, Status};
 
 // Global flag indicating shutdown has been initiated.
 // Used to refuse new incoming requests.

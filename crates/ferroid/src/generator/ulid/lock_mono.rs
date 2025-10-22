@@ -1,11 +1,16 @@
-use crate::{
-    Error, IdGenStatus, Mutex, Result, TimeSource, generator::UlidGenerator, id::UlidId,
-    rand::RandSource,
-};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
+
 #[cfg(feature = "tracing")]
 use tracing::instrument;
+
+use crate::{
+    Error, Mutex, Result,
+    generator::{IdGenStatus, UlidGenerator},
+    id::UlidId,
+    rand::RandSource,
+    time::TimeSource,
+};
 
 /// A lock-based *monotonic* ULID-style ID generator suitable for multi-threaded
 /// environments.
@@ -65,7 +70,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{generator::LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -77,8 +87,8 @@ where
     /// };
     /// ```
     ///
-    /// [`TimeSource`]: crate::TimeSource
-    /// [`RandSource`]: crate::RandSource
+    /// [`TimeSource`]: crate::time::TimeSource
+    /// [`RandSource`]: crate::rand::RandSource
     pub fn new(time: T, rng: R) -> Self {
         Self::from_components(ID::ZERO, ID::ZERO, time, rng)
     }
@@ -126,7 +136,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{generator::LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -157,7 +172,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{generator::LockMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
+    ///     id::{ToU64, ULID},
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///

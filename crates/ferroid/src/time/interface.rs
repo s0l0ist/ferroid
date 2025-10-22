@@ -25,7 +25,7 @@ pub const MASTODON_EPOCH: Duration = UNIX_EPOCH;
 ///
 /// # Example
 /// ```
-/// use ferroid::TimeSource;
+/// use ferroid::time::TimeSource;
 ///
 /// struct FixedTime;
 /// impl TimeSource<u64> for FixedTime {

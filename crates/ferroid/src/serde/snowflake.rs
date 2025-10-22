@@ -107,11 +107,13 @@ pub mod as_base32_snow {
 
 #[cfg(all(test, feature = "alloc", feature = "snowflake"))]
 mod tests {
-    use super::*;
-    use crate::{id::SnowflakeTwitterId, serde::Error};
     use alloc::string::ToString;
     use core::u64;
+
     use serde_json::json;
+
+    use super::*;
+    use crate::{id::SnowflakeTwitterId, serde::Error};
 
     #[test]
     fn native_snow_roundtrip() {

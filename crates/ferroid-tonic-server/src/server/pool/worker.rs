@@ -1,6 +1,7 @@
-use crate::server::streaming::{processor::handle_stream_request, request::WorkRequest};
 use ferroid_tonic_core::types::Generator;
 use tokio::sync::mpsc;
+
+use crate::server::streaming::{processor::handle_stream_request, request::WorkRequest};
 
 /// Worker task responsible for processing [`WorkRequest`] messages.
 ///

@@ -1,16 +1,17 @@
-use crate::{
-    IdGenStatus, MonotonicClock, TimeSource,
-    generator::{BasicSnowflakeGenerator, LockSnowflakeGenerator, SnowflakeGenerator},
-    id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
-};
-use alloc::rc::Rc;
-use alloc::sync::Arc;
-use alloc::{vec, vec::Vec};
+use alloc::{rc::Rc, sync::Arc, vec, vec::Vec};
 use core::cell::Cell;
-use std::collections::HashSet;
-use std::panic;
-use std::sync::Mutex;
-use std::thread::{self, scope};
+use std::{
+    collections::HashSet,
+    panic,
+    sync::Mutex,
+    thread::{self, scope},
+};
+
+use crate::{
+    generator::{BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator, SnowflakeGenerator},
+    id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
+    time::{MonotonicClock, TimeSource},
+};
 
 struct MockTime {
     millis: u64,

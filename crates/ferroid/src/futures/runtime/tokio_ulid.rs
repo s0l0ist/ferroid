@@ -1,7 +1,9 @@
-use crate::{
-    RandSource, Result, TimeSource, futures::TokioSleep, generator::UlidGenerator, id::UlidId,
-};
 use core::future::Future;
+
+use crate::{
+    Result, futures::TokioSleep, generator::UlidGenerator, id::UlidId, rand::RandSource,
+    time::TimeSource,
+};
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
@@ -53,16 +55,19 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashSet, vec::Vec};
+
+    use futures::future::try_join_all;
+
     use super::*;
     use crate::{
-        MonotonicClock, Result, ThreadRandom, TimeSource,
+        Result,
         futures::{SleepProvider, TokioYield},
         generator::LockMonoUlidGenerator,
         id::ULID,
+        rand::ThreadRandom,
+        time::{MonotonicClock, TimeSource},
     };
-    use futures::future::try_join_all;
-    use std::collections::HashSet;
-    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
