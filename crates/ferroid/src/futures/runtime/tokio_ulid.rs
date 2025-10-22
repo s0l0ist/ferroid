@@ -8,7 +8,7 @@ use core::future::Future;
 /// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
 /// without specifying the sleep strategy manually.
 ///
-/// [`SleepProvider`]: crate::SleepProvider
+/// [`SleepProvider`]: crate::futures::SleepProvider
 pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
 where
     ID: UlidId,
@@ -29,7 +29,7 @@ where
     /// This future may return an error if the underlying generator does.
     ///
     /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::UlidGeneratorAsyncExt::try_next_id_async
+    ///     crate::futures::UlidGeneratorAsyncExt::try_next_id_async
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 

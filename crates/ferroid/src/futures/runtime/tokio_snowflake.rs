@@ -8,7 +8,7 @@ use core::future::Future;
 /// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
 /// without specifying the sleep strategy manually.
 ///
-/// [`SleepProvider`]: crate::SleepProvider
+/// [`SleepProvider`]: crate::futures::SleepProvider
 pub trait SnowflakeGeneratorAsyncTokioExt<ID, T>
 where
     ID: SnowflakeId,
@@ -27,7 +27,7 @@ where
     /// This future may return an error if the underlying generator does.
     ///
     /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
+    ///     crate::futures::SnowflakeGeneratorAsyncExt::try_next_id_async
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
