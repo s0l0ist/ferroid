@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, RandSource, Result, TimeSource, UlidId};
+use crate::{IdGenStatus, RandSource, Result, TimeSource, id::UlidId};
 use core::fmt;
 
 /// A minimal interface for generating Ulid IDs

@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource};
+use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, id::UlidId, rand::RandSource};
 use core::cmp;
 use core::marker::PhantomData;
 use portable_atomic::{AtomicU128, Ordering};
@@ -68,7 +68,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -131,7 +131,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -163,7 +163,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
     ///
     /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///

@@ -1,4 +1,4 @@
-use crate::Id;
+use crate::id::Id;
 
 /// Represents the result of attempting to generate a new Snowflake ID.
 ///
@@ -12,7 +12,7 @@ use crate::Id;
 ///
 /// # Example
 /// ```
-/// use ferroid::{SnowflakeId, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+/// use ferroid::{id::{SnowflakeId, SnowflakeTwitterId}, BasicSnowflakeGenerator, IdGenStatus};
 ///
 /// struct FixedTime;
 /// impl ferroid::TimeSource<u64> for FixedTime {

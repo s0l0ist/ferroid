@@ -26,7 +26,7 @@ use crate::server::{
 use core::pin::Pin;
 use ferroid_tonic_core::{
     Error,
-    ferroid::Id,
+    ferroid::id::Id,
     proto::{IdChunk, StreamIdsRequest, id_generator_server::IdGenerator},
     types::{Clock, EPOCH, Generator, SNOWFLAKE_ID_SIZE, SnowflakeId},
 };

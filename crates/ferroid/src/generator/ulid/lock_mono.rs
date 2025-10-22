@@ -1,5 +1,5 @@
 use crate::{
-    Error, IdGenStatus, Mutex, Result, TimeSource, UlidGenerator, UlidId, rand::RandSource,
+    Error, IdGenStatus, Mutex, Result, TimeSource, UlidGenerator, id::UlidId, rand::RandSource,
 };
 use alloc::sync::Arc;
 use core::cmp::Ordering;
@@ -64,7 +64,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -125,7 +125,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -156,7 +156,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///

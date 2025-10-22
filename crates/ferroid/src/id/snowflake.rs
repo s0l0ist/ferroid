@@ -1,4 +1,4 @@
-use crate::Id;
+use crate::id::Id;
 use core::hash::Hash;
 
 /// A trait representing a layout-compatible Snowflake ID generator.
@@ -11,7 +11,7 @@ use core::hash::Hash;
 /// # Example
 ///
 /// ```
-/// use ferroid::{SnowflakeId, SnowflakeTwitterId};
+/// use ferroid::id::{SnowflakeId, SnowflakeTwitterId};
 ///
 /// let id = SnowflakeTwitterId::from(1000, 2, 1);
 /// assert_eq!(id.timestamp(), 1000);
@@ -221,7 +221,7 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl $crate::Id for $name {
+        impl $crate::id::Id for $name {
             type Ty = $int;
             const ZERO: $int = 0;
             const ONE: $int = 1;
@@ -237,7 +237,7 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl $crate::SnowflakeId for $name {
+        impl $crate::id::SnowflakeId for $name {
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }

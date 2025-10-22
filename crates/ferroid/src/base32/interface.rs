@@ -1,4 +1,8 @@
-use crate::{BeBytes, Id, Result, base32::Error};
+use crate::{
+    Result,
+    base32::Error,
+    id::{BeBytes, Id},
+};
 
 /// Extension trait for types that support Crockford Base32 encoding and
 /// decoding.

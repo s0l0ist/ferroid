@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
+use crate::{IdGenStatus, Result, SnowflakeGenerator, TimeSource, id::SnowflakeId};
 use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -58,7 +58,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -121,7 +121,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -156,7 +156,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{BasicSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///

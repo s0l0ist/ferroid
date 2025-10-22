@@ -1,4 +1,4 @@
-use crate::Id;
+use crate::id::Id;
 use core::hash::Hash;
 
 /// Trait for layout-compatible ULID-style identifiers.
@@ -195,7 +195,7 @@ macro_rules! define_ulid {
             #[cfg(feature = "std")]
             #[cfg_attr(not(feature = "std"), doc(hidden))]
             #[must_use]
-            pub fn from_timestamp(timestamp: <Self as $crate::Id>::Ty) -> Self {
+            pub fn from_timestamp(timestamp: <Self as $crate::id::Id>::Ty) -> Self {
                 Self::from_timestamp_and_rand(timestamp, &$crate::ThreadRandom)
             }
 
@@ -205,9 +205,9 @@ macro_rules! define_ulid {
             ///
             /// [`RandSource`]: crate::RandSource
             #[must_use]
-            pub fn from_timestamp_and_rand<R>(timestamp: <Self as $crate::Id>::Ty, rng: &R) -> Self
+            pub fn from_timestamp_and_rand<R>(timestamp: <Self as $crate::id::Id>::Ty, rng: &R) -> Self
             where
-                R: $crate::RandSource<<Self as $crate::Id>::Ty>,
+                R: $crate::RandSource<<Self as $crate::id::Id>::Ty>,
             {
                 let random = rng.rand();
                 Self::from(timestamp, random)
@@ -234,7 +234,7 @@ macro_rules! define_ulid {
             #[must_use]
             pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
             where
-                R: $crate::RandSource<<Self as $crate::Id>::Ty>,
+                R: $crate::RandSource<<Self as $crate::id::Id>::Ty>,
             {
                 let timestamp = datetime
                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
@@ -245,7 +245,7 @@ macro_rules! define_ulid {
             }
         }
 
-        impl $crate::Id for $name {
+        impl $crate::id::Id for $name {
             type Ty = $int;
             const ZERO: $int = 0;
             const ONE: $int = 1;
@@ -261,7 +261,7 @@ macro_rules! define_ulid {
             }
         }
 
-        impl $crate::UlidId for $name {
+        impl $crate::id::UlidId for $name {
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }

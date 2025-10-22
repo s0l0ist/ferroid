@@ -63,7 +63,7 @@ The simplest way to generate a ULID is via `Ulid`, which provides a thread-local
 generator that can produce both non-monotonic and monotonic ULIDs:
 
 ```rust
-use ferroid::{ULID, Ulid};
+use ferroid::{id::ULID, Ulid};
 
 // A ULID (slower, always random within the same millisecond)
 let id: ULID = Ulid::new_ulid();
@@ -97,7 +97,7 @@ bit, making `u64::MAX` invalid. This validation behavior is consistent with
 section).
 
 ```rust
-use ferroid::{SnowflakeTwitterId, serde::{as_base32_snow, as_native_snow}};
+use ferroid::{id::SnowflakeTwitterId, serde::{as_base32_snow, as_native_snow}};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -128,7 +128,7 @@ stack-allocated buffer and avoids heap allocation by default. To enable
 ```rust
 use core::str::FromStr;
 use ferroid::{
-    SnowflakeId, SnowflakeTwitterId, ULID, UlidId,
+    id::{SnowflakeId, SnowflakeTwitterId, ULID, UlidId},
     base32::{Base32SnowExt, Base32SnowFormatter, Base32UlidExt, Base32UlidFormatter},
 };
 
@@ -228,7 +228,7 @@ path. You may spin, yield, or sleep depending on your environment:
 ```rust
 use ferroid::{
     BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus, MonotonicClock,
-    SnowflakeTwitterId, TWITTER_EPOCH, ThreadRandom, ULID, ToU64
+    id::{SnowflakeTwitterId, ULID, ToU64}, TWITTER_EPOCH, ThreadRandom
 };
 
 let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
@@ -276,7 +276,7 @@ throughput.
 ```rust
 use ferroid::{
     Error, LockMonoUlidGenerator, LockSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result,
-    SnowflakeMastodonId, ThreadRandom, ULID, UNIX_EPOCH,
+    id::{SnowflakeMastodonId, ULID}, ThreadRandom, UNIX_EPOCH,
     futures::{SnowflakeGeneratorAsyncTokioExt, UlidGeneratorAsyncTokioExt},
 };
 

@@ -42,14 +42,17 @@
 //! > binary encoding. To change the format, fork or wrap the binary crate and
 //! > inject your own implementation.
 
-use ferroid::{BasicSnowflakeGenerator, Id, MonotonicClock, SnowflakeTwitterId, TWITTER_EPOCH};
+use ferroid::{
+    BasicSnowflakeGenerator, MonotonicClock, TWITTER_EPOCH,
+    id::{Id, SnowflakeTwitterId},
+};
 
 /// The canonical Snowflake ID type used across the system.
 ///
 /// Defaults to [`SnowflakeTwitterId`], but can be replaced in custom builds
 /// with any type implementing [`SnowflakeId`].
 ///
-/// [`SnowflakeId`]: crate::ferroid::SnowflakeId
+/// [`SnowflakeId`]: crate::ferroid::id::SnowflakeId
 pub type SnowflakeId = SnowflakeTwitterId;
 
 /// The primitive integer type that backs a [`SnowflakeId`] (typically `u64`).

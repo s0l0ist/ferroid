@@ -1,4 +1,4 @@
-use crate::ToU64;
+use crate::id::ToU64;
 use core::fmt;
 use core::hash::Hash;
 use core::ops::{

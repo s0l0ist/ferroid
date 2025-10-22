@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, SnowflakeId, TimeSource};
+use crate::{IdGenStatus, Result, TimeSource, id::SnowflakeId};
 use core::fmt;
 
 /// A minimal interface for generating Snowflake IDs

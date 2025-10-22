@@ -13,7 +13,6 @@ mod error;
 pub mod futures;
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 mod generator;
-mod id;
 #[cfg(all(feature = "std", feature = "alloc", target_has_atomic = "64"))]
 mod mono_clock;
 #[cfg(feature = "std")]
@@ -27,11 +26,11 @@ mod time;
 #[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
 #[cfg(feature = "base32")]
 pub mod base32;
+pub mod id;
 pub use crate::error::*;
 #[cfg_attr(docsrs, doc(cfg(any(feature = "snowflake", feature = "ulid"))))]
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 pub use crate::generator::*;
-pub use crate::id::*;
 #[cfg_attr(
     docsrs,
     doc(cfg(all(feature = "std", feature = "alloc", target_has_atomic = "64")))

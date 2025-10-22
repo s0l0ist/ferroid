@@ -1,6 +1,7 @@
 use crate::{
-    BasicSnowflakeGenerator, Id, IdGenStatus, LockSnowflakeGenerator, MonotonicClock,
-    SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource, ToU64,
+    BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator, MonotonicClock,
+    SnowflakeGenerator, TimeSource,
+    id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
 };
 use alloc::rc::Rc;
 use alloc::sync::Arc;

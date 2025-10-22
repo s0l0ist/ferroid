@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod as_native_snow {
     use super::{Deserialize, Deserializer, Serialize, Serializer};
-    use crate::{SnowflakeId, serde::Error};
+    use crate::{id::SnowflakeId, serde::Error};
 
     /// Serialize a snowflake ID as its native integer representation.
     ///
@@ -48,7 +48,7 @@ pub mod as_native_snow {
 #[cfg(feature = "base32")]
 pub mod as_base32_snow {
     use super::{Deserializer, Serializer};
-    use crate::{BeBytes, base32::Base32SnowExt, serde::Error};
+    use crate::{base32::Base32SnowExt, id::BeBytes, serde::Error};
 
     /// Serialize a snowflake ID as a Crockford base32 encoded string.
     ///
@@ -108,7 +108,7 @@ pub mod as_base32_snow {
 #[cfg(all(test, feature = "alloc", feature = "snowflake"))]
 mod tests {
     use super::*;
-    use crate::{SnowflakeTwitterId, serde::Error};
+    use crate::{id::SnowflakeTwitterId, serde::Error};
     use alloc::string::ToString;
     use core::u64;
     use serde_json::json;

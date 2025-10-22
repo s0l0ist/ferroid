@@ -1,4 +1,4 @@
-use crate::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
+use crate::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator, TimeSource, id::SnowflakeId};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
 #[cfg(feature = "tracing")]
@@ -64,7 +64,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -129,7 +129,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -163,7 +163,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{LockSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///

@@ -1,5 +1,8 @@
 use super::SleepProvider;
-use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource, ToU64};
+use crate::{
+    IdGenStatus, Result, SnowflakeGenerator, TimeSource,
+    id::{SnowflakeId, ToU64},
+};
 use core::{
     future::Future,
     marker::PhantomData,

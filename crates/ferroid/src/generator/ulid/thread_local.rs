@@ -7,8 +7,9 @@
 //! (monotonic overflow), it yields using the configured backoff strategy (e.g.,
 //! spin, yield, sleep). These overflows typically resolve within ~1ms.
 use crate::{
-    BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus, MonotonicClock, RandSource,
-    ThreadRandom, ToU64, ULID, UNIX_EPOCH,
+    BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus, MonotonicClock, RandSource,
+    ThreadRandom, UNIX_EPOCH,
+    id::{Id, ToU64, ULID},
 };
 use std::sync::LazyLock;
 use std::thread_local;

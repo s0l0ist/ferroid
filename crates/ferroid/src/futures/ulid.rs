@@ -1,5 +1,8 @@
 use super::SleepProvider;
-use crate::{IdGenStatus, RandSource, Result, TimeSource, ToU64, UlidGenerator, UlidId};
+use crate::{
+    IdGenStatus, RandSource, Result, TimeSource, UlidGenerator,
+    id::{ToU64, UlidId},
+};
 use core::{
     future::Future,
     marker::PhantomData,
