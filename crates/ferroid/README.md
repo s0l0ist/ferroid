@@ -276,8 +276,8 @@ throughput.
 ```rust
 use ferroid::{
     Error, LockMonoUlidGenerator, LockSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result,
-    SnowflakeGeneratorAsyncTokioExt, SnowflakeMastodonId, ThreadRandom, ULID, UNIX_EPOCH,
-    UlidGeneratorAsyncTokioExt,
+    SnowflakeMastodonId, ThreadRandom, ULID, UNIX_EPOCH,
+    futures::{SnowflakeGeneratorAsyncTokioExt, UlidGeneratorAsyncTokioExt},
 };
 
 async fn run() -> Result<(), Error> {

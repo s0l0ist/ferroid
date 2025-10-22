@@ -5,10 +5,11 @@ use criterion::{
 use ferroid::{
     AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, BasicMonoUlidGenerator,
     BasicSnowflakeGenerator, BasicUlidGenerator, BeBytes, Id, IdGenStatus, LockMonoUlidGenerator,
-    LockSnowflakeGenerator, MonotonicClock, RandSource, SmolSleep, SnowflakeGenerator,
-    SnowflakeGeneratorAsyncExt, SnowflakeId, SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom,
-    TimeSource, ToU64, TokioSleep, ULID, Ulid, UlidGenerator, UlidGeneratorAsyncExt, UlidId,
+    LockSnowflakeGenerator, MonotonicClock, RandSource, SnowflakeGenerator, SnowflakeId,
+    SnowflakeMastodonId, SnowflakeTwitterId, ThreadRandom, TimeSource, ToU64, ULID, Ulid,
+    UlidGenerator, UlidId,
     base32::{Base32SnowExt, Base32UlidExt},
+    futures::{SmolSleep, SnowflakeGeneratorAsyncExt, TokioSleep, UlidGeneratorAsyncExt},
 };
 use futures::future::try_join_all;
 use std::{
