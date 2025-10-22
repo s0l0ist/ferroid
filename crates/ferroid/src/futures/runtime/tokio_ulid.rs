@@ -1,4 +1,6 @@
-use crate::{RandSource, Result, TimeSource, UlidGenerator, futures::TokioSleep, id::UlidId};
+use crate::{
+    RandSource, Result, TimeSource, futures::TokioSleep, generator::UlidGenerator, id::UlidId,
+};
 use core::future::Future;
 
 /// Extension trait for asynchronously generating ULIDs using the
@@ -53,8 +55,9 @@ where
 mod tests {
     use super::*;
     use crate::{
-        LockMonoUlidGenerator, MonotonicClock, Result, ThreadRandom, TimeSource,
+        MonotonicClock, Result, ThreadRandom, TimeSource,
         futures::{SleepProvider, TokioYield},
+        generator::LockMonoUlidGenerator,
         id::ULID,
     };
     use futures::future::try_join_all;

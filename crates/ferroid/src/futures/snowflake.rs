@@ -1,6 +1,7 @@
 use super::SleepProvider;
 use crate::{
-    IdGenStatus, Result, SnowflakeGenerator, TimeSource,
+    IdGenStatus, Result, TimeSource,
+    generator::SnowflakeGenerator,
     id::{SnowflakeId, ToU64},
 };
 use core::{

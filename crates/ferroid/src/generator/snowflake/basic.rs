@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, SnowflakeGenerator, TimeSource, id::SnowflakeId};
+use crate::{IdGenStatus, Result, TimeSource, generator::SnowflakeGenerator, id::SnowflakeId};
 use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -20,8 +20,8 @@ use tracing::instrument;
 /// - [`LockSnowflakeGenerator`]
 /// - [`AtomicSnowflakeGenerator`]
 ///
-/// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
-/// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
+/// [`LockSnowflakeGenerator`]: crate::generator::LockSnowflakeGenerator
+/// [`AtomicSnowflakeGenerator`]: crate::generator::AtomicSnowflakeGenerator
 pub struct BasicSnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId,
@@ -58,7 +58,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::BasicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -121,7 +121,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::BasicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -156,7 +156,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::BasicSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///

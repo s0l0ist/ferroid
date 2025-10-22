@@ -1,4 +1,6 @@
-use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, id::UlidId, rand::RandSource};
+use crate::{
+    IdGenStatus, Result, TimeSource, generator::UlidGenerator, id::UlidId, rand::RandSource,
+};
 use core::{cell::Cell, cmp::Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -23,9 +25,9 @@ use tracing::instrument;
 /// - [`LockMonoUlidGenerator`]
 /// - [`AtomicMonoUlidGenerator`]
 ///
-/// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
-/// [`AtomicMonoUlidGenerator`]: crate::AtomicMonoUlidGenerator
-/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
+/// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
+/// [`AtomicMonoUlidGenerator`]: crate::generator::AtomicMonoUlidGenerator
+/// [`LockMonoUlidGenerator`]: crate::generator::LockMonoUlidGenerator
 pub struct BasicMonoUlidGenerator<ID, T, R>
 where
     ID: UlidId,
@@ -56,7 +58,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::BasicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -115,7 +117,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::BasicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -147,7 +149,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::BasicMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
     ///
     /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///

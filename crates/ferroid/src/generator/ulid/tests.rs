@@ -1,6 +1,6 @@
 use crate::{
-    BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator, MonotonicClock,
-    RandSource, ThreadRandom, TimeSource, UlidGenerator,
+    IdGenStatus, MonotonicClock, RandSource, ThreadRandom, TimeSource,
+    generator::{BasicMonoUlidGenerator, BasicUlidGenerator, LockMonoUlidGenerator, UlidGenerator},
     id::{Id, ToU64, ULID, UlidId},
 };
 use alloc::rc::Rc;
@@ -263,7 +263,7 @@ fn lock_generator_mono_sequence_test() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_sequence_test() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let mock_time = MockTime { millis: 42 };
     let mock_rand = MockRand { rand: 42 };
@@ -290,7 +290,7 @@ fn lock_generator_mono_pending_test() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_pending_test() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let generator: AtomicMonoUlidGenerator<ULID, _, _> =
         AtomicMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
@@ -316,7 +316,7 @@ fn lock_generator_mono_rollover_test() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_rollover_test() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
     let generator: AtomicMonoUlidGenerator<ULID, _, _> =
@@ -343,7 +343,7 @@ fn lock_generator_monotonic_clock_random_increments() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_monotonic_clock_random_increments() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
@@ -363,7 +363,7 @@ fn lock_generator_threaded_monotonic() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_threaded_monotonic() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;

@@ -1,6 +1,7 @@
 use super::SleepProvider;
 use crate::{
-    IdGenStatus, RandSource, Result, TimeSource, UlidGenerator,
+    IdGenStatus, RandSource, Result, TimeSource,
+    generator::UlidGenerator,
     id::{ToU64, UlidId},
 };
 use core::{

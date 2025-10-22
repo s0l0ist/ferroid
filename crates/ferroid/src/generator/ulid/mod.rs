@@ -16,8 +16,10 @@ mod lock_mono;
     feature = "atomic"
 ))]
 mod tests;
+
+#[cfg_attr(docsrs, doc(cfg(all(feature = "ulid", feature = "thread-local"))))]
 #[cfg(feature = "thread-local")]
-mod thread_local;
+pub mod thread_local;
 
 #[cfg_attr(
     docsrs,
@@ -36,6 +38,3 @@ pub use interface::*;
 #[cfg_attr(docsrs, doc(cfg(all(feature = "ulid", feature = "lock"))))]
 #[cfg(feature = "lock")]
 pub use lock_mono::*;
-#[cfg_attr(docsrs, doc(cfg(all(feature = "ulid", feature = "thread-local"))))]
-#[cfg(feature = "thread-local")]
-pub use thread_local::*;

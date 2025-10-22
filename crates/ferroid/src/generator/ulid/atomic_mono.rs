@@ -1,4 +1,6 @@
-use crate::{IdGenStatus, Result, TimeSource, UlidGenerator, id::UlidId, rand::RandSource};
+use crate::{
+    IdGenStatus, Result, TimeSource, generator::UlidGenerator, id::UlidId, rand::RandSource,
+};
 use core::cmp;
 use core::marker::PhantomData;
 use portable_atomic::{AtomicU128, Ordering};
@@ -31,9 +33,9 @@ use tracing::instrument;
 /// - [`BasicMonoUlidGenerator`]
 /// - [`LockMonoUlidGenerator`]
 ///
-/// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
-/// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
-/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
+/// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
+/// [`BasicMonoUlidGenerator`]: crate::generator::BasicMonoUlidGenerator
+/// [`LockMonoUlidGenerator`]: crate::generator::LockMonoUlidGenerator
 pub struct AtomicMonoUlidGenerator<ID, T, R>
 where
     ID: UlidId<Ty = u128>,
@@ -68,7 +70,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::AtomicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -131,7 +133,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::AtomicMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -163,7 +165,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::AtomicMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
     ///
     /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///

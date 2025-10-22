@@ -12,7 +12,7 @@ use crate::id::Id;
 ///
 /// # Example
 /// ```
-/// use ferroid::{id::{SnowflakeId, SnowflakeTwitterId}, BasicSnowflakeGenerator, IdGenStatus};
+/// use ferroid::{id::{SnowflakeId, SnowflakeTwitterId}, generator::BasicSnowflakeGenerator, IdGenStatus};
 ///
 /// struct FixedTime;
 /// impl ferroid::TimeSource<u64> for FixedTime {

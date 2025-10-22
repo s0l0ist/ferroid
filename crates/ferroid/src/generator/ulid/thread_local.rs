@@ -7,8 +7,8 @@
 //! (monotonic overflow), it yields using the configured backoff strategy (e.g.,
 //! spin, yield, sleep). These overflows typically resolve within ~1ms.
 use crate::{
-    BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus, MonotonicClock, RandSource,
-    ThreadRandom, UNIX_EPOCH,
+    IdGenStatus, MonotonicClock, RandSource, ThreadRandom, UNIX_EPOCH,
+    generator::{BasicMonoUlidGenerator, BasicUlidGenerator},
     id::{Id, ToU64, ULID},
 };
 use std::sync::LazyLock;
@@ -75,7 +75,7 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// use ferroid::Ulid;
+    /// use ferroid::generator::thread_local::Ulid;
     /// let id = Ulid::new_ulid();
     /// ```
     #[must_use]
@@ -93,7 +93,7 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// use ferroid::Ulid;
+    /// use ferroid::generator::thread_local::Ulid;
     /// let id = Ulid::new_mono_ulid();
     /// ```
     #[must_use]
@@ -109,7 +109,7 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Ulid, Backoff};
+    /// use ferroid::generator::thread_local::{Ulid, Backoff};
     /// let id = Ulid::with_mono_backoff(Backoff::Spin);
     /// ```
     #[must_use]
@@ -154,7 +154,7 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// use ferroid::Ulid;
+    /// use ferroid::generator::thread_local::Ulid;
     /// let id = Ulid::from_timestamp(1_694_201_234_000);
     /// ```
     #[must_use]
@@ -169,7 +169,7 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    ///  use ferroid::{Ulid, ThreadRandom};
+    /// use ferroid::{generator::thread_local::Ulid, ThreadRandom};
     ///  let id = Ulid::from_timestamp_and_rand(0, &ThreadRandom);
     /// ```
     pub fn from_timestamp_and_rand<R>(timestamp: <ULID as Id>::Ty, rng: &R) -> ULID
@@ -186,7 +186,7 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// use ferroid::Ulid;
+    /// use ferroid::generator::thread_local::Ulid;
     /// let id = Ulid::from_datetime(std::time::SystemTime::now());
     /// ```
     #[must_use]
@@ -198,7 +198,7 @@ impl Ulid {
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Ulid, ThreadRandom};
+    /// use ferroid::{generator::thread_local::Ulid, ThreadRandom};
     /// let now = std::time::SystemTime::now();
     /// let id = Ulid::from_datetime_and_rand(now, &ThreadRandom);
     /// ```

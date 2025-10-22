@@ -1,4 +1,6 @@
-use crate::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator, TimeSource, id::SnowflakeId};
+use crate::{
+    Error, IdGenStatus, Mutex, Result, TimeSource, generator::SnowflakeGenerator, id::SnowflakeId,
+};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
 #[cfg(feature = "tracing")]
@@ -23,8 +25,8 @@ use tracing::instrument;
 /// - [`BasicSnowflakeGenerator`]
 /// - [`AtomicSnowflakeGenerator`]
 ///
-/// [`BasicSnowflakeGenerator`]: crate::BasicSnowflakeGenerator
-/// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
+/// [`BasicSnowflakeGenerator`]: crate::generator::BasicSnowflakeGenerator
+/// [`AtomicSnowflakeGenerator`]: crate::generator::AtomicSnowflakeGenerator
 pub struct LockSnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId,
@@ -64,7 +66,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::LockSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -129,7 +131,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::LockSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -163,7 +165,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::LockSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///

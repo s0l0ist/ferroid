@@ -63,7 +63,7 @@ The simplest way to generate a ULID is via `Ulid`, which provides a thread-local
 generator that can produce both non-monotonic and monotonic ULIDs:
 
 ```rust
-use ferroid::{id::ULID, Ulid};
+use ferroid::{id::ULID, generator::thread_local::Ulid};
 
 // A ULID (slower, always random within the same millisecond)
 let id: ULID = Ulid::new_ulid();
@@ -227,7 +227,7 @@ path. You may spin, yield, or sleep depending on your environment:
 
 ```rust
 use ferroid::{
-    BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus, MonotonicClock,
+    generator::{BasicSnowflakeGenerator, BasicUlidGenerator}, IdGenStatus, MonotonicClock,
     id::{SnowflakeTwitterId, ULID, ToU64}, TWITTER_EPOCH, ThreadRandom
 };
 
@@ -275,7 +275,7 @@ throughput.
 
 ```rust
 use ferroid::{
-    Error, LockMonoUlidGenerator, LockSnowflakeGenerator, MASTODON_EPOCH, MonotonicClock, Result,
+    Error, generator::{LockMonoUlidGenerator, LockSnowflakeGenerator}, MASTODON_EPOCH, MonotonicClock, Result,
     id::{SnowflakeMastodonId, ULID}, ThreadRandom, UNIX_EPOCH,
     futures::{SnowflakeGeneratorAsyncTokioExt, UlidGeneratorAsyncTokioExt},
 };

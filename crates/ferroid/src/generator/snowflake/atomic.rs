@@ -1,4 +1,4 @@
-use crate::{IdGenStatus, Result, SnowflakeGenerator, TimeSource, id::SnowflakeId};
+use crate::{IdGenStatus, Result, TimeSource, generator::SnowflakeGenerator, id::SnowflakeId};
 use core::{cmp, marker::PhantomData};
 use portable_atomic::{AtomicU64, Ordering};
 #[cfg(feature = "tracing")]
@@ -26,8 +26,8 @@ use tracing::instrument;
 /// - [`BasicSnowflakeGenerator`]
 /// - [`LockSnowflakeGenerator`]
 ///
-/// [`BasicSnowflakeGenerator`]: crate::BasicSnowflakeGenerator
-/// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
+/// [`BasicSnowflakeGenerator`]: crate::generator::BasicSnowflakeGenerator
+/// [`LockSnowflakeGenerator`]: crate::generator::LockSnowflakeGenerator
 pub struct AtomicSnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId<Ty = u64>,
@@ -69,7 +69,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::AtomicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///     
     /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -138,7 +138,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::AtomicSnowflakeGenerator, IdGenStatus, id::SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -173,7 +173,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{generator::AtomicSnowflakeGenerator, id::{ToU64, SnowflakeTwitterId}, IdGenStatus, TWITTER_EPOCH, MonotonicClock};
     ///
     /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///

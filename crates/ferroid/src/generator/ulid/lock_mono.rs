@@ -1,5 +1,6 @@
 use crate::{
-    Error, IdGenStatus, Mutex, Result, TimeSource, UlidGenerator, id::UlidId, rand::RandSource,
+    Error, IdGenStatus, Mutex, Result, TimeSource, generator::UlidGenerator, id::UlidId,
+    rand::RandSource,
 };
 use alloc::sync::Arc;
 use core::cmp::Ordering;
@@ -28,9 +29,9 @@ use tracing::instrument;
 /// - [`BasicMonoUlidGenerator`]
 /// - [`AtomicMonoUlidGenerator`]
 ///
-/// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
-/// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
-/// [`AtomicMonoUlidGenerator`]: crate::AtomicMonoUlidGenerator
+/// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
+/// [`BasicMonoUlidGenerator`]: crate::generator::BasicMonoUlidGenerator
+/// [`AtomicMonoUlidGenerator`]: crate::generator::AtomicMonoUlidGenerator
 pub struct LockMonoUlidGenerator<ID, T, R>
 where
     ID: UlidId,
@@ -64,7 +65,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -125,7 +126,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::LockMonoUlidGenerator, IdGenStatus, id::ULID, MonotonicClock, ThreadRandom};
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -156,7 +157,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
+    /// use ferroid::{generator::LockMonoUlidGenerator, IdGenStatus, id::{ULID, ToU64}, MonotonicClock, ThreadRandom};
     ///
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
