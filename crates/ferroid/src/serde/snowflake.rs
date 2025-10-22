@@ -41,6 +41,10 @@ pub mod as_native_snow {
     }
 }
 
+#[cfg_attr(
+    docsrs,
+    doc(cfg(all(feature = "serde", feature = "snowflake", feature = "base32")))
+)]
 #[cfg(feature = "base32")]
 pub mod as_base32_snow {
     use super::{Deserializer, Serializer};
