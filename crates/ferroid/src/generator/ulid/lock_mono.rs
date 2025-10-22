@@ -5,8 +5,7 @@ use core::cmp::Ordering;
 use tracing::instrument;
 
 use crate::{
-    Mutex,
-    generator::{Error, IdGenStatus, Result, UlidGenerator},
+    generator::{Error, IdGenStatus, Mutex, Result, UlidGenerator},
     id::UlidId,
     rand::RandSource,
     time::TimeSource,

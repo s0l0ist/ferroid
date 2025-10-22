@@ -48,7 +48,7 @@ impl core::error::Error for Error {}
 
 #[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
 #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
-use crate::{MutexGuard, PoisonError};
+use crate::generator::{MutexGuard, PoisonError};
 #[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
 #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 impl<T> From<PoisonError<MutexGuard<'_, T>>> for Error {

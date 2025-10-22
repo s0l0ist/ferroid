@@ -5,8 +5,7 @@ use core::cmp::Ordering;
 use tracing::instrument;
 
 use crate::{
-    Mutex,
-    generator::{Error, IdGenStatus, Result, SnowflakeGenerator},
+    generator::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator},
     id::SnowflakeId,
     time::TimeSource,
 };

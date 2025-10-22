@@ -8,24 +8,16 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[cfg(feature = "futures")]
-pub mod futures;
-#[cfg(feature = "std")]
-mod mutex;
-pub mod rand;
-
-pub mod time;
-
 #[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
 #[cfg(feature = "base32")]
 pub mod base32;
-#[cfg_attr(docsrs, doc(cfg(any(feature = "snowflake", feature = "ulid"))))]
-#[cfg(any(feature = "snowflake", feature = "ulid"))]
+#[cfg(feature = "futures")]
+pub mod futures;
 pub mod generator;
 pub mod id;
+
+pub mod rand;
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[cfg(feature = "serde")]
 pub mod serde;
-#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
-#[cfg(feature = "std")]
-pub use mutex::*;
+pub mod time;
