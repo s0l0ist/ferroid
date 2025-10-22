@@ -63,7 +63,7 @@ The simplest way to generate a ULID is via `Ulid`, which provides a thread-local
 generator that can produce both non-monotonic and monotonic ULIDs:
 
 ```rust
-use ferroid::{id::ULID, generator::thread_local::Ulid};
+use ferroid::{generator::thread_local::Ulid, id::ULID};
 
 // A ULID (slower, always random within the same millisecond)
 let id: ULID = Ulid::new_ulid();
@@ -97,7 +97,10 @@ bit, making `u64::MAX` invalid. This validation behavior is consistent with
 section).
 
 ```rust
-use ferroid::{id::SnowflakeTwitterId, serde::{as_base32_snow, as_native_snow}};
+use ferroid::{
+    id::SnowflakeTwitterId,
+    serde::{as_base32_snow, as_native_snow},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -128,10 +131,9 @@ stack-allocated buffer and avoids heap allocation by default. To enable
 ```rust
 use core::str::FromStr;
 use ferroid::{
-    id::{SnowflakeId, SnowflakeTwitterId, ULID, UlidId},
     base32::{Base32SnowExt, Base32SnowFormatter, Base32UlidExt, Base32UlidFormatter},
+    id::{SnowflakeId, SnowflakeTwitterId, ULID, UlidId},
 };
-
 
 let id = SnowflakeTwitterId::from(123_456, 0, 42);
 assert_eq!(format!("{id}"), "00000F280001A");
@@ -227,9 +229,9 @@ path. You may spin, yield, or sleep depending on your environment:
 
 ```rust
 use ferroid::{
-    rand::ThreadRandom,
-    generator::{IdGenStatus, BasicSnowflakeGenerator, BasicUlidGenerator},
+    generator::{BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus},
     id::{SnowflakeTwitterId, ToU64, ULID},
+    rand::ThreadRandom,
     time::{MonotonicClock, TWITTER_EPOCH},
 };
 
@@ -277,9 +279,11 @@ throughput.
 
 ```rust
 use ferroid::{
-    Error, generator::{LockMonoUlidGenerator, LockSnowflakeGenerator}, time::MASTODON_EPOCH, time::MonotonicClock, Result,
-    id::{SnowflakeMastodonId, ULID}, rand::ThreadRandom, time::UNIX_EPOCH,
     futures::{SnowflakeGeneratorAsyncTokioExt, UlidGeneratorAsyncTokioExt},
+    generator::{Error, LockMonoUlidGenerator, LockSnowflakeGenerator, Result},
+    id::{SnowflakeMastodonId, ULID},
+    rand::ThreadRandom,
+    time::{MASTODON_EPOCH, MonotonicClock, UNIX_EPOCH},
 };
 
 async fn run() -> Result<(), Error> {

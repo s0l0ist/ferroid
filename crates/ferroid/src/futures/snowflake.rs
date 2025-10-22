@@ -10,8 +10,7 @@ use pin_project_lite::pin_project;
 
 use super::SleepProvider;
 use crate::{
-    Result,
-    generator::{IdGenStatus, SnowflakeGenerator},
+    generator::{IdGenStatus, Result, SnowflakeGenerator},
     id::{SnowflakeId, ToU64},
     time::TimeSource,
 };

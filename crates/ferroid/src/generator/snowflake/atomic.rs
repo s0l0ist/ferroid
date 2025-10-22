@@ -5,8 +5,7 @@ use portable_atomic::{AtomicU64, Ordering};
 use tracing::instrument;
 
 use crate::{
-    Result,
-    generator::{IdGenStatus, SnowflakeGenerator},
+    generator::{IdGenStatus, Result, SnowflakeGenerator},
     id::SnowflakeId,
     time::TimeSource,
 };

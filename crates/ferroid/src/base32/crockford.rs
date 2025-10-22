@@ -1,4 +1,4 @@
-use crate::{Result, base32::Error, id::BeBytes};
+use crate::{base32::Error, generator::Result, id::BeBytes};
 
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const NO_VALUE: u8 = 255;

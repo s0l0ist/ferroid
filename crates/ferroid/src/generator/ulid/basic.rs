@@ -4,8 +4,7 @@ use core::marker::PhantomData;
 use tracing::instrument;
 
 use crate::{
-    Result,
-    generator::{IdGenStatus, UlidGenerator},
+    generator::{IdGenStatus, Result, UlidGenerator},
     id::UlidId,
     rand::RandSource,
     time::TimeSource,

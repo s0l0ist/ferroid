@@ -1,7 +1,10 @@
 use core::future::Future;
 
 use crate::{
-    Result, futures::SmolSleep, generator::UlidGenerator, id::UlidId, rand::RandSource,
+    futures::SmolSleep,
+    generator::{Result, UlidGenerator},
+    id::UlidId,
+    rand::RandSource,
     time::TimeSource,
 };
 
@@ -61,9 +64,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        Result,
         futures::{SleepProvider, SmolYield},
-        generator::LockMonoUlidGenerator,
+        generator::{LockMonoUlidGenerator, Result},
         id::ULID,
         rand::{RandSource, ThreadRandom},
         time::{MonotonicClock, TimeSource},

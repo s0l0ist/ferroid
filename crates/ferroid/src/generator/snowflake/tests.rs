@@ -378,7 +378,7 @@ fn lock_is_poisoned_on_panic_std_mutex() {
     let err = generator
         .try_next_id()
         .expect_err("expected an error after poison");
-    assert!(matches!(err, crate::Error::LockPoisoned));
+    assert!(matches!(err, crate::generator::Error::LockPoisoned));
 }
 
 #[cfg(feature = "parking-lot")]

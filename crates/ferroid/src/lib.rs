@@ -8,7 +8,6 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-mod error;
 #[cfg(feature = "futures")]
 pub mod futures;
 #[cfg(feature = "std")]
@@ -20,11 +19,10 @@ pub mod time;
 #[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
 #[cfg(feature = "base32")]
 pub mod base32;
-pub mod id;
-pub use crate::error::*;
 #[cfg_attr(docsrs, doc(cfg(any(feature = "snowflake", feature = "ulid"))))]
 #[cfg(any(feature = "snowflake", feature = "ulid"))]
 pub mod generator;
+pub mod id;
 #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[cfg(feature = "serde")]
 pub mod serde;

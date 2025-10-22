@@ -1,7 +1,10 @@
 use core::future::Future;
 
 use crate::{
-    Result, futures::SmolSleep, generator::SnowflakeGenerator, id::SnowflakeId, time::TimeSource,
+    futures::SmolSleep,
+    generator::{Result, SnowflakeGenerator},
+    id::SnowflakeId,
+    time::TimeSource,
 };
 
 /// Extension trait for asynchronously generating Snowflake IDs using the
@@ -58,9 +61,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        Result,
         futures::{SleepProvider, SmolYield},
-        generator::{AtomicSnowflakeGenerator, LockSnowflakeGenerator, SnowflakeGenerator},
+        generator::{AtomicSnowflakeGenerator, LockSnowflakeGenerator, Result, SnowflakeGenerator},
         id::{SnowflakeId, SnowflakeTwitterId},
         time::{MonotonicClock, TimeSource},
     };

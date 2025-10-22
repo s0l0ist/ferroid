@@ -5,8 +5,7 @@ use portable_atomic::{AtomicU128, Ordering};
 use tracing::instrument;
 
 use crate::{
-    Result,
-    generator::{IdGenStatus, UlidGenerator},
+    generator::{IdGenStatus, Result, UlidGenerator},
     id::UlidId,
     rand::RandSource,
     time::TimeSource,

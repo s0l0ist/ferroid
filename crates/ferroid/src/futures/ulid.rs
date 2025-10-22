@@ -10,8 +10,7 @@ use pin_project_lite::pin_project;
 
 use super::SleepProvider;
 use crate::{
-    Result,
-    generator::{IdGenStatus, UlidGenerator},
+    generator::{IdGenStatus, Result, UlidGenerator},
     id::{ToU64, UlidId},
     rand::RandSource,
     time::TimeSource,

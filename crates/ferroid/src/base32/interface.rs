@@ -1,6 +1,6 @@
 use crate::{
-    Result,
     base32::Error,
+    generator::Result,
     id::{BeBytes, Id},
 };
 
