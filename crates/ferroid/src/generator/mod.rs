@@ -1,5 +1,5 @@
 mod error;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "lock", feature = "parking-lot"))]
 mod mutex;
 #[cfg(feature = "snowflake")]
 mod snowflake;
@@ -7,7 +7,7 @@ mod status;
 #[cfg(feature = "ulid")]
 mod ulid;
 pub use error::*;
-#[cfg(feature = "std")]
+#[cfg(any(feature = "lock", feature = "parking-lot"))]
 pub use mutex::*;
 #[cfg(feature = "snowflake")]
 pub use snowflake::*;
