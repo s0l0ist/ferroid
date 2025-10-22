@@ -1,14 +1,20 @@
-use crate::{
-    BasicMonoUlidGenerator, BasicUlidGenerator, Id, IdGenStatus, LockMonoUlidGenerator,
-    MonotonicClock, RandSource, ThreadRandom, TimeSource, ToU64, ULID, UlidGenerator, UlidId,
-};
-use alloc::rc::Rc;
-use alloc::sync::Arc;
-use alloc::{vec, vec::Vec};
+use alloc::{rc::Rc, sync::Arc, vec, vec::Vec};
 use core::cell::Cell;
-use std::collections::HashSet;
-use std::sync::Mutex;
-use std::thread::{self, scope};
+use std::{
+    collections::HashSet,
+    sync::Mutex,
+    thread::{self, scope},
+};
+
+use crate::{
+    generator::{
+        BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator,
+        UlidGenerator,
+    },
+    id::{Id, ToU64, ULID, UlidId},
+    rand::{RandSource, ThreadRandom},
+    time::{MonotonicClock, TimeSource},
+};
 
 struct MockTime {
     millis: u128,
@@ -262,7 +268,7 @@ fn lock_generator_mono_sequence_test() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_sequence_test() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let mock_time = MockTime { millis: 42 };
     let mock_rand = MockRand { rand: 42 };
@@ -289,7 +295,7 @@ fn lock_generator_mono_pending_test() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_pending_test() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let generator: AtomicMonoUlidGenerator<ULID, _, _> =
         AtomicMonoUlidGenerator::from_components(0, ULID::max_random(), FixedTime, MinRand);
@@ -315,7 +321,7 @@ fn lock_generator_mono_rollover_test() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_rollover_test() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
     let generator: AtomicMonoUlidGenerator<ULID, _, _> =
@@ -342,7 +348,7 @@ fn lock_generator_monotonic_clock_random_increments() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_monotonic_clock_random_increments() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
@@ -362,7 +368,7 @@ fn lock_generator_threaded_monotonic() {
 #[test]
 #[cfg(target_has_atomic = "128")]
 fn atomic_generator_threaded_monotonic() {
-    use crate::AtomicMonoUlidGenerator;
+    use crate::generator::AtomicMonoUlidGenerator;
 
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
@@ -391,7 +397,7 @@ fn lock_is_poisoned_on_panic_std_mutex() {
     let err = generator
         .try_next_id()
         .expect_err("expected an error after poison");
-    assert!(matches!(err, crate::Error::LockPoisoned(_)));
+    assert!(matches!(err, crate::generator::Error::LockPoisoned));
 }
 
 #[cfg(feature = "parking-lot")]

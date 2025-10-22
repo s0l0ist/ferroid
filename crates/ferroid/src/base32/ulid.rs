@@ -1,7 +1,11 @@
+use core::{fmt, marker::PhantomData};
+
 use super::interface::Base32Ext;
-use crate::{Base32Error, BeBytes, Error, Id, Result, UlidId};
-use core::fmt;
-use core::marker::PhantomData;
+use crate::{
+    base32::Error,
+    generator::Result,
+    id::{BeBytes, Id, UlidId},
+};
 
 /// Extension trait for Crockford Base32 encoding and decoding of ID types.
 ///
@@ -33,8 +37,9 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Base32UlidExt, ULID};
     /// use std::fmt::Write;
+    ///
+    /// use ferroid::{base32::Base32UlidExt, id::ULID};
     ///
     /// let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
@@ -55,7 +60,10 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Base32UlidExt, BeBytes, Id, ULID};
+    /// use ferroid::{
+    ///     base32::Base32UlidExt,
+    ///     id::{BeBytes, Id, ULID},
+    /// };
     ///
     /// let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
@@ -112,7 +120,10 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Base32Error, Base32UlidExt, Error, Id, ULID, UlidId};
+    /// use ferroid::{
+    ///     base32::{Base32UlidExt, Error},
+    ///     id::{Id, ULID, UlidId},
+    /// };
     ///
     /// // Crockford Base32 encodes values in 5-bit chunks, so encoding a u128 (128
     /// // bits) requires 26 characters (26 × 5 = 130 bits). Since u128 can only hold
@@ -141,9 +152,7 @@ where
     fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow {
-                id: decoded,
-            }));
+            return Err(Error::DecodeOverflow { id: decoded });
         }
         Ok(decoded)
     }
@@ -330,8 +339,9 @@ where
 
 #[cfg(all(test, feature = "alloc", feature = "ulid"))]
 mod alloc_test {
-    use crate::{Base32UlidExt, ULID};
     use alloc::string::ToString;
+
+    use crate::{base32::Base32UlidExt, id::ULID};
 
     #[test]
     fn ulid_display() {
@@ -343,7 +353,10 @@ mod alloc_test {
 
 #[cfg(all(test, feature = "ulid"))]
 mod test {
-    use crate::{Base32Error, Base32UlidExt, Error, UlidId, ULID};
+    use crate::{
+        base32::{Base32UlidExt, Error},
+        id::{ULID, UlidId},
+    };
 
     #[test]
     fn ulid_try_from() {
@@ -424,10 +437,10 @@ mod test {
         let res = ULID::decode(invalid);
         assert_eq!(
             res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidAscii {
+            Error::DecodeInvalidAscii {
                 byte: b'@',
                 index: 12,
-            })
+            }
         );
     }
 
@@ -436,18 +449,12 @@ mod test {
         // Shorter than 26-byte base32 for u128
         let too_short = "0123456789012345678901234";
         let res = ULID::decode(too_short);
-        assert_eq!(
-            res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 25 })
-        );
+        assert_eq!(res.unwrap_err(), Error::DecodeInvalidLen { len: 25 });
 
         // Longer than 26-byte base32 for u128
         let too_long = "012345678901234567890123456";
         let res = ULID::decode(too_long);
 
-        assert_eq!(
-            res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 27 })
-        );
+        assert_eq!(res.unwrap_err(), Error::DecodeInvalidLen { len: 27 });
     }
 }

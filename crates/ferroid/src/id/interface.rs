@@ -1,10 +1,13 @@
-use crate::ToU64;
-use core::fmt;
-use core::hash::Hash;
-use core::ops::{
-    Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Div, DivAssign,
-    Mul, MulAssign, Not, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign,
+use core::{
+    fmt,
+    hash::Hash,
+    ops::{
+        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Div,
+        DivAssign, Mul, MulAssign, Not, Shl, ShlAssign, Shr, ShrAssign, Sub, SubAssign,
+    },
 };
+
+use crate::id::ToU64;
 
 /// A trait for types that wrap a primitive scalar identifier.
 ///

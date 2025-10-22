@@ -1,5 +1,12 @@
-use crate::{RandSource, Result, TimeSource, TokioSleep, UlidGenerator, UlidId};
 use core::future::Future;
+
+use crate::{
+    futures::TokioSleep,
+    generator::{Result, UlidGenerator},
+    id::UlidId,
+    rand::RandSource,
+    time::TimeSource,
+};
 
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
@@ -8,7 +15,7 @@ use core::future::Future;
 /// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
 /// without specifying the sleep strategy manually.
 ///
-/// [`SleepProvider`]: crate::SleepProvider
+/// [`SleepProvider`]: crate::futures::SleepProvider
 pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
 where
     ID: UlidId,
@@ -29,7 +36,7 @@ where
     /// This future may return an error if the underlying generator does.
     ///
     /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::UlidGeneratorAsyncExt::try_next_id_async
+    ///     crate::futures::UlidGeneratorAsyncExt::try_next_id_async
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
@@ -43,20 +50,26 @@ where
     type Err = G::Err;
 
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
-        <Self as crate::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<TokioSleep>(self)
+        <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<TokioSleep>(
+            self,
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::HashSet, vec::Vec};
+
+    use futures::future::try_join_all;
+
     use super::*;
     use crate::{
-        LockMonoUlidGenerator, MonotonicClock, Result, SleepProvider, ThreadRandom, TimeSource,
-        TokioYield, ULID,
+        futures::{SleepProvider, TokioYield},
+        generator::{LockMonoUlidGenerator, Result},
+        id::ULID,
+        rand::ThreadRandom,
+        time::{MonotonicClock, TimeSource},
     };
-    use futures::future::try_join_all;
-    use std::collections::HashSet;
-    use std::vec::Vec;
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
@@ -120,7 +133,7 @@ mod tests {
                 tokio::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = crate::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g)
+                        let id = crate::futures::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g)
                             .await
                             .unwrap();
                         ids.push(id);

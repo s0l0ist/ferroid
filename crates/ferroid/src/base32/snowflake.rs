@@ -1,7 +1,11 @@
+use core::{fmt, marker::PhantomData};
+
 use super::interface::Base32Ext;
-use crate::{Base32Error, BeBytes, Error, Id, Result, SnowflakeId};
-use core::fmt;
-use core::marker::PhantomData;
+use crate::{
+    base32::Error,
+    generator::Result,
+    id::{BeBytes, Id, SnowflakeId},
+};
 
 /// Extension trait for Crockford Base32 encoding and decoding of ID types.
 ///
@@ -33,8 +37,9 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Base32SnowExt, SnowflakeTwitterId};
     /// use std::fmt::Write;
+    ///
+    /// use ferroid::{base32::Base32SnowExt, id::SnowflakeTwitterId};
     ///
     /// let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
     ///
@@ -54,7 +59,10 @@ where
     /// guaranteed at compile time when using [`Base32SnowExt::buf`].
     /// # Example
     /// ```
-    /// use ferroid::{Base32SnowExt, BeBytes, Id, SnowflakeTwitterId};
+    /// use ferroid::{
+    ///     base32::Base32SnowExt,
+    ///     id::{BeBytes, Id, SnowflakeTwitterId},
+    /// };
     ///
     /// let id = SnowflakeTwitterId::from_raw(2_424_242_424_242_424_242);
     ///
@@ -110,7 +118,10 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{Base32Error, Base32SnowExt, Error, Id, SnowflakeId, SnowflakeTwitterId};
+    /// use ferroid::{
+    ///     base32::{Base32SnowExt, Error},
+    ///     id::{Id, SnowflakeId, SnowflakeTwitterId},
+    /// };
     ///
     /// // Crockford Base32 encodes values in 5-bit chunks, so encoding a u64
     /// // (64 bits)
@@ -151,7 +162,7 @@ where
     /// let id = SnowflakeTwitterId::decode("FZZZZZZZZZZZZ")
     ///     .or_else(|err| {
     ///         match err {
-    ///             Error::Base32Error(Base32Error::DecodeOverflow { id }) => {
+    ///             Error::DecodeOverflow { id } => {
     ///                 debug_assert!(!id.is_valid());
     ///                 // clears reserved bits
     ///                 let valid = id.into_valid();
@@ -166,9 +177,7 @@ where
     fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
         let decoded = Self::inner_decode(s)?;
         if !decoded.is_valid() {
-            return Err(Error::Base32Error(Base32Error::DecodeOverflow {
-                id: decoded,
-            }));
+            return Err(Error::DecodeOverflow { id: decoded });
         }
         Ok(decoded)
     }
@@ -355,11 +364,12 @@ where
 
 #[cfg(all(test, feature = "alloc", feature = "snowflake"))]
 mod alloc_test {
-    use crate::{
-        Base32SnowExt, SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId,
-        SnowflakeTwitterId,
-    };
     use alloc::string::ToString;
+
+    use crate::{
+        base32::Base32SnowExt,
+        id::{SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId, SnowflakeTwitterId},
+    };
 
     #[test]
     fn twitter_display() {
@@ -390,8 +400,11 @@ mod alloc_test {
 #[cfg(all(test, feature = "snowflake"))]
 mod test {
     use crate::{
-        Base32Error, Base32SnowExt, Error, SnowflakeDiscordId, SnowflakeId, SnowflakeInstagramId,
-        SnowflakeMastodonId, SnowflakeTwitterId,
+        base32::{Base32SnowExt, Error},
+        id::{
+            SnowflakeDiscordId, SnowflakeId, SnowflakeInstagramId, SnowflakeMastodonId,
+            SnowflakeTwitterId,
+        },
     };
 
     #[test]
@@ -570,10 +583,10 @@ mod test {
         let res = SnowflakeTwitterId::decode(invalid);
         assert_eq!(
             res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidAscii {
+            Error::DecodeInvalidAscii {
                 byte: b'@',
                 index: 6,
-            })
+            }
         );
     }
 
@@ -582,18 +595,12 @@ mod test {
         // Shorter than 13-byte base32 for u64
         let too_short = "012345678901";
         let res = SnowflakeTwitterId::decode(too_short);
-        assert_eq!(
-            res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 12 })
-        );
+        assert_eq!(res.unwrap_err(), Error::DecodeInvalidLen { len: 12 });
 
         // Longer than 13-byte base32 for u64
         let too_long = "01234567890123";
         let res = SnowflakeTwitterId::decode(too_long);
 
-        assert_eq!(
-            res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidLen { len: 14 })
-        );
+        assert_eq!(res.unwrap_err(), Error::DecodeInvalidLen { len: 14 });
     }
 }

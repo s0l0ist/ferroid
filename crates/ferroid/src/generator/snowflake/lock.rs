@@ -1,8 +1,14 @@
-use crate::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
 use alloc::sync::Arc;
 use core::cmp::Ordering;
+
 #[cfg(feature = "tracing")]
 use tracing::instrument;
+
+use crate::{
+    generator::{Error, IdGenStatus, Mutex, Result, SnowflakeGenerator},
+    id::SnowflakeId,
+    time::TimeSource,
+};
 
 /// A lock-based Snowflake ID generator suitable for multi-threaded
 /// environments.
@@ -23,8 +29,8 @@ use tracing::instrument;
 /// - [`BasicSnowflakeGenerator`]
 /// - [`AtomicSnowflakeGenerator`]
 ///
-/// [`BasicSnowflakeGenerator`]: crate::BasicSnowflakeGenerator
-/// [`AtomicSnowflakeGenerator`]: crate::AtomicSnowflakeGenerator
+/// [`BasicSnowflakeGenerator`]: crate::generator::BasicSnowflakeGenerator
+/// [`AtomicSnowflakeGenerator`]: crate::generator::AtomicSnowflakeGenerator
 pub struct LockSnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId,
@@ -64,7 +70,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{
+    ///     generator::{IdGenStatus, LockSnowflakeGenerator},
+    ///     id::SnowflakeTwitterId,
+    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    /// };
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -76,8 +86,8 @@ where
     /// };
     /// ```
     ///
-    /// [`TimeSource`]: crate::TimeSource
-    /// [`MonotonicClock`]: crate::MonotonicClock
+    /// [`TimeSource`]: crate::time::TimeSource
+    /// [`MonotonicClock`]: crate::time::MonotonicClock
     pub fn new(machine_id: ID::Ty, time: T) -> Self {
         Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
     }
@@ -129,7 +139,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{
+    ///     generator::{IdGenStatus, LockSnowflakeGenerator},
+    ///     id::SnowflakeTwitterId,
+    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    /// };
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -163,7 +177,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{LockSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{
+    ///     generator::{IdGenStatus, LockSnowflakeGenerator},
+    ///     id::{SnowflakeTwitterId, ToU64},
+    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    /// };
     ///
     /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -179,7 +197,7 @@ where
     /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error<core::convert::Infallible>> {
+    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error> {
         let now = self.time.current_millis();
 
         #[cfg(feature = "parking-lot")]

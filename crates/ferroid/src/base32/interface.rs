@@ -1,4 +1,8 @@
-use crate::{Base32Error, BeBytes, Error, Id, Result};
+use crate::{
+    base32::Error,
+    generator::Result,
+    id::{BeBytes, Id},
+};
 
 /// Extension trait for types that support Crockford Base32 encoding and
 /// decoding.
@@ -30,7 +34,6 @@ where
     /// integer type.
     ///
     /// See also: [`Base32Ext::enc_to_buf`] for usage.
-    ///
     #[inline]
     fn inner_buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
         <<Self as Id>::Ty as BeBytes>::Base32Array::default()
@@ -66,9 +69,7 @@ where
     fn inner_decode<E>(s: impl AsRef<str>) -> Result<Self, Error<E>> {
         let s_ref = s.as_ref();
         if s_ref.len() != Self::Ty::BASE32_SIZE {
-            return Err(Error::Base32Error(Base32Error::DecodeInvalidLen {
-                len: s_ref.len(),
-            }));
+            return Err(Error::DecodeInvalidLen { len: s_ref.len() });
         }
         let raw = super::decode_base32(s_ref)?;
         Ok(Self::from_raw(raw))

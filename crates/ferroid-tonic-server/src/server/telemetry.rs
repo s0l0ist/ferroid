@@ -72,41 +72,38 @@ compile_error!(
 );
 
 // Core imports - always needed
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-
-// Honeycomb-specific imports
-#[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]
-use opentelemetry_otlp::{Compression, Protocol, WithExportConfig, WithTonicConfig};
-#[cfg(all(feature = "honeycomb", feature = "metrics"))]
-use opentelemetry_sdk::metrics::Temporality;
-#[cfg(feature = "honeycomb")]
-use tonic::metadata::MetadataMap;
-#[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]
-use tonic::transport::ClientTlsConfig;
-
 // Metrics-specific imports
-#[cfg(feature = "metrics")]
-use opentelemetry::metrics::{Counter, Histogram, Meter, UpDownCounter};
-#[cfg(feature = "metrics")]
-use opentelemetry_sdk::metrics as sdkmetrics;
 #[cfg(feature = "metrics")]
 use std::sync::OnceLock;
 
-// Either
-#[cfg(any(feature = "metrics", feature = "tracing"))]
-use opentelemetry::{InstrumentationScope, KeyValue};
-#[cfg(any(feature = "metrics", feature = "tracing"))]
-use opentelemetry_sdk::Resource;
-#[cfg(any(feature = "metrics", feature = "tracing"))]
-use opentelemetry_semantic_conventions as semvcns;
-
+#[cfg(feature = "metrics")]
+use opentelemetry::metrics::{Counter, Histogram, Meter, UpDownCounter};
 // Tracing-specific imports
 #[cfg(feature = "tracing")]
 use opentelemetry::trace::TracerProvider;
+// Either
+#[cfg(any(feature = "metrics", feature = "tracing"))]
+use opentelemetry::{InstrumentationScope, KeyValue};
+// Honeycomb-specific imports
+#[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]
+use opentelemetry_otlp::{Compression, Protocol, WithExportConfig, WithTonicConfig};
+#[cfg(any(feature = "metrics", feature = "tracing"))]
+use opentelemetry_sdk::Resource;
+#[cfg(feature = "metrics")]
+use opentelemetry_sdk::metrics as sdkmetrics;
+#[cfg(all(feature = "honeycomb", feature = "metrics"))]
+use opentelemetry_sdk::metrics::Temporality;
 #[cfg(feature = "tracing")]
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 #[cfg(feature = "tracing")]
 use opentelemetry_sdk::trace as sdktrace;
+#[cfg(any(feature = "metrics", feature = "tracing"))]
+use opentelemetry_semantic_conventions as semvcns;
+#[cfg(feature = "honeycomb")]
+use tonic::metadata::MetadataMap;
+#[cfg(all(feature = "honeycomb", any(feature = "metrics", feature = "tracing")))]
+use tonic::transport::ClientTlsConfig;
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub struct TelemetryProviders {
     #[cfg(feature = "tracing")]

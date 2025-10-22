@@ -1,12 +1,14 @@
-use crate::{TimeSource, UNIX_EPOCH};
 use alloc::sync::Arc;
 use core::time::Duration;
-use portable_atomic::{AtomicU64, Ordering};
 use std::{
     sync::OnceLock,
     thread::{self, JoinHandle},
     time::{Instant, SystemTime},
 };
+
+use portable_atomic::{AtomicU64, Ordering};
+
+use crate::time::{TimeSource, UNIX_EPOCH};
 
 /// Shared ticker thread that updates every millisecond.
 #[derive(Debug)]
@@ -61,11 +63,10 @@ impl MonotonicClock {
     ///
     /// # Example
     /// ```
-    /// use std::time::{Duration, Instant};
-    /// use ferroid::{MonotonicClock, TimeSource};
-    /// let now = std::time::SystemTime::now()
-    ///     .duration_since(std::time::UNIX_EPOCH)
-    ///     .unwrap();
+    /// use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+    ///
+    /// use ferroid::time::{MonotonicClock, TimeSource};
+    /// let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
     /// // Or use a default epoch
     /// // use ferroid::TWITTER_EPOCH,
     /// // let now = TWITTER_EPOCH;

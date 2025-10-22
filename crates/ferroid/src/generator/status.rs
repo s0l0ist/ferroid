@@ -1,4 +1,4 @@
-use crate::Id;
+use crate::id::Id;
 
 /// Represents the result of attempting to generate a new Snowflake ID.
 ///
@@ -12,16 +12,24 @@ use crate::Id;
 ///
 /// # Example
 /// ```
-/// use ferroid::{SnowflakeId, BasicSnowflakeGenerator, SnowflakeTwitterId, IdGenStatus};
+/// use ferroid::{
+///     generator::{BasicSnowflakeGenerator, IdGenStatus},
+///     id::{SnowflakeId, SnowflakeTwitterId},
+/// };
 ///
 /// struct FixedTime;
-/// impl ferroid::TimeSource<u64> for FixedTime {
+/// impl ferroid::time::TimeSource<u64> for FixedTime {
 ///     fn current_millis(&self) -> u64 {
 ///         1
 ///     }
 /// }
 ///
-/// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(0, 1, SnowflakeTwitterId::max_sequence(), FixedTime);
+/// let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(
+///     0,
+///     1,
+///     SnowflakeTwitterId::max_sequence(),
+///     FixedTime,
+/// );
 /// match generator.next_id() {
 ///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
 ///     IdGenStatus::Pending { yield_for } => println!("Back off for: {yield_for}"),

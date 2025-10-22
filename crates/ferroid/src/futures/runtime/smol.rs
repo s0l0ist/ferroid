@@ -1,11 +1,13 @@
-use crate::SleepProvider;
-use core::future::Future;
 use core::{
+    future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
+
 use pin_project_lite::pin_project;
 use smol::Timer;
+
+use crate::futures::SleepProvider;
 
 /// An implementation of [`SleepProvider`] using Smol's timer.
 ///

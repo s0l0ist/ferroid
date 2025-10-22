@@ -1,9 +1,15 @@
-use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
-use core::cmp;
-use core::marker::PhantomData;
+use core::{cmp, marker::PhantomData};
+
 use portable_atomic::{AtomicU128, Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
+
+use crate::{
+    generator::{IdGenStatus, Result, UlidGenerator},
+    id::UlidId,
+    rand::RandSource,
+    time::TimeSource,
+};
 
 /// A lock-free *monotonic* ULID-style ID generator suitable for single-threaded
 /// environments.
@@ -31,9 +37,9 @@ use tracing::instrument;
 /// - [`BasicMonoUlidGenerator`]
 /// - [`LockMonoUlidGenerator`]
 ///
-/// [`BasicUlidGenerator`]: crate::BasicUlidGenerator
-/// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
-/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
+/// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
+/// [`BasicMonoUlidGenerator`]: crate::generator::BasicMonoUlidGenerator
+/// [`LockMonoUlidGenerator`]: crate::generator::LockMonoUlidGenerator
 pub struct AtomicMonoUlidGenerator<ID, T, R>
 where
     ID: UlidId<Ty = u128>,
@@ -68,9 +74,15 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{AtomicMonoUlidGenerator, IdGenStatus},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
-    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator =
+    ///     AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = loop {
     ///     match generator.next_id() {
@@ -80,8 +92,8 @@ where
     /// };
     /// ```
     ///
-    /// [`TimeSource`]: crate::TimeSource
-    /// [`RandSource`]: crate::RandSource
+    /// [`TimeSource`]: crate::time::TimeSource
+    /// [`RandSource`]: crate::rand::RandSource
     pub fn new(time: T, rng: R) -> Self {
         Self::from_components(ID::ZERO, ID::ZERO, time, rng)
     }
@@ -131,9 +143,15 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{AtomicMonoUlidGenerator, IdGenStatus},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
-    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator =
+    ///     AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = loop {
     ///     match generator.next_id() {
@@ -163,9 +181,15 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicMonoUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{AtomicMonoUlidGenerator, IdGenStatus},
+    ///     id::{ToU64, ULID},
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
-    /// let generator = AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator =
+    ///     AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// // Attempt to generate a new ID
     /// let id: ULID = loop {

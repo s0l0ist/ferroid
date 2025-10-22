@@ -1,127 +1,112 @@
-use crate::{Result, SmolSleep, SnowflakeGenerator, SnowflakeId, TimeSource};
 use core::future::Future;
 
-/// Extension trait for asynchronously generating Snowflake IDs using the
+use crate::{
+    futures::SmolSleep,
+    generator::{Result, UlidGenerator},
+    id::UlidId,
+    rand::RandSource,
+    time::TimeSource,
+};
+
+/// Extension trait for asynchronously generating ULIDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
 ///
 /// This trait provides a convenience method for using a [`SleepProvider`]
 /// backed by the `smol` runtime, allowing you to call `.try_next_id_async()`
 /// without needing to specify the sleep strategy manually.
 ///
-/// [`SleepProvider`]: crate::SleepProvider
-pub trait SnowflakeGeneratorAsyncSmolExt<ID, T>
+/// [`SleepProvider`]: crate::futures::SleepProvider
+pub trait UlidGeneratorAsyncSmolExt<ID, T, R>
 where
-    ID: SnowflakeId,
+    ID: UlidId,
     T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
 {
     type Err;
-    /// Returns a future that resolves to the next available Snowflake ID using
+    /// Returns a future that resolves to the next available Ulid using
     /// the [`SmolSleep`] provider.
     ///
     /// Internally delegates to
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] method with
+    /// [`UlidGeneratorAsyncExt::try_next_id_async`] method with
     /// [`SmolSleep`] as the sleep strategy.
     ///
     /// # Errors
     ///
     /// This future may return an error if the underlying generator does.
     ///
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::SnowflakeGeneratorAsyncExt::try_next_id_async
+    /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
+    ///     crate::futures::UlidGeneratorAsyncExt::try_next_id_async
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
-impl<G, ID, T> SnowflakeGeneratorAsyncSmolExt<ID, T> for G
+impl<G, ID, T, R> UlidGeneratorAsyncSmolExt<ID, T, R> for G
 where
-    G: SnowflakeGenerator<ID, T> + Sync,
-    ID: SnowflakeId + Send,
+    G: UlidGenerator<ID, T, R> + Sync,
+    ID: UlidId + Send,
     T: TimeSource<ID::Ty> + Send,
+    R: RandSource<ID::Ty> + Send,
 {
     type Err = G::Err;
 
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
-        <Self as crate::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<SmolSleep>(self)
+        <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<SmolSleep>(
+            self,
+        )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{
-        AtomicSnowflakeGenerator, LockSnowflakeGenerator, MonotonicClock, Result, SleepProvider,
-        SmolYield, SnowflakeGenerator, SnowflakeId, SnowflakeTwitterId, TimeSource,
-    };
+    use std::{collections::HashSet, vec::Vec};
+
     use futures::future::try_join_all;
     use smol::Task;
-    use std::collections::HashSet;
-    use std::vec::Vec;
+
+    use super::*;
+    use crate::{
+        futures::{SleepProvider, SmolYield},
+        generator::{LockMonoUlidGenerator, Result},
+        id::ULID,
+        rand::{RandSource, ThreadRandom},
+        time::{MonotonicClock, TimeSource},
+    };
 
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
+    // Test the explicit SleepProvider approach
     #[test]
-    fn generates_many_unique_ids_lock_smol_sleep() {
+    fn generates_many_unique_ids_basic_smol_sleep() {
         smol::block_on(async {
-            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolSleep>(
-                LockSnowflakeGenerator::new,
+            test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolSleep>(
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
+                ThreadRandom::default,
             )
             .await
             .unwrap();
         });
     }
     #[test]
-    fn generates_many_unique_ids_lock_smol_yield() {
+    fn generates_many_unique_ids_basic_smol_yield() {
         smol::block_on(async {
-            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolYield>(
-                LockSnowflakeGenerator::new,
+            test_many_ulid_unique_ids_explicit::<ULID, _, _, _, SmolYield>(
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
+                ThreadRandom::default,
             )
             .await
             .unwrap();
         });
     }
     #[test]
-    fn generates_many_unique_ids_lock_smol_convenience() {
+    fn generates_many_unique_ids_basic_smol_convience() {
         smol::block_on(async {
-            test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
-                LockSnowflakeGenerator::new,
+            test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
+                LockMonoUlidGenerator::new,
                 MonotonicClock::default,
-            )
-            .await
-            .unwrap();
-        });
-    }
-
-    #[test]
-    fn generates_many_unique_ids_atomic_smol_sleep() {
-        smol::block_on(async {
-            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolSleep>(
-                AtomicSnowflakeGenerator::new,
-                MonotonicClock::default,
-            )
-            .await
-            .unwrap();
-        });
-    }
-    #[test]
-    fn generates_many_unique_ids_atomic_smol_yield() {
-        smol::block_on(async {
-            test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolYield>(
-                AtomicSnowflakeGenerator::new,
-                MonotonicClock::default,
-            )
-            .await
-            .unwrap();
-        });
-    }
-    #[test]
-    fn generates_many_unique_ids_atomic_smol_convenience() {
-        smol::block_on(async {
-            test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
-                AtomicSnowflakeGenerator::new,
-                MonotonicClock::default,
+                ThreadRandom::default,
             )
             .await
             .unwrap();
@@ -129,19 +114,22 @@ mod tests {
     }
 
     // Helper function for explicit SleepProvider testing
-    async fn test_many_snow_unique_ids_explicit<ID, G, T, S>(
-        generator_fn: impl Fn(u64, T) -> G,
+    async fn test_many_ulid_unique_ids_explicit<ID, G, T, R, S>(
+        generator_fn: impl Fn(T, R) -> G,
         clock_factory: impl Fn() -> T,
+        rand_factory: impl Fn() -> R,
     ) -> Result<()>
     where
-        G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: SnowflakeId + Send + 'static,
+        G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
+        ID: UlidId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
+        R: RandSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
     {
         let clock = clock_factory();
+        let rand = rand_factory();
         let generators: Vec<_> = (0..NUM_GENERATORS)
-            .map(|machine_id| generator_fn(machine_id, clock.clone()))
+            .map(|_| generator_fn(clock.clone(), rand.clone()))
             .collect();
 
         // Test explicit SleepProvider syntax
@@ -151,7 +139,7 @@ mod tests {
                 smol::spawn(async move {
                     let mut ids = Vec::with_capacity(IDS_PER_GENERATOR);
                     for _ in 0..IDS_PER_GENERATOR {
-                        let id = crate::SnowflakeGeneratorAsyncExt::try_next_id_async::<S>(&g)
+                        let id = crate::futures::UlidGeneratorAsyncExt::try_next_id_async::<S>(&g)
                             .await
                             .unwrap();
                         ids.push(id);
@@ -161,22 +149,26 @@ mod tests {
             })
             .collect();
 
-        validate_unique_snow_ids(tasks).await
+        validate_unique_ulid_ids(tasks).await
     }
 
     // Helper function for convenience extension trait testing
-    async fn test_many_snow_unique_ids_convenience<ID, G, T>(
-        generator_fn: impl Fn(u64, T) -> G,
+    async fn test_many_ulid_unique_ids_convenience<ID, G, T, R>(
+        generator_fn: impl Fn(T, R) -> G,
         clock_factory: impl Fn() -> T,
+        rand_factory: impl Fn() -> R,
     ) -> Result<()>
     where
-        G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
-        ID: SnowflakeId + Send + 'static,
+        G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
+        G::Err: Send + Sync + 'static,
+        ID: UlidId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
+        R: RandSource<ID::Ty> + Clone + Send,
     {
         let clock = clock_factory();
+        let rand = rand_factory();
         let generators: Vec<_> = (0..NUM_GENERATORS)
-            .map(|machine_id| generator_fn(machine_id, clock.clone()))
+            .map(|_| generator_fn(clock.clone(), rand.clone()))
             .collect();
 
         // Test convenience extension trait syntax (uses SmolSleep by default)
@@ -196,13 +188,11 @@ mod tests {
             })
             .collect();
 
-        validate_unique_snow_ids(tasks).await
+        validate_unique_ulid_ids(tasks).await
     }
 
     // Helper to validate uniqueness - shared between test approaches
-    async fn validate_unique_snow_ids(
-        tasks: Vec<Task<Result<Vec<impl SnowflakeId>>>>,
-    ) -> Result<()> {
+    async fn validate_unique_ulid_ids(tasks: Vec<Task<Result<Vec<impl UlidId>>>>) -> Result<()> {
         let all_ids: Vec<_> = try_join_all(tasks).await?.into_iter().flatten().collect();
 
         #[allow(clippy::cast_possible_truncation)]

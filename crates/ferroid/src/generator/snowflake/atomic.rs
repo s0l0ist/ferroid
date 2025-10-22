@@ -1,8 +1,14 @@
-use crate::{IdGenStatus, Result, SnowflakeGenerator, SnowflakeId, TimeSource};
 use core::{cmp, marker::PhantomData};
+
 use portable_atomic::{AtomicU64, Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
+
+use crate::{
+    generator::{IdGenStatus, Result, SnowflakeGenerator},
+    id::SnowflakeId,
+    time::TimeSource,
+};
 
 /// A lock-free Snowflake ID generator suitable for multi-threaded environments.
 ///
@@ -26,8 +32,8 @@ use tracing::instrument;
 /// - [`BasicSnowflakeGenerator`]
 /// - [`LockSnowflakeGenerator`]
 ///
-/// [`BasicSnowflakeGenerator`]: crate::BasicSnowflakeGenerator
-/// [`LockSnowflakeGenerator`]: crate::LockSnowflakeGenerator
+/// [`BasicSnowflakeGenerator`]: crate::generator::BasicSnowflakeGenerator
+/// [`LockSnowflakeGenerator`]: crate::generator::LockSnowflakeGenerator
 pub struct AtomicSnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId<Ty = u64>,
@@ -69,8 +75,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
-    ///     
+    /// use ferroid::{
+    ///     generator::{AtomicSnowflakeGenerator, IdGenStatus},
+    ///     id::SnowflakeTwitterId,
+    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    /// };
+    ///
     /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
     /// let id: SnowflakeTwitterId = loop {
@@ -81,8 +91,8 @@ where
     /// };
     /// ```
     ///
-    /// [`TimeSource`]: crate::TimeSource
-    /// [`MonotonicClock`]: crate::MonotonicClock
+    /// [`TimeSource`]: crate::time::TimeSource
+    /// [`MonotonicClock`]: crate::time::MonotonicClock
     pub fn new(machine_id: ID::Ty, time: T) -> Self {
         Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
     }
@@ -138,7 +148,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{
+    ///     generator::{AtomicSnowflakeGenerator, IdGenStatus},
+    ///     id::SnowflakeTwitterId,
+    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    /// };
     ///
     /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
@@ -173,7 +187,11 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{AtomicSnowflakeGenerator, ToU64, IdGenStatus, SnowflakeTwitterId, TWITTER_EPOCH, MonotonicClock};
+    /// use ferroid::{
+    ///     generator::{AtomicSnowflakeGenerator, IdGenStatus},
+    ///     id::{SnowflakeTwitterId, ToU64},
+    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    /// };
     ///
     /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///

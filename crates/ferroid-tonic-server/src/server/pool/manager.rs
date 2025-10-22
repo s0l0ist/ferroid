@@ -9,18 +9,20 @@
 //! independently. This model allows efficient parallelism without contention or
 //! locking.
 
-use crate::server::{
-    service::handler::{get_streams_inflight, set_global_shutdown},
-    streaming::request::WorkRequest,
-};
 use core::time::Duration;
-use ferroid_tonic_core::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use ferroid_tonic_core::Error;
 use tokio::{
     sync::{mpsc, oneshot},
     time::{sleep, timeout},
 };
 use tokio_util::sync::CancellationToken;
+
+use crate::server::{
+    service::handler::{get_streams_inflight, set_global_shutdown},
+    streaming::request::WorkRequest,
+};
 
 /// A cooperative pool of asynchronous workers that process [`WorkRequest`]s.
 ///

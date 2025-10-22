@@ -1,7 +1,14 @@
-use crate::{rand::RandSource, IdGenStatus, Result, TimeSource, UlidGenerator, UlidId};
 use core::marker::PhantomData;
+
 #[cfg(feature = "tracing")]
 use tracing::instrument;
+
+use crate::{
+    generator::{IdGenStatus, Result, UlidGenerator},
+    id::UlidId,
+    rand::RandSource,
+    time::TimeSource,
+};
 
 /// A *non-monotonic* ULID-style ID generator suitable for multi-threaded
 /// environments.
@@ -23,9 +30,9 @@ use tracing::instrument;
 /// - [`LockMonoUlidGenerator`]
 /// - [`AtomicMonoUlidGenerator`]
 ///
-/// [`BasicMonoUlidGenerator`]: crate::BasicMonoUlidGenerator
-/// [`AtomicMonoUlidGenerator`]: crate::AtomicMonoUlidGenerator
-/// [`LockMonoUlidGenerator`]: crate::LockMonoUlidGenerator
+/// [`BasicMonoUlidGenerator`]: crate::generator::BasicMonoUlidGenerator
+/// [`AtomicMonoUlidGenerator`]: crate::generator::AtomicMonoUlidGenerator
+/// [`LockMonoUlidGenerator`]: crate::generator::LockMonoUlidGenerator
 pub struct BasicUlidGenerator<ID, T, R>
 where
     ID: UlidId,
@@ -56,7 +63,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
     /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -68,8 +80,8 @@ where
     /// };
     /// ```
     ///
-    /// [`TimeSource`]: crate::TimeSource
-    /// [`RandSource`]: crate::RandSource
+    /// [`TimeSource`]: crate::time::TimeSource
+    /// [`RandSource`]: crate::rand::RandSource
     pub const fn new(time: T, rng: R) -> Self {
         Self {
             time,
@@ -91,7 +103,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
     /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
@@ -123,7 +140,12 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{BasicUlidGenerator, IdGenStatus, ULID, ToU64, MonotonicClock, ThreadRandom};
+    /// use ferroid::{
+    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     id::{ToU64, ULID},
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
     ///
     /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///

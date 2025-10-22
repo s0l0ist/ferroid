@@ -1,4 +1,4 @@
-use crate::{Base32Error, BeBytes, Error, Result};
+use crate::{base32::Error, generator::Result, id::BeBytes};
 
 const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const NO_VALUE: u8 = 255;
@@ -97,10 +97,7 @@ where
         // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
         let val = unsafe { *LOOKUP.get_unchecked(b as usize) };
         if val == NO_VALUE {
-            return Err(Error::Base32Error(Base32Error::DecodeInvalidAscii {
-                byte: b,
-                index: i,
-            }));
+            return Err(Error::DecodeInvalidAscii { byte: b, index: i });
         }
         acc = (acc << BITS_PER_CHAR) | T::from(val);
     }
@@ -203,10 +200,10 @@ mod tests {
         let res = decode_base32::<u32, ()>(s);
         assert_eq!(
             res.unwrap_err(),
-            Error::Base32Error(Base32Error::DecodeInvalidAscii {
+            Error::DecodeInvalidAscii {
                 byte: b'!',
                 index: 6,
-            })
+            }
         );
     }
 

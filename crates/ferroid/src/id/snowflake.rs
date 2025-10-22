@@ -1,5 +1,6 @@
-use crate::Id;
 use core::hash::Hash;
+
+use crate::id::Id;
 
 /// A trait representing a layout-compatible Snowflake ID generator.
 ///
@@ -11,7 +12,7 @@ use core::hash::Hash;
 /// # Example
 ///
 /// ```
-/// use ferroid::{SnowflakeId, SnowflakeTwitterId};
+/// use ferroid::id::{SnowflakeId, SnowflakeTwitterId};
 ///
 /// let id = SnowflakeTwitterId::from(1000, 2, 1);
 /// assert_eq!(id.timestamp(), 1000);
@@ -93,7 +94,7 @@ pub trait SnowflakeId: Id {
 ///     machine_id: <bits>,
 ///     sequence: <bits>
 /// );
-///```
+/// ```
 ///
 /// ## Example: A Twitter-like layout
 /// ```rust
@@ -130,6 +131,7 @@ macro_rules! define_snowflake_id {
     ) => {
         $(#[$meta])*
         #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[repr(transparent)]
         pub struct $name {
             id: $int,
         }
@@ -220,7 +222,7 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl $crate::Id for $name {
+        impl $crate::id::Id for $name {
             type Ty = $int;
             const ZERO: $int = 0;
             const ONE: $int = 1;
@@ -236,7 +238,7 @@ macro_rules! define_snowflake_id {
             }
         }
 
-        impl $crate::SnowflakeId for $name {
+        impl $crate::id::SnowflakeId for $name {
             fn timestamp(&self) -> Self::Ty {
                 self.timestamp()
             }
@@ -281,25 +283,25 @@ macro_rules! define_snowflake_id {
         $crate::cfg_base32! {
             impl core::fmt::Display for $name {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    use $crate::Base32SnowExt;
+                    use $crate::base32::Base32SnowExt;
                     self.encode().fmt(f)
                 }
             }
 
             impl core::convert::TryFrom<&str> for $name {
-                type Error = $crate::Error<$name>;
+                type Error = $crate::base32::Error<$name>;
 
                 fn try_from(s: &str) -> Result<Self, Self::Error> {
-                    use $crate::Base32SnowExt;
+                    use $crate::base32::Base32SnowExt;
                     Self::decode(s)
                 }
             }
 
             impl core::str::FromStr for $name {
-                type Err = $crate::Error<$name>;
+                type Err = $crate::base32::Error<$name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    use $crate::Base32SnowExt;
+                    use $crate::base32::Base32SnowExt;
                     Self::decode(s)
                 }
             }
@@ -335,7 +337,7 @@ define_snowflake_id!(
     ///              +--------------+----------------+-----------------+---------------+
     ///              |<----------- MSB ---------- 64 bits ----------- LSB ------------>|
     /// ```
-    /// [`TWITTER_EPOCH`]: crate::TWITTER_EPOCH
+    /// [`TWITTER_EPOCH`]: crate::time::TWITTER_EPOCH
     SnowflakeTwitterId, u64,
     reserved: 1,
     timestamp: 41,
@@ -357,7 +359,7 @@ define_snowflake_id!(
     ///              +----------------+-----------------+---------------+
     ///              |<----- MSB ---------- 64 bits --------- LSB ----->|
     /// ```
-    /// [`DISCORD_EPOCH`]: crate::DISCORD_EPOCH
+    /// [`DISCORD_EPOCH`]: crate::time::DISCORD_EPOCH
     SnowflakeDiscordId, u64,
     reserved: 0,
     timestamp: 42,
@@ -378,7 +380,7 @@ define_snowflake_id!(
     ///              +----------------+---------------+
     ///              |<--- MSB --- 64 bits -- LSB --->|
     /// ```
-    /// [`MASTODON_EPOCH`]: crate::MASTODON_EPOCH
+    /// [`MASTODON_EPOCH`]: crate::time::MASTODON_EPOCH
     SnowflakeMastodonId, u64,
     reserved: 0,
     timestamp: 48,
@@ -400,7 +402,7 @@ define_snowflake_id!(
     ///              +----------------+-----------------+---------------+
     ///              |<----- MSB ---------- 64 bits --------- LSB ----->|
     /// ```
-    /// [`INSTAGRAM_EPOCH`]: crate::INSTAGRAM_EPOCH
+    /// [`INSTAGRAM_EPOCH`]: crate::time::INSTAGRAM_EPOCH
     SnowflakeInstagramId, u64,
     reserved: 0,
     timestamp: 41,
@@ -410,8 +412,9 @@ define_snowflake_id!(
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use super::*;
     use std::println;
+
+    use super::*;
 
     #[test]
     fn test_snowflake_twitter_id_fields_and_bounds() {

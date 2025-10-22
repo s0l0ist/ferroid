@@ -1,0 +1,10 @@
+# Group imports by module
+imports_granularity = "Crate"
+
+# Reorder imports alphabetically
+reorder_imports = true
+
+# Group std, external, and crate imports
+group_imports = "StdExternalCrate"
+
+format_code_in_doc_comments = true
