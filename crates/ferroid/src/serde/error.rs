@@ -20,7 +20,6 @@ pub enum Error<E> {
     ///
     /// This wraps the [`crate::base32::Error`] type and is only available when
     /// the `base32` feature is enabled.
-    #[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
     #[cfg(feature = "base32")]
     Base32Error(crate::base32::Error<E>),
 }

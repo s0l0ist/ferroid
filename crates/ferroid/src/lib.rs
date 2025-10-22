@@ -8,16 +8,13 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-#[cfg_attr(docsrs, doc(cfg(feature = "base32")))]
 #[cfg(feature = "base32")]
 pub mod base32;
 #[cfg(feature = "futures")]
 pub mod futures;
 pub mod generator;
 pub mod id;
-
 pub mod rand;
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 #[cfg(feature = "serde")]
 pub mod serde;
 pub mod time;

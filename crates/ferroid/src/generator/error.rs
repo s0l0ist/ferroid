@@ -20,7 +20,6 @@ pub enum Error {
     /// This occurs when a thread panics while holding the lock. When the
     /// `parking-lot` feature is enabled, mutexes do **not** poison, so this
     /// variant is not available.
-    #[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
     #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
     LockPoisoned,
 
@@ -33,7 +32,6 @@ pub enum Error {
     /// If lock poisoning cannot occur (`lock` is disabled, or `parking-lot` is
     /// enabled), there is nothing fallible at runtime. This variant exists
     /// solely to satisfy `Result<T, Error>` and should never be constructed.
-    #[cfg_attr(docsrs, doc(cfg(any(not(feature = "lock"), feature = "parking-lot"))))]
     #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     Infallible,
 }
@@ -46,10 +44,8 @@ impl fmt::Display for Error {
 
 impl core::error::Error for Error {}
 
-#[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
 #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 use crate::generator::{MutexGuard, PoisonError};
-#[cfg_attr(docsrs, doc(cfg(all(feature = "lock", not(feature = "parking-lot")))))]
 #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 impl<T> From<PoisonError<MutexGuard<'_, T>>> for Error {
     fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {

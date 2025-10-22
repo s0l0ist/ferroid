@@ -41,10 +41,6 @@ pub mod as_native_ulid {
     }
 }
 
-#[cfg_attr(
-    docsrs,
-    doc(cfg(all(feature = "serde", feature = "ulid", feature = "base32")))
-)]
 #[cfg(feature = "base32")]
 pub mod as_base32_ulid {
     use super::{Deserializer, Serializer};
