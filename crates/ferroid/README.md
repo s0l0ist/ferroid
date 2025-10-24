@@ -93,8 +93,8 @@ Both strategies validate during deserialization and return errors for invalid
 IDs. This prevents overflow scenarios where the underlying integer value exceeds
 the valid range for the ID type. For example, `SnowflakeTwitterId` reserves 1
 bit, making `u64::MAX` invalid. This validation behavior is consistent with
-`Base32Error::DecodeOverflow` used in the base32 decoding path (see next
-section).
+`ferroid::base32::Error::DecodeOverflow` used in the base32 decoding path (see
+next section).
 
 ```rust
 use ferroid::{
@@ -192,9 +192,9 @@ For example:
   bit remains unset.
 
 If reserved bits are set during decoding, Ferroid returns a
-`Base32Error::DecodeOverflow { id }` containing the full (invalid) ID. You can
-recover by calling `.into_valid()` to mask off reserved bits-allowing either
-explicit error handling or silent correction.
+`ferroid::base32::Error::DecodeOverflow { id }` containing the full (invalid)
+ID. You can recover by calling `.into_valid()` to mask off reserved
+bits-allowing either explicit error handling or silent correction.
 
 ### Generate an ID
 
