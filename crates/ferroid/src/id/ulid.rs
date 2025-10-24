@@ -167,13 +167,13 @@ macro_rules! define_ulid {
             /// `Self::TIMESTAMP_BITS`.
             #[must_use]
             pub const fn max_timestamp() -> $int {
-                (1 << Self::TIMESTAMP_BITS) - 1
+                Self::TIMESTAMP_MASK
             }
             /// Returns the maximum representable randome value based on
             /// `Self::RANDOM_BIT`.
             #[must_use]
             pub const fn max_random() -> $int {
-                (1 << Self::RANDOM_BITS) - 1
+                Self::RANDOM_MASK
             }
 
             /// Converts this type into its raw type representation
@@ -272,11 +272,11 @@ macro_rules! define_ulid {
             }
 
             fn max_timestamp() -> Self::Ty {
-                (1 << $timestamp_bits) - 1
+                Self::TIMESTAMP_MASK
             }
 
             fn max_random() -> Self::Ty {
-                (1 << $random_bits) - 1
+                Self::RANDOM_MASK
             }
 
             fn from_components(timestamp: $int, random: $int) -> Self {

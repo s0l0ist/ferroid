@@ -44,7 +44,6 @@ where
     #[cfg(not(feature = "cache-padded"))]
     state: AtomicU64,
     time: T,
-    machine_id: u64,
     _id: PhantomData<ID>,
 }
 
@@ -129,7 +128,6 @@ where
             #[cfg(not(feature = "cache-padded"))]
             state: AtomicU64::new(initial.to_raw()),
             time,
-            machine_id,
             _id: PhantomData,
         }
     }
@@ -214,21 +212,20 @@ where
         let current_id = ID::from_raw(current_raw);
         let current_ts = current_id.timestamp();
 
-        let (next_ts, next_seq) = match now.cmp(&current_ts) {
+        let next_id = match now.cmp(&current_ts) {
             cmp::Ordering::Equal => {
                 if current_id.has_sequence_room() {
-                    (current_ts, current_id.next_sequence())
+                    current_id.increment_sequence()
                 } else {
                     return Ok(IdGenStatus::Pending { yield_for: ID::ONE });
                 }
             }
-            cmp::Ordering::Greater => (now, ID::ZERO),
+            cmp::Ordering::Greater => current_id.rollover_to_timestamp(now),
             cmp::Ordering::Less => {
                 return Ok(Self::cold_clock_behind(now, current_ts));
             }
         };
 
-        let next_id = ID::from_components(next_ts, self.machine_id, next_seq);
         let next_raw = next_id.to_raw();
 
         if self
