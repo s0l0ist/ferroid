@@ -194,19 +194,19 @@ macro_rules! define_snowflake_id {
             /// `Self::TIMESTAMP_BITS`.
             #[must_use]
             pub const fn max_timestamp() -> $int {
-                (1 << Self::TIMESTAMP_BITS) - 1
+                Self::TIMESTAMP_MASK
             }
             /// Returns the maximum representable machine ID value based on
             /// `Self::MACHINE_ID_BITS`.
             #[must_use]
             pub const fn max_machine_id() -> $int {
-                (1 << Self::MACHINE_ID_BITS) - 1
+                Self::MACHINE_ID_MASK
             }
             /// Returns the maximum representable sequence value based on
             /// `Self::SEQUENCE_BITS`.
             #[must_use]
             pub const fn max_sequence() -> $int {
-                (1 << Self::SEQUENCE_BITS) - 1
+                Self::SEQUENCE_MASK
             }
 
             /// Converts this type into its raw type representation
@@ -252,15 +252,15 @@ macro_rules! define_snowflake_id {
             }
 
             fn max_timestamp() -> Self::Ty {
-                (1 << $timestamp_bits) - 1
+                Self::TIMESTAMP_MASK
             }
 
             fn max_machine_id() -> Self::Ty {
-                (1 << $machine_bits) - 1
+                Self::MACHINE_ID_MASK
             }
 
             fn max_sequence() -> Self::Ty {
-                (1 << $sequence_bits) - 1
+                Self::SEQUENCE_MASK
             }
 
             fn from_components(timestamp: $int, machine_id: $int, sequence: $int) -> Self {

@@ -210,19 +210,20 @@ where
         let current_id = ID::from_raw(current_raw);
         let current_ts = current_id.timestamp();
 
-        let (next_ts, next_rand) = match now.cmp(&current_ts) {
+        let next_id = match now.cmp(&current_ts) {
             cmp::Ordering::Equal => {
                 if current_id.has_random_room() {
-                    (current_ts, current_id.next_random())
+                    current_id.increment_random()
                 } else {
                     return Ok(IdGenStatus::Pending { yield_for: ID::ONE });
                 }
             }
-            cmp::Ordering::Greater => (now, self.rng.rand()),
-            cmp::Ordering::Less => return Ok(Self::cold_clock_behind(now, current_ts)),
+            cmp::Ordering::Greater => current_id.rollover_to_timestamp(now, self.rng.rand()),
+            cmp::Ordering::Less => {
+                return Ok(Self::cold_clock_behind(now, current_ts));
+            }
         };
 
-        let next_id = ID::from_components(next_ts, next_rand);
         let next_raw = next_id.to_raw();
 
         if self
