@@ -3,7 +3,7 @@ use core::fmt;
 /// A result type that is infallible by default.
 ///
 /// Most `ferroid` APIs are infallible. However, some fallible variants are
-/// enabled behind feature flags like `std` or `base32`.
+/// enabled behind feature flags like `lock`.
 pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, E>;
 
 /// All error variants that `ferroid` can emit.
