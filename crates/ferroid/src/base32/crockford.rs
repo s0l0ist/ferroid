@@ -105,7 +105,7 @@ where
     Ok(acc)
 }
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -137,14 +137,14 @@ mod tests {
     }
 
     #[test]
-    fn test_roundtrip_u32() {
+    fn encode_decode_preserves_u32_values() {
         for &v in &[0, 1, u32::MAX, u32::MIN, 42, 0xFF00_FF00, 0x1234_5678] {
             roundtrip_u32(v);
         }
     }
 
     #[test]
-    fn test_roundtrip_u64() {
+    fn encode_decode_preserves_u64_values() {
         for &v in &[
             0,
             1,
@@ -159,7 +159,7 @@ mod tests {
     }
 
     #[test]
-    fn test_roundtrip_u128() {
+    fn encode_decode_preserves_u128_values() {
         for &v in &[
             0,
             1,
@@ -174,48 +174,69 @@ mod tests {
     }
 
     #[test]
-    fn test_alias_and_case_insensitive() {
-        // Crockford alias: O=o=0, I=i=L=l=1
-        let ex = "OILoil";
-        for c in ex.bytes() {
-            let s = std::format!("{c:0>7}"); // pad to 7 chars
-            let res = decode_base32::<u32, ()>(&s);
-            assert!(res.is_ok(), "alias '{c}' failed");
-        }
-        // Mixed case
-        let encoded = "ABCD123";
-        let lower = encoded.to_lowercase();
-        let upper = encoded.to_uppercase();
-        let mid = "aBcD123";
-        let val_lower = decode_base32::<u32, ()>(&lower).unwrap();
-        let val_upper = decode_base32::<u32, ()>(&upper).unwrap();
-        let val_mid = decode_base32::<u32, ()>(mid).unwrap();
-        assert_eq!(val_lower, val_upper);
-        assert_eq!(val_lower, val_mid);
+    fn decode_accepts_lowercase_characters() {
+        let encoded_upper = "ABCD123";
+        let encoded_lower = "abcd123";
+
+        let val_upper = decode_base32::<u32, ()>(encoded_upper).unwrap();
+        let val_lower = decode_base32::<u32, ()>(encoded_lower).unwrap();
+
+        assert_eq!(val_upper, val_lower);
     }
 
     #[test]
-    fn test_invalid_character() {
-        let s = "ZZZZZZ!"; // '!' is not valid
-        let res = decode_base32::<u32, ()>(s);
+    fn decode_accepts_mixed_case_characters() {
+        let encoded_upper = "ABCD123";
+        let encoded_mixed = "aBcD123";
+
+        let val_upper = decode_base32::<u32, ()>(encoded_upper).unwrap();
+        let val_mixed = decode_base32::<u32, ()>(encoded_mixed).unwrap();
+
+        assert_eq!(val_upper, val_mixed);
+    }
+
+    #[test]
+    fn decode_treats_crockford_aliases_as_canonical_values() {
+        // Test that Crockford aliases decode to their canonical values
+        let aliases = [
+            (b'O', b'0'),
+            (b'o', b'0'),
+            (b'I', b'1'),
+            (b'i', b'1'),
+            (b'L', b'1'),
+            (b'l', b'1'),
+        ];
+
+        for (alias, canonical) in aliases {
+            let alias_buf = [alias; 7];
+            let canonical_buf = [canonical; 7];
+
+            let alias_str = core::str::from_utf8(&alias_buf).unwrap();
+            let canonical_str = core::str::from_utf8(&canonical_buf).unwrap();
+
+            let alias_val = decode_base32::<u32, ()>(alias_str).unwrap();
+            let canonical_val = decode_base32::<u32, ()>(canonical_str).unwrap();
+
+            assert_eq!(
+                alias_val, canonical_val,
+                "alias {} should decode to same value as {}",
+                alias as char, canonical as char
+            );
+        }
+    }
+
+    #[test]
+    fn decode_returns_error_for_invalid_character() {
+        let invalid_input = "ZZZZZZ!"; // '!' is not in Crockford base32
+
+        let result = decode_base32::<u32, ()>(invalid_input);
+
         assert_eq!(
-            res.unwrap_err(),
+            result.unwrap_err(),
             Error::DecodeInvalidAscii {
                 byte: b'!',
                 index: 6,
             }
         );
-    }
-
-    #[test]
-    fn test_ulid_ts() {
-        let time: u128 = 1_469_922_850_259;
-        let time_bytes = time.to_be_bytes();
-        let mut out = [0u8; 26];
-        encode_base32(&time_bytes, &mut out);
-        let s = std::str::from_utf8(&out).unwrap();
-        // check we can decode it back
-        let decoded = decode_base32::<u128, ()>(s).unwrap();
-        assert_eq!(decoded, time);
     }
 }

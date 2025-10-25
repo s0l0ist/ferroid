@@ -181,7 +181,7 @@ fn get_honeycomb_metadata() -> anyhow::Result<(MetadataMap, String, Compression)
 
     let endpoint = std::env::var("HONEYCOMB_ENDPOINT").context("missing `HONEYCOMB_ENDPOINT`")?;
     let compression = {
-        use std::str::FromStr;
+        use core::str::FromStr;
         let raw = std::env::var("HONEYCOMB_COMPRESSION")
             .context("missing `HONEYCOMB_COMPRESSION`")?
             .to_ascii_lowercase();
