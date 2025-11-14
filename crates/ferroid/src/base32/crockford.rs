@@ -49,12 +49,12 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
     let output_chars = buf_slice.len();
     let total_bits = output_chars * BITS_PER_CHAR;
     let mut bits = total_bits - input_bits;
-    let mut acc = 0_u16;
+    let mut acc = 0;
     let mask = 0x1F;
 
     let mut out = 0;
     for &b in input {
-        acc = (acc << 8) | u16::from(b);
+        acc = (acc << 8) | usize::from(b);
         bits += 8;
         while bits >= BITS_PER_CHAR {
             bits -= BITS_PER_CHAR;
@@ -64,8 +64,7 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
             // SAFETY: `(acc >> bits) & mask` produces values in the range
             // 0..=31.
             unsafe {
-                *buf_slice.get_unchecked_mut(out) =
-                    *ALPHABET.get_unchecked(((acc >> bits) & mask) as usize);
+                *buf_slice.get_unchecked_mut(out) = *ALPHABET.get_unchecked((acc >> bits) & mask);
             }
             out += 1;
         }
@@ -92,17 +91,15 @@ where
         + core::ops::Shl<usize, Output = T>
         + core::ops::BitOr<Output = T>,
 {
-    let mut acc = T::default();
-    for (i, b) in encoded.bytes().enumerate() {
-        // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
-        let val = unsafe { *LOOKUP.get_unchecked(b as usize) };
-        if val == NO_VALUE {
-            return Err(Error::DecodeInvalidAscii { byte: b, index: i });
-        }
-        acc = (acc << BITS_PER_CHAR) | T::from(val);
-    }
-
-    Ok(acc)
+    encoded
+        .bytes()
+        .enumerate()
+        .try_fold(T::default(), |acc, (i, b)| {
+            let v = unsafe { *LOOKUP.get_unchecked(b as usize) };
+            (v != NO_VALUE)
+                .then_some((acc << BITS_PER_CHAR) | T::from(v))
+                .ok_or(Error::DecodeInvalidAscii { byte: b, index: i })
+        })
 }
 
 #[cfg(test)]

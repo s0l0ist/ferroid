@@ -412,7 +412,7 @@ mod test {
         // Don't need to test all IDs
         let id = SnowflakeTwitterId::try_from("01ARZ3NDEKTSV").unwrap();
         let encoded = id.encode();
-        assert_eq!(encoded, "01ARZ3NDEKTSV");
+        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV");
     }
 
     #[test]
@@ -421,7 +421,7 @@ mod test {
         use core::str::FromStr;
         let id = SnowflakeTwitterId::from_str("01ARZ3NDEKTSV").unwrap();
         let encoded = id.encode();
-        assert_eq!(encoded, "01ARZ3NDEKTSV");
+        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV");
     }
 
     #[test]
@@ -436,7 +436,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeTwitterId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded, "7ZZZZZZZZZZZZ");
+        assert_eq!(encoded.as_str(), "7ZZZZZZZZZZZZ");
         let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeTwitterId::max_timestamp());
@@ -453,7 +453,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded, "0000000000000");
+        assert_eq!(encoded.as_str(), "0000000000000");
         let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
@@ -474,7 +474,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeDiscordId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded, "FZZZZZZZZZZZZ");
+        assert_eq!(encoded.as_str(), "FZZZZZZZZZZZZ");
         let decoded = SnowflakeDiscordId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeDiscordId::max_timestamp());
@@ -491,7 +491,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded, "0000000000000");
+        assert_eq!(encoded.as_str(), "0000000000000");
         let decoded = SnowflakeDiscordId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
@@ -512,7 +512,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeInstagramId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded, "FZZZZZZZZZZZZ");
+        assert_eq!(encoded.as_str(), "FZZZZZZZZZZZZ");
         let decoded = SnowflakeInstagramId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeInstagramId::max_timestamp());
@@ -529,7 +529,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded, "0000000000000");
+        assert_eq!(encoded.as_str(), "0000000000000");
         let decoded = SnowflakeInstagramId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
@@ -550,7 +550,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeMastodonId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded, "FZZZZZZZZZZZZ");
+        assert_eq!(encoded.as_str(), "FZZZZZZZZZZZZ");
         let decoded = SnowflakeMastodonId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeMastodonId::max_timestamp());
@@ -567,7 +567,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded, "0000000000000");
+        assert_eq!(encoded.as_str(), "0000000000000");
         let decoded = SnowflakeMastodonId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
