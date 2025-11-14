@@ -95,6 +95,7 @@ where
         .bytes()
         .enumerate()
         .try_fold(T::default(), |acc, (i, b)| {
+            // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
             let v = unsafe { *LOOKUP.get_unchecked(b as usize) };
             (v != NO_VALUE)
                 .then_some((acc << BITS_PER_CHAR) | T::from(v))
