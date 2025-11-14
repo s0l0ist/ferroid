@@ -728,7 +728,7 @@ where
     let mut buf = ID::buf();
 
     let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(1));
+    group.throughput(Throughput::Bytes(<ID::Ty as BeBytes>::SIZE as u64));
 
     // Benches `Display::fmt` via the blanket `ToString` impl.
     group.bench_function("self/to_string", |b| {
@@ -748,15 +748,16 @@ where
     });
     group.bench_function("encode_to_buf", |b| {
         b.iter(|| {
-            let b = id.encode_to_buf(black_box(&mut buf));
+            let b = id.encode_to_buf(&mut buf);
             black_box(b);
         });
     });
 
+    group.throughput(Throughput::Bytes(<ID::Ty as BeBytes>::BASE32_SIZE as u64));
     let encoded = id.encode();
     group.bench_function("decode", |b| {
         b.iter(|| {
-            black_box(ID::decode(black_box(encoded.as_ref())).unwrap());
+            black_box(ID::decode(encoded.as_ref()).unwrap());
         });
     });
 
@@ -772,7 +773,7 @@ where
     let mut buf = ID::buf();
 
     let mut group = c.benchmark_group(group_name);
-    group.throughput(Throughput::Elements(1));
+    group.throughput(Throughput::Bytes(<ID::Ty as BeBytes>::SIZE as u64));
 
     // Benches `Display::fmt` via the blanket `ToString` impl.
     group.bench_function("self/to_string", |b| {
@@ -792,15 +793,16 @@ where
     });
     group.bench_function("encode_to_buf", |b| {
         b.iter(|| {
-            let b = id.encode_to_buf(black_box(&mut buf));
+            let b = id.encode_to_buf(&mut buf);
             black_box(b);
         });
     });
 
+    group.throughput(Throughput::Bytes(<ID::Ty as BeBytes>::BASE32_SIZE as u64));
     let encoded = id.encode();
     group.bench_function("decode", |b| {
         b.iter(|| {
-            black_box(ID::decode(black_box(encoded.as_ref())).unwrap());
+            black_box(ID::decode(encoded.as_ref()).unwrap());
         });
     });
 
