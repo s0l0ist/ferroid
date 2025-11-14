@@ -17,7 +17,7 @@ keywords = ["ferroid", "grpc", "snowflake", "ulid", "monotonic"]
 publish = true
 
 [dependencies]
-ferroid = { version = "0.8.3", path = "../ferroid", features = ["std", "alloc", "snowflake", "basic"] }
+ferroid = { version = "0.8.4", path = "../ferroid", features = ["std", "alloc", "snowflake", "basic"] }
 prost = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tonic = { workspace = true, features = ["transport", "codegen"] }

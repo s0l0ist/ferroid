@@ -93,18 +93,62 @@ where
         + core::ops::Shl<usize, Output = T>
         + core::ops::BitOr<Output = T>,
 {
-    encoded
-        .bytes()
-        .enumerate()
-        .try_fold(T::default(), |acc, (i, b)| {
-            // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
-            let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
-            (v != INVALID_VALUE)
-                .then_some((acc << BITS_PER_CHAR) | T::from(v))
-                .ok_or(Error::DecodeInvalidAscii { byte: b, index: i })
-        })
+    let bytes = encoded.as_bytes();
+    let mut acc = T::default();
+    let mut has_error = false;
+
+    let chunks = bytes.chunks_exact(4);
+    let remainder = chunks.remainder();
+    for chunk in chunks {
+        let (v0, v1, v2, v3) = unsafe {
+            // SAFETY: `chunks_exact(X)` guarantees `chunk.len() == X`
+            let b0 = *chunk.get_unchecked(0);
+            let b1 = *chunk.get_unchecked(1);
+            let b2 = *chunk.get_unchecked(2);
+            let b3 = *chunk.get_unchecked(3);
+
+            // SAFETY: `bX as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+            let v0 = *DECODE_LUT.get_unchecked(b0 as usize);
+            let v1 = *DECODE_LUT.get_unchecked(b1 as usize);
+            let v2 = *DECODE_LUT.get_unchecked(b2 as usize);
+            let v3 = *DECODE_LUT.get_unchecked(b3 as usize);
+
+            (v0, v1, v2, v3)
+        };
+        acc = (acc << BITS_PER_CHAR) | T::from(v0);
+        acc = (acc << BITS_PER_CHAR) | T::from(v1);
+        acc = (acc << BITS_PER_CHAR) | T::from(v2);
+        acc = (acc << BITS_PER_CHAR) | T::from(v3);
+
+        has_error |= (v0 | v1 | v2 | v3) == INVALID_VALUE;
+    }
+
+    // Handle remainder
+    for &b in remainder.iter() {
+        // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+        let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
+        acc = (acc << BITS_PER_CHAR) | T::from(v);
+        has_error |= v == INVALID_VALUE;
+    }
+
+    if has_error {
+        return Err(handle_error(bytes));
+    }
+    Ok(acc)
 }
 
+#[cold]
+#[inline(never)]
+fn handle_error<E>(bytes: &[u8]) -> Error<E> {
+    for (i, &b) in bytes.iter().enumerate() {
+        // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+        let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
+        if v == INVALID_VALUE {
+            return Error::DecodeInvalidAscii { byte: b, index: i };
+        }
+    }
+    unreachable!("handle_error called but no invalid byte found");
+}
 #[cfg(test)]
 mod tests {
     use super::*;
