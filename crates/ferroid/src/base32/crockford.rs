@@ -1,16 +1,18 @@
 use crate::{base32::Error, generator::Result, id::BeBytes};
 
-const ALPHABET: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const NO_VALUE: u8 = 255;
+const INVALID_VALUE: u8 = 255;
 const BITS_PER_CHAR: usize = 5;
 
+/// Lookup table for Crockford base32 encoding
+static ENCODE_LUT: [u8; 32] = *b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
 /// Lookup table for Crockford base32 decoding
-const LOOKUP: [u8; 256] = {
-    let mut lut = [NO_VALUE; 256];
+static DECODE_LUT: [u8; 256] = {
+    let mut lut = [INVALID_VALUE; 256];
     let mut i = 0_u8;
     // Main alphabet, allow lower-case
     while i < 32 {
-        let c = ALPHABET[i as usize];
+        let c = ENCODE_LUT[i as usize];
         lut[c as usize] = i;
         if c.is_ascii_uppercase() {
             lut[(c + 32) as usize] = i; // lowercase letter
@@ -36,11 +38,11 @@ const LOOKUP: [u8; 256] = {
 ///   encoding fixed-size inputs which we ensure in the caller when using
 ///   `Base32Array`.
 ///
-/// - The index into `ALPHABET` is masked with `0x1F` (31), ensuring it is
+/// - The index into `ENCODE_LUT` is masked with `0x1F` (31), ensuring it is
 ///   always in the range 0..=31.
-///   - `ALPHABET` is a fixed-size array with exactly 32 elements, so all masked
+///   - `ENCODE_LUT` is a fixed-size array with exactly 32 elements, so all masked
 ///     indices are valid.
-///   - Therefore, `ALPHABET[(acc >> bits) & 0x1F]` is guaranteed to be
+///   - Therefore, `ENCODE_LUT[(acc >> bits) & 0x1F]` is guaranteed to be
 ///     in-bounds.
 #[inline(always)]
 #[allow(clippy::inline_always)]
@@ -64,7 +66,7 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
             // SAFETY: `(acc >> bits) & mask` produces values in the range
             // 0..=31.
             unsafe {
-                *buf_slice.get_unchecked_mut(out) = *ALPHABET.get_unchecked((acc >> bits) & mask);
+                *buf_slice.get_unchecked_mut(out) = *ENCODE_LUT.get_unchecked((acc >> bits) & mask);
             }
             out += 1;
         }
@@ -79,7 +81,7 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 /// # Safety
 ///
 /// - `encoded.bytes()` produces values in the range 0..=255.
-/// - `LOOKUP` is a fixed-size array of 256 elements, so `LOOKUP[b as usize]` is
+/// - `DECODE_LUT` is a fixed-size array of 256 elements, so `DECODE_LUT[b as usize]` is
 ///   always in-bounds.
 #[inline(always)]
 #[allow(clippy::inline_always)]
@@ -95,9 +97,9 @@ where
         .bytes()
         .enumerate()
         .try_fold(T::default(), |acc, (i, b)| {
-            // SAFETY: `b as usize` is in 0..=255, and `LOOKUP` has 256 entries.
-            let v = unsafe { *LOOKUP.get_unchecked(b as usize) };
-            (v != NO_VALUE)
+            // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+            let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
+            (v != INVALID_VALUE)
                 .then_some((acc << BITS_PER_CHAR) | T::from(v))
                 .ok_or(Error::DecodeInvalidAscii { byte: b, index: i })
         })
