@@ -141,7 +141,8 @@ where
 #[inline(never)]
 fn handle_error<E>(bytes: &[u8]) -> Error<E> {
     for (i, &b) in bytes.iter().enumerate() {
-        let v = DECODE_LUT[b as usize]; // safe in cold path
+        // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+        let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
         if v == INVALID_VALUE {
             return Error::DecodeInvalidAscii { byte: b, index: i };
         }
