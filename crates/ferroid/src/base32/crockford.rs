@@ -93,16 +93,77 @@ where
         + core::ops::Shl<usize, Output = T>
         + core::ops::BitOr<Output = T>,
 {
-    encoded
-        .bytes()
-        .enumerate()
-        .try_fold(T::default(), |acc, (i, b)| {
-            // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
-            let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
-            (v != INVALID_VALUE)
-                .then_some((acc << BITS_PER_CHAR) | T::from(v))
-                .ok_or(Error::DecodeInvalidAscii { byte: b, index: i })
-        })
+    let bytes = encoded.as_bytes();
+    let mut acc = T::default();
+
+    let chunks = bytes.chunks_exact(4);
+    let remainder = chunks.remainder();
+
+    for (chunk_idx, chunk) in chunks.enumerate() {
+        let base_idx = chunk_idx * 4;
+        let ((b0, v0), (b1, v1), (b2, v2), (b3, v3)) = unsafe {
+            // SAFETY: `chunks_exact(4)` guarantees `chunk.len() == 4`
+            let b0 = *chunk.get_unchecked(0);
+            let b1 = *chunk.get_unchecked(1);
+            let b2 = *chunk.get_unchecked(2);
+            let b3 = *chunk.get_unchecked(3);
+
+            // SAFETY: `bX as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+            let v0 = *DECODE_LUT.get_unchecked(b0 as usize);
+            let v1 = *DECODE_LUT.get_unchecked(b1 as usize);
+            let v2 = *DECODE_LUT.get_unchecked(b2 as usize);
+            let v3 = *DECODE_LUT.get_unchecked(b3 as usize);
+
+            ((b0, v0), (b1, v1), (b2, v2), (b3, v3))
+        };
+        acc = (acc << BITS_PER_CHAR) | T::from(v0);
+        acc = (acc << BITS_PER_CHAR) | T::from(v1);
+        acc = (acc << BITS_PER_CHAR) | T::from(v2);
+        acc = (acc << BITS_PER_CHAR) | T::from(v3);
+
+        let has_error = (v0 | v1 | v2 | v3) == INVALID_VALUE;
+        if has_error {
+            if v0 == INVALID_VALUE {
+                return Err(Error::DecodeInvalidAscii {
+                    byte: b0,
+                    index: base_idx,
+                });
+            }
+            if v1 == INVALID_VALUE {
+                return Err(Error::DecodeInvalidAscii {
+                    byte: b1,
+                    index: base_idx + 1,
+                });
+            }
+            if v2 == INVALID_VALUE {
+                return Err(Error::DecodeInvalidAscii {
+                    byte: b2,
+                    index: base_idx + 2,
+                });
+            }
+            if v3 == INVALID_VALUE {
+                return Err(Error::DecodeInvalidAscii {
+                    byte: b3,
+                    index: base_idx + 3,
+                });
+            }
+        }
+    }
+
+    // Handle remainder
+    let base_idx = bytes.len() - remainder.len();
+    for (i, &b) in remainder.iter().enumerate() {
+        // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+        let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
+        acc = (acc << BITS_PER_CHAR) | T::from(v);
+        if v == INVALID_VALUE {
+            return Err(Error::DecodeInvalidAscii {
+                byte: b,
+                index: base_idx + i,
+            });
+        }
+    }
+    Ok(acc)
 }
 
 #[cfg(test)]
