@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.8.2"
+version = "0.8.3"
 edition = "2024"
 rust-version = "1.85.1"
 license = "MIT OR Apache-2.0"
@@ -25,7 +25,7 @@ criterion = { version = "0.7", default-features = false }
 crossbeam-utils = { version = "0.8", default-features = false }
 dotenvy = { version = "0.15", default-features = false }
 futures = { version = "0.3", default-features = false }
-hyper = { version = "1.7", default-features = false }
+hyper = { version = "1.8", default-features = false }
 mimalloc = { version = "0.1", default-features = false }
 num_cpus = { version = "1.17", default-features = false }
 opentelemetry = { version = "0.31", default-features = false }

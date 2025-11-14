@@ -362,7 +362,7 @@ mod test {
     fn ulid_try_from() {
         let ulid = ULID::try_from("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
         let encoded = ulid.encode();
-        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
     }
 
     #[test]
@@ -370,7 +370,7 @@ mod test {
         use core::str::FromStr;
         let ulid = ULID::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
         let encoded = ulid.encode();
-        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
     }
 
     #[test]
@@ -380,7 +380,7 @@ mod test {
         assert_eq!(id.random(), ULID::max_random());
 
         let encoded = id.encode();
-        assert_eq!(encoded, "7ZZZZZZZZZZZZZZZZZZZZZZZZZ");
+        assert_eq!(encoded.as_str(), "7ZZZZZZZZZZZZZZZZZZZZZZZZZ");
         let decoded = ULID::decode(&encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), ULID::max_timestamp());
@@ -395,7 +395,7 @@ mod test {
         assert_eq!(id.random(), 1_012_768_647_078_601_740_696_923);
 
         let encoded = id.encode();
-        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
         let decoded = ULID::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 1_469_922_850_259);
@@ -407,7 +407,7 @@ mod test {
         assert_eq!(id.random(), 885_339_478_614_498_720_052_741);
 
         let encoded = id.encode();
-        assert_eq!(encoded, "01EWW6K6EXQDX5JV0E9CAHPXG5");
+        assert_eq!(encoded.as_str(), "01EWW6K6EXQDX5JV0E9CAHPXG5");
         let decoded = ULID::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 1_611_559_180_765);
@@ -422,7 +422,7 @@ mod test {
         assert_eq!(id.random(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded, "00000000000000000000000000");
+        assert_eq!(encoded.as_str(), "00000000000000000000000000");
         let decoded = ULID::decode(&encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
