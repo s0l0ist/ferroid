@@ -191,7 +191,7 @@ where
 }
 
 /// A reusable builder that owns the Base32 buffer and formats an ID.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Base32SnowFormatter<T>
 where
     T: Base32SnowExt,
@@ -223,17 +223,24 @@ where
 
     /// Returns an allocated `String` of the base32 encoding.
     #[cfg(feature = "alloc")]
-    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
-    #[allow(clippy::inherent_to_string_shadow_display)]
     #[must_use]
-    pub fn to_string(&self) -> alloc::string::String {
+    pub fn as_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 
-    /// Consumes the builder and returns the raw buffer.
+    /// Consumes the formatter and returns the raw buffer.
     pub const fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
         self.buf
+    }
+}
+
+impl<T: Base32SnowExt> core::hash::Hash for Base32SnowFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
     }
 }
 
@@ -246,12 +253,71 @@ where
     }
 }
 
+impl<T: Base32SnowExt> fmt::Debug for Base32SnowFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Base32SnowFormatter")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: Base32SnowExt> From<&Base32SnowFormatter<T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: &Base32SnowFormatter<T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+#[cfg(feature = "alloc")]
+impl<T: Base32SnowExt> From<Base32SnowFormatter<T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: Base32SnowFormatter<T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+
 impl<T: Base32SnowExt> AsRef<str> for Base32SnowFormatter<T>
 where
     T::Ty: BeBytes,
 {
     fn as_ref(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl<T: Base32SnowExt> core::ops::Deref for Base32SnowFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32SnowExt> core::borrow::Borrow<str> for Base32SnowFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32SnowExt> PartialEq<str> for Base32SnowFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
     }
 }
 
@@ -265,7 +331,6 @@ where
 }
 
 #[cfg(feature = "alloc")]
-#[cfg_attr(not(feature = "alloc"), doc(hidden))]
 impl<T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatter<T>
 where
     T::Ty: BeBytes,
@@ -276,7 +341,7 @@ where
 }
 
 /// A builder that borrows a user-supplied buffer for Base32 formatting.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Base32SnowFormatterRef<'a, T>
 where
     T: Base32SnowExt,
@@ -307,12 +372,19 @@ where
 
     /// Returns an allocated `String` of the base32 encoding.
     #[cfg(feature = "alloc")]
-    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
-    #[allow(clippy::inherent_to_string_shadow_display)]
     #[must_use]
-    pub fn to_string(&self) -> alloc::string::String {
+    pub fn as_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+    }
+}
+
+impl<T: Base32SnowExt> core::hash::Hash for Base32SnowFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
     }
 }
 
@@ -325,11 +397,61 @@ where
     }
 }
 
+impl<T: Base32SnowExt> fmt::Debug for Base32SnowFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Base32SnowFormatterRef")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: Base32SnowExt> From<&Base32SnowFormatterRef<'_, T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: &Base32SnowFormatterRef<'_, T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+#[cfg(feature = "alloc")]
+impl<T: Base32SnowExt> From<Base32SnowFormatterRef<'_, T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: Base32SnowFormatterRef<'_, T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+
 impl<T: Base32SnowExt> AsRef<str> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
     fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32SnowExt> core::ops::Deref for Base32SnowFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32SnowExt> core::borrow::Borrow<str> for Base32SnowFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    fn borrow(&self) -> &str {
         self.as_str()
     }
 }
@@ -352,7 +474,6 @@ where
 }
 
 #[cfg(feature = "alloc")]
-#[cfg_attr(not(feature = "alloc"), doc(hidden))]
 impl<T: Base32SnowExt> PartialEq<alloc::string::String> for Base32SnowFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
@@ -412,7 +533,7 @@ mod test {
         // Don't need to test all IDs
         let id = SnowflakeTwitterId::try_from("01ARZ3NDEKTSV").unwrap();
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV");
+        assert_eq!(encoded, "01ARZ3NDEKTSV");
     }
 
     #[test]
@@ -421,7 +542,7 @@ mod test {
         use core::str::FromStr;
         let id = SnowflakeTwitterId::from_str("01ARZ3NDEKTSV").unwrap();
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV");
+        assert_eq!(encoded, "01ARZ3NDEKTSV");
     }
 
     #[test]
@@ -436,7 +557,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeTwitterId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "7ZZZZZZZZZZZZ");
+        assert_eq!(encoded, "7ZZZZZZZZZZZZ");
         let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeTwitterId::max_timestamp());
@@ -453,7 +574,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "0000000000000");
+        assert_eq!(encoded, "0000000000000");
         let decoded = SnowflakeTwitterId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
@@ -474,7 +595,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeDiscordId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "FZZZZZZZZZZZZ");
+        assert_eq!(encoded, "FZZZZZZZZZZZZ");
         let decoded = SnowflakeDiscordId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeDiscordId::max_timestamp());
@@ -491,7 +612,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "0000000000000");
+        assert_eq!(encoded, "0000000000000");
         let decoded = SnowflakeDiscordId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
@@ -512,7 +633,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeInstagramId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "FZZZZZZZZZZZZ");
+        assert_eq!(encoded, "FZZZZZZZZZZZZ");
         let decoded = SnowflakeInstagramId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeInstagramId::max_timestamp());
@@ -529,7 +650,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "0000000000000");
+        assert_eq!(encoded, "0000000000000");
         let decoded = SnowflakeInstagramId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
@@ -550,7 +671,7 @@ mod test {
         assert_eq!(id.sequence(), SnowflakeMastodonId::max_sequence());
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "FZZZZZZZZZZZZ");
+        assert_eq!(encoded, "FZZZZZZZZZZZZ");
         let decoded = SnowflakeMastodonId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), SnowflakeMastodonId::max_timestamp());
@@ -567,7 +688,7 @@ mod test {
         assert_eq!(id.sequence(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "0000000000000");
+        assert_eq!(encoded, "0000000000000");
         let decoded = SnowflakeMastodonId::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);

@@ -188,13 +188,40 @@ macro_rules! define_ulid {
                 Self { id: raw }
             }
 
+            /// Generates a non-monotonic ULID using the current system time in
+            /// milliseconds since the Unix epoch and the built-in
+            /// [`ThreadRandom`] random generator.
+            ///
+            /// This convenience constructor does **not** maintain any internal
+            /// state and therefore does *not* guarantee monotonicity when
+            /// multiple IDs are created within the same millisecond. If you
+            /// have a bursty load or need strictly monotonic ULIDs, prefer a
+            /// stateful generator such as [`BasicUlidGenerator`] or
+            /// [`BasicMonoUlidGenerator`].
+            ///
+            /// Internally, this performs a system time query on every call,
+            /// making it the slowest way to generate a ULID, but it is suitable
+            /// for low-volume or one-off ID generation.
+            ///
+            /// [`ThreadRandom`]: crate::rand::ThreadRandom
+            /// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
+            /// [`BasicMonoUlidGenerator`]:
+            ///     crate::generator::BasicMonoUlidGenerator
+            #[cfg(all(
+                feature = "std",
+                not(all(target_arch = "wasm32", target_os = "unknown")),
+            ))]
+            #[must_use]
+            pub fn now() -> Self {
+                Self::from_datetime(std::time::SystemTime::now())
+            }
+
             /// Generates a ULID from the given timestamp in milliseconds since
             /// UNIX epoch, using the built-in [`ThreadRandom`] random
             /// generator.
             ///
             /// [`ThreadRandom`]: crate::rand::ThreadRandom
             #[cfg(feature = "std")]
-            #[cfg_attr(not(feature = "std"), doc(hidden))]
             #[must_use]
             pub fn from_timestamp(timestamp: <Self as $crate::id::Id>::Ty) -> Self {
                 Self::from_timestamp_and_rand(timestamp, &$crate::rand::ThreadRandom)
@@ -219,7 +246,6 @@ macro_rules! define_ulid {
             ///
             /// [`ThreadRandom`]: crate::rand::ThreadRandom
             #[cfg(feature = "std")]
-            #[cfg_attr(not(feature = "std"), doc(hidden))]
             #[must_use]
             pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
                 Self::from_datetime_and_rand(datetime, &$crate::rand::ThreadRandom)
@@ -231,7 +257,6 @@ macro_rules! define_ulid {
             /// [`RandSource`]: crate::rand::RandSource
             ///
             #[cfg(feature = "std")]
-            #[cfg_attr(not(feature = "std"), doc(hidden))]
             #[must_use]
             pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
             where
@@ -282,8 +307,8 @@ macro_rules! define_ulid {
             fn from_components(timestamp: $int, random: $int) -> Self {
                 // Random bits can frequencly overflow, but this is okay since
                 // they're masked. We don't need a debug assertion here because
-                // this is expected behavior. However, the timestamp and part
-                // should never overflow.
+                // this is expected behavior. However, the timestamp should
+                // never overflow.
                 debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
                 Self::from(timestamp, random)
             }

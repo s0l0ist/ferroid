@@ -166,7 +166,7 @@ where
 }
 
 /// A reusable builder that owns the Base32 buffer and formats an ID.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Base32UlidFormatter<T>
 where
     T: Base32UlidExt,
@@ -198,17 +198,24 @@ where
 
     /// Returns an allocated `String` of the base32 encoding.
     #[cfg(feature = "alloc")]
-    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
-    #[allow(clippy::inherent_to_string_shadow_display)]
     #[must_use]
-    pub fn to_string(&self) -> alloc::string::String {
+    pub fn as_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
     }
 
-    /// Consumes the builder and returns the raw buffer.
+    /// Consumes the formatter and returns the raw buffer.
     pub const fn into_inner(self) -> <T::Ty as BeBytes>::Base32Array {
         self.buf
+    }
+}
+
+impl<T: Base32UlidExt> core::hash::Hash for Base32UlidFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
     }
 }
 
@@ -221,12 +228,71 @@ where
     }
 }
 
+impl<T: Base32UlidExt> fmt::Debug for Base32UlidFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Base32UlidFormatter")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: Base32UlidExt> From<&Base32UlidFormatter<T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: &Base32UlidFormatter<T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+#[cfg(feature = "alloc")]
+impl<T: Base32UlidExt> From<Base32UlidFormatter<T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: Base32UlidFormatter<T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+
 impl<T: Base32UlidExt> AsRef<str> for Base32UlidFormatter<T>
 where
     T::Ty: BeBytes,
 {
     fn as_ref(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl<T: Base32UlidExt> core::ops::Deref for Base32UlidFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32UlidExt> core::borrow::Borrow<str> for Base32UlidFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32UlidExt> PartialEq<str> for Base32UlidFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
     }
 }
 
@@ -240,7 +306,6 @@ where
 }
 
 #[cfg(feature = "alloc")]
-#[cfg_attr(not(feature = "alloc"), doc(hidden))]
 impl<T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatter<T>
 where
     T::Ty: BeBytes,
@@ -251,7 +316,7 @@ where
 }
 
 /// A builder that borrows a user-supplied buffer for Base32 formatting.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Base32UlidFormatterRef<'a, T>
 where
     T: Base32UlidExt,
@@ -282,12 +347,19 @@ where
 
     /// Returns an allocated `String` of the base32 encoding.
     #[cfg(feature = "alloc")]
-    #[cfg_attr(not(feature = "alloc"), doc(hidden))]
-    #[allow(clippy::inherent_to_string_shadow_display)]
     #[must_use]
-    pub fn to_string(&self) -> alloc::string::String {
+    pub fn as_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
         unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+    }
+}
+
+impl<T: Base32UlidExt> core::hash::Hash for Base32UlidFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.as_str().hash(state);
     }
 }
 
@@ -300,11 +372,61 @@ where
     }
 }
 
+impl<T: Base32UlidExt> fmt::Debug for Base32UlidFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Base32UlidFormatterRef")
+            .field(&self.as_str())
+            .finish()
+    }
+}
+
+#[cfg(feature = "alloc")]
+impl<T: Base32UlidExt> From<&Base32UlidFormatterRef<'_, T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: &Base32UlidFormatterRef<'_, T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+#[cfg(feature = "alloc")]
+impl<T: Base32UlidExt> From<Base32UlidFormatterRef<'_, T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn from(formatter: Base32UlidFormatterRef<'_, T>) -> alloc::string::String {
+        formatter.as_string()
+    }
+}
+
 impl<T: Base32UlidExt> AsRef<str> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
 {
     fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32UlidExt> core::ops::Deref for Base32UlidFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl<T: Base32UlidExt> core::borrow::Borrow<str> for Base32UlidFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    fn borrow(&self) -> &str {
         self.as_str()
     }
 }
@@ -327,7 +449,6 @@ where
 }
 
 #[cfg(feature = "alloc")]
-#[cfg_attr(not(feature = "alloc"), doc(hidden))]
 impl<T: Base32UlidExt> PartialEq<alloc::string::String> for Base32UlidFormatterRef<'_, T>
 where
     T::Ty: BeBytes,
@@ -362,7 +483,7 @@ mod test {
     fn ulid_try_from() {
         let ulid = ULID::try_from("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
         let encoded = ulid.encode();
-        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
     }
 
     #[test]
@@ -370,7 +491,7 @@ mod test {
         use core::str::FromStr;
         let ulid = ULID::from_str("01ARZ3NDEKTSV4RRFFQ69G5FAV").unwrap();
         let encoded = ulid.encode();
-        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
     }
 
     #[test]
@@ -380,7 +501,7 @@ mod test {
         assert_eq!(id.random(), ULID::max_random());
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "7ZZZZZZZZZZZZZZZZZZZZZZZZZ");
+        assert_eq!(encoded, "7ZZZZZZZZZZZZZZZZZZZZZZZZZ");
         let decoded = ULID::decode(&encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), ULID::max_timestamp());
@@ -395,7 +516,7 @@ mod test {
         assert_eq!(id.random(), 1_012_768_647_078_601_740_696_923);
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "01ARZ3NDEKTSV4RRFFQ69G5FAV");
+        assert_eq!(encoded, "01ARZ3NDEKTSV4RRFFQ69G5FAV");
         let decoded = ULID::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 1_469_922_850_259);
@@ -407,7 +528,7 @@ mod test {
         assert_eq!(id.random(), 885_339_478_614_498_720_052_741);
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "01EWW6K6EXQDX5JV0E9CAHPXG5");
+        assert_eq!(encoded, "01EWW6K6EXQDX5JV0E9CAHPXG5");
         let decoded = ULID::decode(encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 1_611_559_180_765);
@@ -422,7 +543,7 @@ mod test {
         assert_eq!(id.random(), 0);
 
         let encoded = id.encode();
-        assert_eq!(encoded.as_str(), "00000000000000000000000000");
+        assert_eq!(encoded, "00000000000000000000000000");
         let decoded = ULID::decode(&encoded).unwrap();
 
         assert_eq!(decoded.timestamp(), 0);
