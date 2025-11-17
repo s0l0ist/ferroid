@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.8.5"
+version = "0.8.6"
 edition = "2024"
 rust-version = "1.85.1"
 license = "MIT OR Apache-2.0"
@@ -58,6 +58,7 @@ tower-http = { version = "0.6", default-features = false }
 tracing = { version = "0.1", default-features = false }
 tracing-opentelemetry = { version = "0.32", default-features = false }
 tracing-subscriber = { version = "0.3", default-features = false }
+web-time = { version = "1.1", default-features = false }
 
 [profile.bin-release]
 inherits = "release"

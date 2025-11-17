@@ -89,7 +89,7 @@ where
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
-    /// ⚠️ **Note:**\
+    /// # ⚠️ Note
     /// This method structurally decodes a Crockford base32 string into an
     /// integer representing a Snowflake ID, regardless of whether the input is
     /// a canonical Snowflake ID.

@@ -17,8 +17,9 @@ service IdGenerator {
   // `IdChunk` messages. Each chunk contains a packed byte buffer of one or more
   // serialized Snowflake-style IDs.
   //
-  // ⚠️ NOTE: The response is raw binary for performance. Clients must decode the
-  // buffer using the expected ID type:
+  // # ⚠️ Note
+  // The response is raw binary for performance. Clients must decode the buffer
+  // using the expected ID type:
   // - For `u64`: 8 bytes per ID
   // - For `u128`: 16 bytes per ID
   //

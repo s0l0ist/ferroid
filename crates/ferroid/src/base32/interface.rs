@@ -51,10 +51,11 @@ where
     }
     /// Decodes a Base32-encoded string back into an ID.
     ///
-    /// ⚠️ **Note:** This method performs a structural decode of the Base32
-    /// string into the raw underlying integer. It does **not** validate whether
-    /// the decoded value satisfies semantic invariants of the ID format (e.g.,
-    /// reserved bits).
+    /// # ⚠️ Note
+    /// This method performs a structural decode of the Base32 string into the
+    /// raw underlying integer. It does **not** validate whether the decoded
+    /// value satisfies semantic invariants of the ID format (e.g., reserved
+    /// bits).
     ///
     /// If your ID type includes reserved bits, you should explicitly validate
     /// the result using `.is_valid()` or normalize it using `.into_valid()`.

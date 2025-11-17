@@ -37,6 +37,9 @@ smol = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["time", "rt-multi-thread"] }
 tracing = { workspace = true, optional = true, features = ["attributes"] }
 
+[target.wasm32-unknown-unknown.dependencies]
+web-time = { workspace = true }
+
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
 futures = { workspace = true, features = ["alloc"] }

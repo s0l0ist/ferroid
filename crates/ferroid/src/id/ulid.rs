@@ -207,13 +207,33 @@ macro_rules! define_ulid {
             /// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
             /// [`BasicMonoUlidGenerator`]:
             ///     crate::generator::BasicMonoUlidGenerator
-            #[cfg(all(
-                feature = "std",
-                not(all(target_arch = "wasm32", target_os = "unknown")),
-            ))]
+            #[cfg(feature = "std")]
             #[must_use]
             pub fn now() -> Self {
-                Self::from_datetime(std::time::SystemTime::now())
+                #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+                {
+                    use web_time::web::SystemTimeExt;
+                    Self::from_datetime(web_time::SystemTime::now().to_std())
+                }
+                #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+                {
+                    Self::from_datetime(std::time::SystemTime::now())
+                }
+            }
+
+            /// Returns this ULID's timestamp as a [`std::time::SystemTime`].
+            ///
+            /// The ULID timestamp encodes the number of milliseconds since
+            /// [`std::time::UNIX_EPOCH`].
+            ///
+            /// # ⚠️ Note
+            /// The precision is limited to whole milliseconds, matching the
+            /// ULID specification.
+            #[cfg(feature = "std")]
+            #[must_use]
+            pub fn datetime(&self) -> std::time::SystemTime {
+                std::time::SystemTime::UNIX_EPOCH
+                    + std::time::Duration::from_millis(self.timestamp() as u64)
             }
 
             /// Generates a ULID from the given timestamp in milliseconds since
