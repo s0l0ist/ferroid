@@ -363,6 +363,12 @@ macro_rules! define_ulid {
                         val.encode().as_string()
                     }
                 }
+                impl From<&$name> for alloc::string::String {
+                    fn from(val: &$name) -> Self {
+                        use $crate::base32::Base32UlidExt;
+                        val.encode().as_string()
+                    }
+                }
             }
 
             impl core::convert::TryFrom<&str> for $name {
