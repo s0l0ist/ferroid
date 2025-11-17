@@ -188,63 +188,66 @@ macro_rules! define_ulid {
                 Self { id: raw }
             }
 
-            /// Generates a non-monotonic ULID using the current system time in
-            /// milliseconds since the Unix epoch and the built-in
-            /// [`ThreadRandom`] random generator.
-            ///
-            /// This convenience constructor does **not** maintain any internal
-            /// state and therefore does *not* guarantee monotonicity when
-            /// multiple IDs are created within the same millisecond. If you
-            /// have a bursty load or need strictly monotonic ULIDs, prefer a
-            /// stateful generator such as [`BasicUlidGenerator`] or
-            /// [`BasicMonoUlidGenerator`].
-            ///
-            /// Internally, this performs a system time query on every call,
-            /// making it the slowest way to generate a ULID, but it is suitable
-            /// for low-volume or one-off ID generation.
-            ///
-            /// [`ThreadRandom`]: crate::rand::ThreadRandom
-            /// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
-            /// [`BasicMonoUlidGenerator`]:
-            ///     crate::generator::BasicMonoUlidGenerator
-            #[cfg(feature = "std")]
-            #[must_use]
-            pub fn now() -> Self {
-                #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-                {
-                    use web_time::web::SystemTimeExt;
-                    Self::from_datetime(web_time::SystemTime::now().to_std())
-                }
-                #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-                {
-                    Self::from_datetime(std::time::SystemTime::now())
+            $crate::cfg_std! {
+                /// Generates a non-monotonic ULID using the current system time in
+                /// milliseconds since the Unix epoch and the built-in
+                /// [`ThreadRandom`] random generator.
+                ///
+                /// This convenience constructor does **not** maintain any internal
+                /// state and therefore does *not* guarantee monotonicity when
+                /// multiple IDs are created within the same millisecond. If you
+                /// have a bursty load or need strictly monotonic ULIDs, prefer a
+                /// stateful generator such as [`BasicUlidGenerator`] or
+                /// [`BasicMonoUlidGenerator`].
+                ///
+                /// Internally, this performs a system time query on every call,
+                /// making it the slowest way to generate a ULID, but it is suitable
+                /// for low-volume or one-off ID generation.
+                ///
+                /// [`ThreadRandom`]: crate::rand::ThreadRandom
+                /// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
+                /// [`BasicMonoUlidGenerator`]:
+                ///     crate::generator::BasicMonoUlidGenerator
+                #[must_use]
+                pub fn now() -> Self {
+                    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+                    {
+                        use web_time::web::SystemTimeExt;
+                        Self::from_datetime(web_time::SystemTime::now().to_std())
+                    }
+                    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+                    {
+                        Self::from_datetime(std::time::SystemTime::now())
+                    }
                 }
             }
 
-            /// Returns this ULID's timestamp as a [`std::time::SystemTime`].
-            ///
-            /// The ULID timestamp encodes the number of milliseconds since
-            /// [`std::time::UNIX_EPOCH`].
-            ///
-            /// # ⚠️ Note
-            /// The precision is limited to whole milliseconds, matching the
-            /// ULID specification.
-            #[cfg(feature = "std")]
-            #[must_use]
-            pub fn datetime(&self) -> std::time::SystemTime {
-                std::time::SystemTime::UNIX_EPOCH
-                    + std::time::Duration::from_millis(self.timestamp() as u64)
+            $crate::cfg_std! {
+                /// Returns this ULID's timestamp as a [`std::time::SystemTime`].
+                ///
+                /// The ULID timestamp encodes the number of milliseconds since
+                /// [`std::time::UNIX_EPOCH`].
+                ///
+                /// # ⚠️ Note
+                /// The precision is limited to whole milliseconds, matching the
+                /// ULID specification.
+                #[must_use]
+                pub fn datetime(&self) -> std::time::SystemTime {
+                    std::time::SystemTime::UNIX_EPOCH
+                        + std::time::Duration::from_millis(self.timestamp() as u64)
+                }
             }
 
-            /// Generates a ULID from the given timestamp in milliseconds since
-            /// UNIX epoch, using the built-in [`ThreadRandom`] random
-            /// generator.
-            ///
-            /// [`ThreadRandom`]: crate::rand::ThreadRandom
-            #[cfg(feature = "std")]
-            #[must_use]
-            pub fn from_timestamp(timestamp: <Self as $crate::id::Id>::Ty) -> Self {
-                Self::from_timestamp_and_rand(timestamp, &$crate::rand::ThreadRandom)
+            $crate::cfg_std! {
+                /// Generates a ULID from the given timestamp in milliseconds since
+                /// UNIX epoch, using the built-in [`ThreadRandom`] random
+                /// generator.
+                ///
+                /// [`ThreadRandom`]: crate::rand::ThreadRandom
+                #[must_use]
+                pub fn from_timestamp(timestamp: <Self as $crate::id::Id>::Ty) -> Self {
+                    Self::from_timestamp_and_rand(timestamp, &$crate::rand::ThreadRandom)
+                }
             }
 
             /// Generates a ULID from the given timestamp in milliseconds since
@@ -261,33 +264,35 @@ macro_rules! define_ulid {
                 Self::from(timestamp, random)
             }
 
-            /// Generates a ULID from the given `SystemTime`, using the built-in
-            /// [`ThreadRandom`] random generator.
-            ///
-            /// [`ThreadRandom`]: crate::rand::ThreadRandom
-            #[cfg(feature = "std")]
-            #[must_use]
-            pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
-                Self::from_datetime_and_rand(datetime, &$crate::rand::ThreadRandom)
+            $crate::cfg_std! {
+                /// Generates a ULID from the given `SystemTime`, using the built-in
+                /// [`ThreadRandom`] random generator.
+                ///
+                /// [`ThreadRandom`]: crate::rand::ThreadRandom
+                #[must_use]
+                pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
+                    Self::from_datetime_and_rand(datetime, &$crate::rand::ThreadRandom)
+                }
             }
 
-            /// Generates a ULID from the given `SystemTime` and a custom random
-            /// number generator implementing [`RandSource`]
-            ///
-            /// [`RandSource`]: crate::rand::RandSource
-            ///
-            #[cfg(feature = "std")]
-            #[must_use]
-            pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
-            where
-                R: $crate::rand::RandSource<<Self as $crate::id::Id>::Ty>,
-            {
-                let timestamp = datetime
-                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .unwrap_or(core::time::Duration::ZERO)
-                    .as_millis();
-                let random = rng.rand();
-                Self::from(timestamp, random)
+            $crate::cfg_std! {
+                /// Generates a ULID from the given `SystemTime` and a custom random
+                /// number generator implementing [`RandSource`]
+                ///
+                /// [`RandSource`]: crate::rand::RandSource
+                ///
+                #[must_use]
+                pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
+                where
+                    R: $crate::rand::RandSource<<Self as $crate::id::Id>::Ty>,
+                {
+                    let timestamp = datetime
+                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                        .unwrap_or(core::time::Duration::ZERO)
+                        .as_millis();
+                    let random = rng.rand();
+                    Self::from(timestamp, random)
+                }
             }
         }
 
@@ -348,6 +353,47 @@ macro_rules! define_ulid {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                     use $crate::base32::Base32UlidExt;
                     self.encode().fmt(f)
+                }
+            }
+            impl PartialEq<str> for $name {
+                fn eq(&self, other: &str) -> bool {
+                    use $crate::base32::Base32UlidExt;
+                    Self::decode(other).map(|id| id == *self).unwrap_or(false)
+                }
+            }
+            impl PartialEq<&str> for $name {
+                fn eq(&self, other: &&str) -> bool {
+                    self == *other
+                }
+            }
+            impl PartialEq<$name> for &str {
+                fn eq(&self, other: &$name) -> bool {
+                    other == *self
+                }
+            }
+
+            $crate::cfg_alloc! {
+                impl PartialEq<$crate::__internal::String> for $name {
+                    fn eq(&self, other: &$crate::__internal::String) -> bool {
+                        self == other.as_str()
+                    }
+                }
+                impl PartialEq<$name> for $crate::__internal::String {
+                    fn eq(&self, other: &$name) -> bool {
+                        other == self
+                    }
+                }
+                impl From<$name> for $crate::__internal::String {
+                    fn from(val: $name) -> Self {
+                        use $crate::base32::Base32UlidExt;
+                        val.encode().as_string()
+                    }
+                }
+                impl From<&$name> for $crate::__internal::String {
+                    fn from(val: &$name) -> Self {
+                        use $crate::base32::Base32UlidExt;
+                        val.encode().as_string()
+                    }
                 }
             }
 
