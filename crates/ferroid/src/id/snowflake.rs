@@ -288,6 +288,15 @@ macro_rules! define_snowflake_id {
                 }
             }
 
+            $crate::cfg_alloc! {
+                impl From<$name> for alloc::string::String {
+                    fn from(val: $name) -> Self {
+                        use $crate::base32::Base32SnowExt;
+                        val.encode().as_string()
+                    }
+                }
+            }
+
             impl core::convert::TryFrom<&str> for $name {
                 type Error = $crate::base32::Error<$name>;
 
