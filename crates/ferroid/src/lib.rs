@@ -8,6 +8,17 @@ extern crate std;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+// Used for cfg_alloc! macro
+#[cfg(feature = "alloc")]
+#[doc(hidden)]
+pub mod __internal {
+    #[cfg(feature = "std")]
+    pub use std::string::String;
+
+    #[cfg(not(feature = "std"))]
+    pub use alloc::string::String;
+}
+
 #[cfg(feature = "base32")]
 pub mod base32;
 #[cfg(feature = "futures")]

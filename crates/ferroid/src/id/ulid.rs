@@ -355,15 +355,41 @@ macro_rules! define_ulid {
                     self.encode().fmt(f)
                 }
             }
+            impl PartialEq<str> for $name {
+                fn eq(&self, other: &str) -> bool {
+                    use $crate::base32::Base32UlidExt;
+                    Self::decode(other).map(|id| id == *self).unwrap_or(false)
+                }
+            }
+            impl PartialEq<&str> for $name {
+                fn eq(&self, other: &&str) -> bool {
+                    self == *other
+                }
+            }
+            impl PartialEq<$name> for &str {
+                fn eq(&self, other: &$name) -> bool {
+                    other == *self
+                }
+            }
 
             $crate::cfg_alloc! {
-                impl From<$name> for alloc::string::String {
+                impl PartialEq<$crate::__internal::String> for $name {
+                    fn eq(&self, other: &$crate::__internal::String) -> bool {
+                        self == other.as_str()
+                    }
+                }
+                impl PartialEq<$name> for $crate::__internal::String {
+                    fn eq(&self, other: &$name) -> bool {
+                        other == self
+                    }
+                }
+                impl From<$name> for $crate::__internal::String {
                     fn from(val: $name) -> Self {
                         use $crate::base32::Base32UlidExt;
                         val.encode().as_string()
                     }
                 }
-                impl From<&$name> for alloc::string::String {
+                impl From<&$name> for $crate::__internal::String {
                     fn from(val: &$name) -> Self {
                         use $crate::base32::Base32UlidExt;
                         val.encode().as_string()

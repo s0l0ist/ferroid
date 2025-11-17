@@ -301,7 +301,16 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
+        self == *other
+    }
+}
+
+impl<T: Base32UlidExt> PartialEq<Base32UlidFormatter<T>> for &str
+where
+    T::Ty: BeBytes,
+{
+    fn eq(&self, other: &Base32UlidFormatter<T>) -> bool {
+        other == *self
     }
 }
 
@@ -311,7 +320,16 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &alloc::string::String) -> bool {
-        self.as_str() == other.as_str()
+        self == other
+    }
+}
+#[cfg(feature = "alloc")]
+impl<T: Base32UlidExt> PartialEq<Base32UlidFormatter<T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn eq(&self, other: &Base32UlidFormatter<T>) -> bool {
+        other == self
     }
 }
 
@@ -444,7 +462,15 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &&str) -> bool {
-        self.as_str() == *other
+        self == *other
+    }
+}
+impl<T: Base32UlidExt> PartialEq<Base32UlidFormatterRef<'_, T>> for &str
+where
+    T::Ty: BeBytes,
+{
+    fn eq(&self, other: &Base32UlidFormatterRef<'_, T>) -> bool {
+        other == *self
     }
 }
 
@@ -454,7 +480,16 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &alloc::string::String) -> bool {
-        self.as_str() == other.as_str()
+        self == other
+    }
+}
+#[cfg(feature = "alloc")]
+impl<T: Base32UlidExt> PartialEq<Base32UlidFormatterRef<'_, T>> for alloc::string::String
+where
+    T::Ty: BeBytes,
+{
+    fn eq(&self, other: &Base32UlidFormatterRef<'_, T>) -> bool {
+        other == self
     }
 }
 
