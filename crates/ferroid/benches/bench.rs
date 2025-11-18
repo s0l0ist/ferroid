@@ -170,17 +170,19 @@ fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str) {
 fn bench_generator_hot_yield<ID, G, T>(
     c: &mut Criterion,
     group_name: &str,
-    generator_factory: impl Fn() -> G,
+    generator_fn: impl Fn(T) -> G,
+    clock_fn: impl Fn() -> T,
 ) where
     ID: SnowflakeId,
     G: SnowflakeGenerator<ID, T>,
-    T: TimeSource<ID::Ty>,
+    T: TimeSource<ID::Ty> + Clone,
 {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
     group.bench_function("single_id", |b| {
-        let generator = generator_factory();
+        let clock = clock_fn();
         b.iter(|| {
+            let generator = generator_fn(clock.clone());
             loop {
                 match generator.next_id() {
                     IdGenStatus::Ready { id } => {
@@ -199,7 +201,9 @@ fn bench_generator_hot_yield<ID, G, T>(
 fn bench_generator_ulid<ID, G, T, R>(
     c: &mut Criterion,
     group_name: &str,
-    generator_factory: impl Fn() -> G,
+    generator_fn: impl Fn(T, R) -> G,
+    clock_fn: impl Fn() -> T,
+    rand_fn: impl Fn() -> R,
 ) where
     ID: UlidId,
     G: UlidGenerator<ID, T, R>,
@@ -209,7 +213,9 @@ fn bench_generator_ulid<ID, G, T, R>(
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
     group.bench_function("single_id", |b| {
-        let generator = generator_factory();
+        let clock = clock_fn();
+        let rand = rand_fn();
+        let generator = generator_fn(clock, rand);
         b.iter(|| {
             loop {
                 match generator.next_id() {
@@ -226,7 +232,7 @@ fn bench_generator_ulid<ID, G, T, R>(
 }
 
 /// Benchmarks the latency of generating a single ID in an async context
-fn bench_generator_async_single_tokio<ID, G, T>(
+fn bench_snow_generator_async_single_tokio<ID, G, T>(
     c: &mut Criterion,
     group_name: &str,
     generator_fn: impl Fn(u64, T) -> G,
@@ -234,15 +240,15 @@ fn bench_generator_async_single_tokio<ID, G, T>(
 ) where
     G: SnowflakeGenerator<ID, T> + Sync,
     ID: SnowflakeId + Send,
-    T: TimeSource<ID::Ty> + Send,
+    T: TimeSource<ID::Ty> + Clone + Send,
 {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
     group.bench_function("single_id", |b| {
         let rt = Builder::new_multi_thread().enable_all().build().unwrap();
         let clock = clock_factory();
-        let generator = generator_fn(0, clock);
         b.to_async(&rt).iter(|| async {
+            let generator = generator_fn(0, clock.clone());
             let id = generator.try_next_id_async::<TokioSleep>().await.unwrap();
             black_box(id);
         });
@@ -252,7 +258,7 @@ fn bench_generator_async_single_tokio<ID, G, T>(
 }
 
 /// Benchmarks the latency of generating a single ID in an async context (smol)
-fn bench_generator_async_single_smol<ID, G, T>(
+fn bench_snow_generator_async_single_smol<ID, G, T>(
     c: &mut Criterion,
     group_name: &str,
     generator_fn: impl Fn(u64, T) -> G,
@@ -260,7 +266,7 @@ fn bench_generator_async_single_smol<ID, G, T>(
 ) where
     G: SnowflakeGenerator<ID, T> + Sync,
     ID: SnowflakeId + Send,
-    T: TimeSource<ID::Ty> + Send,
+    T: TimeSource<ID::Ty> + Clone + Send,
 {
     unsafe { std::env::set_var("SMOL_THREADS", num_cpus::get().to_string()) };
 
@@ -268,8 +274,8 @@ fn bench_generator_async_single_smol<ID, G, T>(
     group.throughput(Throughput::Elements(1));
     group.bench_function("single_id", |b| {
         let clock = clock_factory();
-        let generator = generator_fn(0, clock);
         b.to_async(SmolExecutor).iter(|| async {
+            let generator = generator_fn(0, clock.clone());
             let id = generator.try_next_id_async::<SmolSleep>().await.unwrap();
             black_box(id);
         });
@@ -355,53 +361,69 @@ fn bench_thread_local(c: &mut Criterion) {
 }
 
 fn benchmark_mono_sequential_basic(c: &mut Criterion) {
-    let clock = MonotonicClock::default();
-    bench_generator_hot_yield::<SnowflakeTwitterId, _, _>(c, "mono/sequential/basic", || {
-        BasicSnowflakeGenerator::new(0, clock.clone())
-    });
+    bench_generator_hot_yield::<SnowflakeTwitterId, _, _>(
+        c,
+        "mono/sequential/snow/basic",
+        |time| BasicSnowflakeGenerator::new(0, time),
+        MonotonicClock::default,
+    );
 }
 
 fn benchmark_mono_sequential_lock(c: &mut Criterion) {
-    let clock = MonotonicClock::default();
-    bench_generator_hot_yield::<SnowflakeTwitterId, _, _>(c, "mono/sequential/lock", || {
-        LockSnowflakeGenerator::new(0, clock.clone())
-    });
+    bench_generator_hot_yield::<SnowflakeTwitterId, _, _>(
+        c,
+        "mono/sequential/snow/lock",
+        |time| LockSnowflakeGenerator::new(0, time),
+        MonotonicClock::default,
+    );
 }
 
 fn benchmark_mono_sequential_atomic(c: &mut Criterion) {
-    let clock = MonotonicClock::default();
-    bench_generator_hot_yield::<SnowflakeTwitterId, _, _>(c, "mono/sequential/atomic", || {
-        AtomicSnowflakeGenerator::new(0, clock.clone())
-    });
+    bench_generator_hot_yield::<SnowflakeTwitterId, _, _>(
+        c,
+        "mono/sequential/snow/atomic",
+        |time| AtomicSnowflakeGenerator::new(0, time),
+        MonotonicClock::default,
+    );
 }
 
 fn benchmark_mono_sequential_ulid_basic(c: &mut Criterion) {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic", || {
-        BasicUlidGenerator::new(clock.clone(), rand.clone())
-    });
-    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/basic_mono", || {
-        BasicMonoUlidGenerator::new(clock.clone(), rand.clone())
-    });
+    bench_generator_ulid::<ULID, _, _, _>(
+        c,
+        "mono/sequential/ulid/basic",
+        |time, rng| BasicUlidGenerator::new(time, rng),
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
+    bench_generator_ulid::<ULID, _, _, _>(
+        c,
+        "mono/sequential/ulid/basic_mono",
+        |time, rng| BasicMonoUlidGenerator::new(time, rng),
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
 }
 fn benchmark_mono_sequential_ulid_lock(c: &mut Criterion) {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/lock_mono", || {
-        LockMonoUlidGenerator::new(clock.clone(), rand.clone())
-    });
+    bench_generator_ulid::<ULID, _, _, _>(
+        c,
+        "mono/sequential/ulid/lock_mono",
+        |time, rng| LockMonoUlidGenerator::new(time, rng),
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
 }
 fn benchmark_mono_sequential_ulid_atomic(c: &mut Criterion) {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    bench_generator_ulid::<ULID, _, _, _>(c, "mono/sequential/ulid/atomic_mono", || {
-        AtomicMonoUlidGenerator::new(clock.clone(), rand.clone())
-    });
+    bench_generator_ulid::<ULID, _, _, _>(
+        c,
+        "mono/sequential/ulid/atomicmono",
+        |time, rng| AtomicMonoUlidGenerator::new(time, rng),
+        MonotonicClock::default,
+        ThreadRandom::default,
+    );
 }
 
 fn benchmark_async_single_tokio_lock(c: &mut Criterion) {
-    bench_generator_async_single_tokio::<SnowflakeTwitterId, _, _>(
+    bench_snow_generator_async_single_tokio::<SnowflakeTwitterId, _, _>(
         c,
         "async/tokio/snow/lock",
         LockSnowflakeGenerator::new,
@@ -410,7 +432,7 @@ fn benchmark_async_single_tokio_lock(c: &mut Criterion) {
 }
 
 fn benchmark_async_single_tokio_atomic(c: &mut Criterion) {
-    bench_generator_async_single_tokio::<SnowflakeTwitterId, _, _>(
+    bench_snow_generator_async_single_tokio::<SnowflakeTwitterId, _, _>(
         c,
         "async/tokio/snow/atomic",
         AtomicSnowflakeGenerator::new,
@@ -419,7 +441,7 @@ fn benchmark_async_single_tokio_atomic(c: &mut Criterion) {
 }
 
 fn benchmark_async_single_smol_lock(c: &mut Criterion) {
-    bench_generator_async_single_smol::<SnowflakeTwitterId, _, _>(
+    bench_snow_generator_async_single_smol::<SnowflakeTwitterId, _, _>(
         c,
         "async/smol/snow/lock",
         LockSnowflakeGenerator::new,
@@ -428,7 +450,7 @@ fn benchmark_async_single_smol_lock(c: &mut Criterion) {
 }
 
 fn benchmark_async_single_smol_atomic(c: &mut Criterion) {
-    bench_generator_async_single_smol::<SnowflakeTwitterId, _, _>(
+    bench_snow_generator_async_single_smol::<SnowflakeTwitterId, _, _>(
         c,
         "async/smol/snow/atomic",
         AtomicSnowflakeGenerator::new,
@@ -477,7 +499,7 @@ fn benchmark_async_single_smol_ulid_atomic(c: &mut Criterion) {
 }
 
 criterion_group!(
-    name = slow_benches;
+    name = benches;
     config = Criterion::default()
         .sample_size(100)
         .warm_up_time(Duration::from_secs(1))
@@ -498,15 +520,6 @@ criterion_group!(
         benchmark_async_single_tokio_ulid_atomic,
         benchmark_async_single_smol_ulid_lock,
         benchmark_async_single_smol_ulid_atomic,
-);
-criterion_group!(
-    name = fast_benches;
-    config = Criterion::default()
-        .sample_size(10)
-        .warm_up_time(Duration::from_micros(500))
-        .measurement_time(Duration::from_millis(1));
-    targets =
-
         // --- Snowflake Sequential ---
         benchmark_mono_sequential_basic,
         benchmark_mono_sequential_lock,
@@ -518,4 +531,4 @@ criterion_group!(
         benchmark_async_single_smol_atomic,
 
 );
-criterion_main!(slow_benches, fast_benches);
+criterion_main!(benches);
