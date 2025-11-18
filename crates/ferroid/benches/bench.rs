@@ -736,9 +736,9 @@ where
             black_box(id.to_string());
         });
     });
-    group.bench_function("encode/to_string", |b| {
+    group.bench_function("encode/as_string", |b| {
         b.iter(|| {
-            black_box(id.encode().to_string());
+            black_box(id.encode().as_string());
         });
     });
     group.bench_function("encode/as_str", |b| {
@@ -781,9 +781,9 @@ where
             black_box(id.to_string());
         });
     });
-    group.bench_function("encode/to_string", |b| {
+    group.bench_function("encode/as_string", |b| {
         b.iter(|| {
-            black_box(id.encode().to_string());
+            black_box(id.encode().as_string());
         });
     });
     group.bench_function("encode/as_str", |b| {
@@ -874,6 +874,11 @@ fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str) {
 fn bench_ulid_constructors(c: &mut Criterion, group_name: &str) {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
+    group.bench_function("now", |b| {
+        b.iter(|| {
+            black_box(ULID::now());
+        });
+    });
     group.bench_function("from", |b| {
         b.iter(|| {
             black_box(ULID::from(42, 42));
