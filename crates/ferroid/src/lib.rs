@@ -12,11 +12,10 @@ extern crate alloc;
 #[cfg(feature = "alloc")]
 #[doc(hidden)]
 pub mod __internal {
-    #[cfg(feature = "std")]
-    pub use std::string::String;
-
     #[cfg(not(feature = "std"))]
     pub use alloc::string::String;
+    #[cfg(feature = "std")]
+    pub use std::string::String;
 }
 
 #[cfg(feature = "base32")]
