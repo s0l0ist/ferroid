@@ -398,7 +398,7 @@ bits than the target type can hold. Ferroid handles this pragmatically:
 - Strings that decode to values larger than the target type are **accepted** if
   all excess bits fall outside reserved regions
 - If any excess bits fall into **reserved regions** (which must be zero),
-  decoding fails with `Base32Error::DecodeOverflow`
+  decoding fails with `ferroid::base32::Error::DecodeOverflow`
 - Types with **no reserved bits** (like `ULID`) will never fail due to overflow
 - Types with **reserved bits** (like `SnowflakeTwitterId`) validate that
   reserved bits remain unset
@@ -586,7 +586,8 @@ Ferroid takes a more flexible stance:
 - Strings like `"ZZZZZZZZZZZZZZZZZZZZZZZZZZ"` (which technically overflow) are
   accepted and decoded without error
 - However, if any of the overflowed bits fall into reserved regions (which must
-  remain zero), decoding will fail with `Base32Error::DecodeOverflow`
+  remain zero), decoding will fail with
+  `ferroid::base32::Error::DecodeOverflow`
 
 This allows any 13-character Base32 string to decode into a `u64`, or any
 26-character string into a `u128`, **as long as reserved layout constraints

@@ -453,8 +453,8 @@ fn benchmark_async_snow(c: &mut Criterion) {
 criterion_group!(
     name = benches;
     config = Criterion::default()
-    .warm_up_time(std::time::Duration::from_millis(500))
-    .measurement_time(std::time::Duration::from_millis(500))
+    // .warm_up_time(std::time::Duration::from_millis(500))
+    // .measurement_time(std::time::Duration::from_millis(500))
     ;
     targets =
         // --- ID Constructors ---
