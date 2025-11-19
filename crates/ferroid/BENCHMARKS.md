@@ -66,7 +66,7 @@ Throughput is reported over the **binary ID size** (`SIZE`).
 | `LockSnowflakeGenerator`   | ~8.26 ns    | ~121M IDs/sec |
 | `AtomicSnowflakeGenerator` | ~3.75 ns    | ~267M IDs/sec |
 | `LockMonoUlidGenerator`    | ~8.37 ns    | ~119M IDs/sec |
-| `AtomicMonoUlidGenerator`  | ~5.03 ns    | ~199M IDs/sec |
+| `AtomicMonoUlidGenerator`  | ~7.03 ns    | ~142M IDs/sec |
 
 ### Async Generators (Smol)
 
