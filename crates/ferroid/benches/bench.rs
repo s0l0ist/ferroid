@@ -4,18 +4,17 @@ use criterion::{
 };
 use ferroid::{
     base32::{Base32SnowExt, Base32UlidExt},
-    define_snowflake_id, define_ulid,
+    define_snowflake_id,
     futures::{SmolSleep, SnowflakeGeneratorAsyncExt, TokioSleep, UlidGeneratorAsyncExt},
     generator::{
         AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, BasicMonoUlidGenerator,
         BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator,
         LockSnowflakeGenerator, SnowflakeGenerator, UlidGenerator, thread_local::Ulid,
     },
-    id::{BeBytes, SnowflakeId, UlidId},
+    id::{BeBytes, SnowflakeId, SnowflakeTwitterId, ULID, UlidId},
     rand::{RandSource, ThreadRandom},
-    time::TimeSource,
+    time::{MonotonicClock, TimeSource},
 };
-use portable_atomic::{AtomicU64, Ordering};
 use tokio::runtime::Builder;
 
 define_snowflake_id!(
@@ -26,31 +25,6 @@ define_snowflake_id!(
     machine_id: 0,
     sequence: 63
 );
-
-define_ulid!(
-    /// A ulid that contains enough sequence bits to test the hot path
-    BenchUlid, u128,
-    reserved: 1,
-    timestamp: 0,
-    random: 127
-);
-
-/// A clock that simulates the atomic load from `MonotonicClock`, but which
-/// never increments, therefore guaranteeing the generator(s) will never yield.
-#[derive(Default)]
-struct BenchClock {
-    time: AtomicU64,
-}
-impl TimeSource<u64> for BenchClock {
-    fn current_millis(&self) -> u64 {
-        self.time.load(Ordering::Relaxed)
-    }
-}
-impl TimeSource<u128> for BenchClock {
-    fn current_millis(&self) -> u128 {
-        u128::from(self.time.load(Ordering::Relaxed))
-    }
-}
 
 fn bench_snow_base32<ID>(c: &mut Criterion, group_name: &str)
 where
@@ -129,23 +103,23 @@ fn bench_ulid_constructors(c: &mut Criterion, group_name: &str) {
     group.throughput(Throughput::Elements(1));
     group.bench_function("now", |b| {
         b.iter(|| {
-            black_box(BenchUlid::now());
+            black_box(ULID::now());
         });
     });
     group.bench_function("from", |b| {
         b.iter(|| {
-            black_box(BenchUlid::from(41, 42));
+            black_box(ULID::from(41, 42));
         });
     });
     group.bench_function("from_timestamp", |b| {
         b.iter(|| {
-            black_box(BenchUlid::from_timestamp(42));
+            black_box(ULID::from_timestamp(42));
         });
     });
     group.bench_function("from_datetime", |b| {
         let now = std::time::SystemTime::now();
         b.iter(|| {
-            black_box(BenchUlid::from_datetime(now));
+            black_box(ULID::from_datetime(now));
         });
     });
     group.finish();
@@ -155,7 +129,7 @@ fn bench_snow_constructors(c: &mut Criterion, group_name: &str) {
     group.throughput(Throughput::Elements(1));
     group.bench_function("from", |b| {
         b.iter(|| {
-            black_box(BenchSnowflake::from(40, 41, 42));
+            black_box(SnowflakeTwitterId::from(40, 41, 42));
         });
     });
     group.finish();
@@ -294,7 +268,7 @@ fn bench_async_snow_smol<ID, G, T>(
     });
     group.finish();
 }
-/// Benchmarks the latency of generating a single BenchUlid in an async context
+/// Benchmarks the latency of generating a single ULID in an async context
 /// (tokio)
 fn bench_async_ulid_tokio<ID, G, T, R>(
     c: &mut Criterion,
@@ -322,7 +296,7 @@ fn bench_async_ulid_tokio<ID, G, T, R>(
     });
     group.finish();
 }
-/// Benchmarks the latency of generating a single BenchUlid in an async context
+/// Benchmarks the latency of generating a single ULID in an async context
 /// (smol)
 fn bench_async_ulid_smol<ID, G, T, R>(
     c: &mut Criterion,
@@ -351,143 +325,144 @@ fn bench_async_ulid_smol<ID, G, T, R>(
     group.finish();
 }
 
-// Base32 encode/decode
-fn bench_base32(c: &mut Criterion) {
-    bench_snow_base32::<BenchSnowflake>(c, "base32/snow");
-    bench_ulid_base32::<BenchUlid>(c, "base32/ulid");
-}
 fn bench_constructors(c: &mut Criterion) {
-    bench_snow_constructors(c, "BenchSnowflake");
-    bench_ulid_constructors(c, "BenchUlid");
+    bench_snow_constructors(c, "snow");
+    bench_ulid_constructors(c, "ulid");
 }
+
+fn bench_base32(c: &mut Criterion) {
+    bench_snow_base32::<SnowflakeTwitterId>(c, "snow/base32");
+    bench_ulid_base32::<ULID>(c, "ulid/base32");
+}
+
 fn bench_thread_local(c: &mut Criterion) {
-    bench_thread_local_ulid(c, "thread_local/Ulid");
+    bench_thread_local_ulid(c, "thread_local/ulid");
 }
 fn benchmark_ulid(c: &mut Criterion) {
-    bench_generator_ulid::<BenchUlid, _, _, _>(
+    bench_generator_ulid::<ULID, _, _, _>(
         c,
-        "basic/ulid",
+        "ulid/basic",
         BasicUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
-    bench_generator_ulid::<BenchUlid, _, _, _>(
+    bench_generator_ulid::<ULID, _, _, _>(
         c,
-        "basic_mono/ulid",
+        "ulid/basic_mono",
         BasicMonoUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
-    bench_generator_ulid::<BenchUlid, _, _, _>(
+    bench_generator_ulid::<ULID, _, _, _>(
         c,
-        "lock_mono/ulid",
+        "ulid/lock_mono",
         LockMonoUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
-    bench_generator_ulid::<BenchUlid, _, _, _>(
+    bench_generator_ulid::<ULID, _, _, _>(
         c,
-        "atomic_mono/ulid",
+        "ulid/atomic_mono",
         AtomicMonoUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
 }
 fn benchmark_snow(c: &mut Criterion) {
+    // These use `BenchSnowflake` to avoid pending
     bench_generator_snow::<BenchSnowflake, _, _>(
         c,
-        "basic/snow",
+        "snow/basic",
         BasicSnowflakeGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
     );
     bench_generator_snow::<BenchSnowflake, _, _>(
         c,
-        "lock/snow",
+        "snow/lock",
         LockSnowflakeGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
     );
     bench_generator_snow::<BenchSnowflake, _, _>(
         c,
-        "atomic/snow",
+        "snow/atomic",
         AtomicSnowflakeGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
     );
 }
 fn benchmark_async_ulid(c: &mut Criterion) {
-    bench_async_ulid_tokio::<BenchUlid, _, _, _>(
+    bench_async_ulid_tokio::<ULID, _, _, _>(
         c,
-        "tokio/lock_mono/ulid",
+        "ulid/lock_mono/tokio",
         LockMonoUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
-    bench_async_ulid_smol::<BenchUlid, _, _, _>(
+    bench_async_ulid_smol::<ULID, _, _, _>(
         c,
-        "smol/lock_mono/ulid",
+        "ulid/lock_mono/smol",
         LockMonoUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
-    bench_async_ulid_tokio::<BenchUlid, _, _, _>(
+    bench_async_ulid_tokio::<ULID, _, _, _>(
         c,
-        "tokio/atomic_mono/ulid",
+        "ulid/atomic_mono/tokio",
         AtomicMonoUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
-    bench_async_ulid_smol::<BenchUlid, _, _, _>(
+    bench_async_ulid_smol::<ULID, _, _, _>(
         c,
-        "smol/atomic_mono/ulid",
+        "ulid/atomic_mono/smol",
         AtomicMonoUlidGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
         ThreadRandom::default,
     );
 }
 fn benchmark_async_snow(c: &mut Criterion) {
     bench_async_snow_tokio::<BenchSnowflake, _, _>(
         c,
-        "tokio/lock/snow",
+        "snow/lock/tokio",
         LockSnowflakeGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
     );
     bench_async_snow_smol::<BenchSnowflake, _, _>(
         c,
-        "smol/lock/snow",
+        "snow/lock/smol",
         LockSnowflakeGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
     );
     bench_async_snow_tokio::<BenchSnowflake, _, _>(
         c,
-        "tokio/atomic/snow",
+        "snow/atomic/tokio",
         AtomicSnowflakeGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
     );
     bench_async_snow_smol::<BenchSnowflake, _, _>(
         c,
-        "smol/atomic/snow",
+        "snow/atomic/smol",
         AtomicSnowflakeGenerator::new,
-        BenchClock::default,
+        MonotonicClock::default,
     );
 }
 criterion_group!(
     name = benches;
     config = Criterion::default()
-    // .sample_size(100)
-    // .warm_up_time(std::time::Duration::from_micros(500))
-    // .measurement_time(std::time::Duration::from_millis(1))
+    .warm_up_time(std::time::Duration::from_millis(500))
+    .measurement_time(std::time::Duration::from_millis(500))
     ;
     targets =
-        // --- Base32 Encoding/Decoding ---
-        bench_base32,
         // --- ID Constructors ---
         bench_constructors,
+         // --- Base32 Encoding/Decoding ---
+        bench_base32,
         // --- Thread-Local Generation ---
         bench_thread_local,
-        // --- BenchUlid Synchronous Generation ---
+        // --- ULID Synchronous Generation ---
         benchmark_ulid,
         // --- Snowflake Synchronous Generation ---
         benchmark_snow,
-        // // --- BenchUlid Async Generation ---
+        // // --- ULID Async Generation ---
         benchmark_async_ulid,
         // --- Snowflake Async Generation ---
         benchmark_async_snow,
