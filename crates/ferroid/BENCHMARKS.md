@@ -35,13 +35,13 @@ equivalent on the hot path; `as_string()` allocates and is slower.
 
 ### Constructors
 
-| Function                          | Time per call | Throughput     |
-| --------------------------------- | ------------- | -------------- |
-| `SnowflakeTwitterId::from(...)`   | ~0.31 ns      | ~3.2B IDs/sec  |
-| `ULID::from(...)`                 | ~0.31 ns      | ~3.2B IDs/sec  |
-| `ULID::from_timestamp(...)`       | ~20.9 ns      | ~47.8M IDs/sec |
-| `ULID::from_datetime(SystemTime)` | ~23.2 ns      | ~43.1M IDs/sec |
-| `ULID::now()`                     | ~42.6 ns      | ~23.5M IDs/sec |
+| Function                        | Time per call | Throughput     |
+| ------------------------------- | ------------- | -------------- |
+| `SnowflakeTwitterId::from(...)` | ~0.31 ns      | ~3.2B IDs/sec  |
+| `ULID::from(...)`               | ~0.31 ns      | ~3.2B IDs/sec  |
+| `ULID::from_timestamp(...)`     | ~20.9 ns      | ~47.8M IDs/sec |
+| `ULID::from_datetime(...)`      | ~23.2 ns      | ~43.1M IDs/sec |
+| `ULID::now()`                   | ~42.6 ns      | ~23.5M IDs/sec |
 
 ### Thread-Local ULID
 
