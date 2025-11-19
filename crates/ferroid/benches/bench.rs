@@ -264,7 +264,7 @@ fn bench_async_snow_tokio<ID, G, T>(
         let rt = Builder::new_multi_thread().enable_all().build().unwrap();
         let clock = clock_fn();
         let g = generator_fn(0, clock);
-        b.to_async(&rt).iter(async || {
+        b.to_async(&rt).iter(|| async {
             let id = g.try_next_id_async::<TokioSleep>().await.unwrap();
             black_box(id);
         });
@@ -287,7 +287,7 @@ fn bench_async_snow_smol<ID, G, T>(
     group.bench_function("try_next_id_async", |b| {
         let clock = clock_fn();
         let g = generator_fn(0, clock);
-        b.to_async(SmolExecutor).iter(async || {
+        b.to_async(SmolExecutor).iter(|| async {
             let id = g.try_next_id_async::<SmolSleep>().await.unwrap();
             black_box(id);
         });
@@ -315,7 +315,7 @@ fn bench_async_ulid_tokio<ID, G, T, R>(
         let clock = clock_fn();
         let rand = rand_fn();
         let g = generator_fn(clock, rand);
-        b.to_async(&rt).iter(async || {
+        b.to_async(&rt).iter(|| async {
             let id = g.try_next_id_async::<TokioSleep>().await.unwrap();
             black_box(id);
         });
@@ -343,7 +343,7 @@ fn bench_async_ulid_smol<ID, G, T, R>(
         let clock = clock_fn();
         let rand = rand_fn();
         let g = generator_fn(clock, rand);
-        b.to_async(SmolExecutor).iter(async || {
+        b.to_async(SmolExecutor).iter(|| async {
             let id = g.try_next_id_async::<SmolSleep>().await.unwrap();
             black_box(id);
         });
