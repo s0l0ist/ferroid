@@ -134,7 +134,7 @@ fn bench_snow_constructors(c: &mut Criterion, group_name: &str) {
     });
     group.finish();
 }
-fn bench_thread_local_ulid(c: &mut Criterion, group_name: &str) {
+fn bench_ulid_thread_local(c: &mut Criterion, group_name: &str) {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
     group.bench_function("new_ulid", |b| {
@@ -325,18 +325,23 @@ fn bench_async_ulid_smol<ID, G, T, R>(
     group.finish();
 }
 
-fn bench_constructors(c: &mut Criterion) {
+fn bench_constructors_snow(c: &mut Criterion) {
     bench_snow_constructors(c, "snow");
+}
+
+fn bench_constructors_ulid(c: &mut Criterion) {
     bench_ulid_constructors(c, "ulid");
 }
 
-fn bench_base32(c: &mut Criterion) {
+fn bench_base32_snow(c: &mut Criterion) {
     bench_snow_base32::<SnowflakeTwitterId>(c, "snow/base32");
+}
+fn bench_base32_ulid(c: &mut Criterion) {
     bench_ulid_base32::<ULID>(c, "ulid/base32");
 }
 
-fn bench_thread_local(c: &mut Criterion) {
-    bench_thread_local_ulid(c, "thread_local/ulid");
+fn bench_thread_local_ulid(c: &mut Criterion) {
+    bench_ulid_thread_local(c, "thread_local/ulid");
 }
 fn benchmark_ulid(c: &mut Criterion) {
     bench_generator_ulid::<ULID, _, _, _>(
@@ -453,17 +458,22 @@ criterion_group!(
     ;
     targets =
         // --- ID Constructors ---
-        bench_constructors,
+        bench_constructors_ulid,
          // --- Base32 Encoding/Decoding ---
-        bench_base32,
+        bench_base32_ulid,
         // --- Thread-Local Generation ---
-        bench_thread_local,
+        bench_thread_local_ulid,
         // --- ULID Synchronous Generation ---
         benchmark_ulid,
-        // --- Snowflake Synchronous Generation ---
-        benchmark_snow,
-        // // --- ULID Async Generation ---
+        // --- ULID Async Generation ---
         benchmark_async_ulid,
+
+        // --- ID Constructors ---
+        bench_constructors_snow,
+         // --- Base32 Encoding/Decoding ---
+        bench_base32_snow,
+         // --- Snowflake Synchronous Generation ---
+        benchmark_snow,
         // --- Snowflake Async Generation ---
         benchmark_async_snow,
 );
