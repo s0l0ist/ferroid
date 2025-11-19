@@ -110,8 +110,8 @@ mod tests {
     // Helper function for explicit SleepProvider testing
     async fn test_many_ulid_unique_ids_explicit<ID, G, T, R, S>(
         generator_fn: impl Fn(T, R) -> G,
-        clock_factory: impl Fn() -> T,
-        rand_factory: impl Fn() -> R,
+        clock_fn: impl Fn() -> T,
+        rand_fn: impl Fn() -> R,
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
@@ -120,8 +120,8 @@ mod tests {
         R: RandSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
     {
-        let clock = clock_factory();
-        let rand = rand_factory();
+        let clock = clock_fn();
+        let rand = rand_fn();
         let generators: Vec<_> = (0..NUM_GENERATORS)
             .map(|_| generator_fn(clock.clone(), rand.clone()))
             .collect();
@@ -149,8 +149,8 @@ mod tests {
     // Helper function for convenience extension trait testing
     async fn test_many_ulid_unique_ids_convenience<ID, G, T, R>(
         generator_fn: impl Fn(T, R) -> G,
-        clock_factory: impl Fn() -> T,
-        rand_factory: impl Fn() -> R,
+        clock_fn: impl Fn() -> T,
+        rand_fn: impl Fn() -> R,
     ) -> Result<()>
     where
         G: UlidGenerator<ID, T, R> + Send + Sync + 'static,
@@ -158,8 +158,8 @@ mod tests {
         T: TimeSource<ID::Ty> + Clone + Send,
         R: RandSource<ID::Ty> + Clone + Send,
     {
-        let clock = clock_factory();
-        let rand = rand_factory();
+        let clock = clock_fn();
+        let rand = rand_fn();
         let generators: Vec<_> = (0..NUM_GENERATORS)
             .map(|_| generator_fn(clock.clone(), rand.clone()))
             .collect();

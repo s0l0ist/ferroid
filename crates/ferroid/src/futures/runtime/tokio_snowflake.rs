@@ -129,7 +129,7 @@ mod tests {
     // Helper function for explicit SleepProvider testing
     async fn test_many_snow_unique_ids_explicit<ID, G, T, S>(
         generator_fn: impl Fn(u64, T) -> G,
-        clock_factory: impl Fn() -> T,
+        clock_fn: impl Fn() -> T,
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
@@ -137,7 +137,7 @@ mod tests {
         T: TimeSource<ID::Ty> + Clone + Send,
         S: SleepProvider,
     {
-        let clock = clock_factory();
+        let clock = clock_fn();
         let generators: Vec<_> = (0..NUM_GENERATORS)
             .map(|machine_id| generator_fn(machine_id, clock.clone()))
             .collect();
@@ -166,14 +166,14 @@ mod tests {
     // Helper function for convenience extension trait testing
     async fn test_many_snow_unique_ids_convenience<ID, G, T>(
         generator_fn: impl Fn(u64, T) -> G,
-        clock_factory: impl Fn() -> T,
+        clock_fn: impl Fn() -> T,
     ) -> Result<()>
     where
         G: SnowflakeGenerator<ID, T> + Send + Sync + 'static,
         ID: SnowflakeId + Send + 'static,
         T: TimeSource<ID::Ty> + Clone + Send,
     {
-        let clock = clock_factory();
+        let clock = clock_fn();
         let generators: Vec<_> = (0..NUM_GENERATORS)
             .map(|machine_id| generator_fn(machine_id, clock.clone()))
             .collect();
