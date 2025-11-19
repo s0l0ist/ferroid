@@ -458,11 +458,11 @@ criterion_group!(
     ;
     targets =
         // --- ID Constructors ---
-        // bench_constructors_ulid,
-        //  // --- Base32 Encoding/Decoding ---
-        // bench_base32_ulid,
-        // // --- Thread-Local Generation ---
-        // bench_thread_local_ulid,
+        bench_constructors_ulid,
+         // --- Base32 Encoding/Decoding ---
+        bench_base32_ulid,
+        // --- Thread-Local Generation ---
+        bench_thread_local_ulid,
         // --- ULID Synchronous Generation ---
         benchmark_ulid,
         // --- ULID Async Generation ---
