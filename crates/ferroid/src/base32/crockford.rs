@@ -60,11 +60,10 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
         bits += 8;
         while bits >= BITS_PER_CHAR {
             bits -= BITS_PER_CHAR;
-            // SAFETY: `out` is strictly less than `buf_slice.len()`, by
-            // caller's contract.
-            //
-            // SAFETY: `(acc >> bits) & mask` produces values in the range
-            // 0..=31.
+            // SAFETY:
+            // - `out` is strictly less than `buf_slice.len()`, by caller's
+            //    contract.
+            // - `(acc >> bits) & mask` produces values in the range 0..=31.
             unsafe {
                 *buf_slice.get_unchecked_mut(out) = *ENCODE_LUT.get_unchecked((acc >> bits) & mask);
             }
