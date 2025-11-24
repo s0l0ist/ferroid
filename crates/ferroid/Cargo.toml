@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 authors.workspace = true
 readme = "README.md"
-description = "Flexible ID generators for producing unique, monotonic, and lexicographically sortable IDs."
+description = "High-performance ULID and Snowflake-style IDs. Unique, monotonic, and lexicographically sortable IDs optimized for low-latency services and async workloads."
 repository = "https://github.com/s0l0ist/ferroid/blob/main/crates/ferroid"
 categories = [
   "data-structures",    # Exposes structured types like ULID, SnowflakeId, etc.

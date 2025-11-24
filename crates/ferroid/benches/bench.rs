@@ -1,4 +1,5 @@
 use core::{fmt, hint::black_box};
+
 use criterion::{
     Criterion, Throughput, async_executor::SmolExecutor, criterion_group, criterion_main,
 };
@@ -59,7 +60,7 @@ where
     group.bench_function("decode", |b| {
         let encoded = id.encode();
         b.iter(|| {
-            black_box(ID::decode(encoded.as_ref()).unwrap());
+            black_box(ID::decode(&encoded).unwrap());
         });
     });
     group.finish();
@@ -93,7 +94,7 @@ where
     group.bench_function("decode", |b| {
         let encoded = id.encode();
         b.iter(|| {
-            black_box(ID::decode(encoded.as_ref()).unwrap());
+            black_box(ID::decode(&encoded).unwrap());
         });
     });
     group.finish();
