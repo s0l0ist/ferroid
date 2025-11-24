@@ -175,7 +175,7 @@ where
     ///     .expect("should produce a valid ID");
     /// ```
     fn decode(input: impl AsRef<[u8]>) -> Result<Self, Error<Self>> {
-        let decoded = Self::inner_decode(input.as_ref())?;
+        let decoded = Self::inner_decode(input)?;
         if !decoded.is_valid() {
             return Err(Error::DecodeOverflow { id: decoded });
         }

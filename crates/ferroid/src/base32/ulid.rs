@@ -150,7 +150,7 @@ where
     /// assert_eq!(id1, id2);
     /// ```
     fn decode(input: impl AsRef<[u8]>) -> Result<Self, Error<Self>> {
-        let decoded = Self::inner_decode(input.as_ref())?;
+        let decoded = Self::inner_decode(input)?;
         if !decoded.is_valid() {
             return Err(Error::DecodeOverflow { id: decoded });
         }
