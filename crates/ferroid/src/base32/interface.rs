@@ -33,20 +33,18 @@ where
     /// guaranteed to match the Crockford Base32 output size for the backing
     /// integer type.
     ///
-    /// See also: [`Base32Ext::enc_to_buf`] for usage.
+    /// See also: [`Base32Ext::inner_encode_to_buf`] for usage.
     #[inline]
-    fn inner_buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
-        <<Self as Id>::Ty as BeBytes>::Base32Array::default()
+    fn inner_buf() -> <Self::Ty as BeBytes>::Base32Array {
+        <Self::Ty as BeBytes>::Base32Array::default()
     }
     /// Encodes this ID into the provided output buffer without heap allocation.
     ///
     /// This is the zero-allocation alternative to [`Base32Ext::enc`]. The
     /// output buffer must be exactly [`BeBytes::BASE32_SIZE`] bytes in length,
     /// which is guaranteed at compile time when using [`BeBytes::Base32Array`].
-    ///
-    /// See also: [`Base32Ext::enc`] for an allocation-producing version.
     #[inline]
-    fn inner_encode_to_buf(&self, buf: &mut <<Self as Id>::Ty as BeBytes>::Base32Array) {
+    fn inner_encode_to_buf(&self, buf: &mut <Self::Ty as BeBytes>::Base32Array) {
         super::encode_base32(self.to_raw().to_be_bytes().as_ref(), buf.as_mut());
     }
     /// Decodes a Base32-encoded string back into an ID.
@@ -64,8 +62,8 @@ where
     ///
     /// Returns an error if the input string:
     /// - is not the expected fixed length
-    /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
-    ///   alphabet)
+    /// - contains invalid UTF8 or invalid ASCII characters (i.e., not in the
+    ///   Crockford Base32 alphabet)
     #[inline]
     fn inner_decode<E>(input: impl AsRef<[u8]>) -> Result<Self, Error<E>> {
         let bytes = input.as_ref();

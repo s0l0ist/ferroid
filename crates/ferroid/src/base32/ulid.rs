@@ -27,7 +27,7 @@ where
     /// See also: [`Base32UlidExt::encode_to_buf`] for usage.
     #[must_use]
     fn buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
-        <Self as Base32Ext>::inner_buf()
+        Self::inner_buf()
     }
     /// Returns a formatter containing the Crockford Base32 representation of
     /// the ID.
