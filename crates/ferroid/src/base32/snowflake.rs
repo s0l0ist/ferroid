@@ -111,8 +111,8 @@ where
     /// Returns an error if the input string:
     /// - is not the expected fixed length of the backing integer representation
     ///   (i.e. 13 chars for u64, 26 chars for u128)
-    /// - contains invalid ASCII characters (i.e., not in the Crockford Base32
-    ///   alphabet)
+    /// - contains invalid UTF8 or invalid ASCII characters (i.e., not in the
+    ///   Crockford Base32 alphabet)
     /// - sets reserved bits that make the decoded value invalid for this ID
     ///   type
     ///
@@ -174,8 +174,8 @@ where
     ///     })
     ///     .expect("should produce a valid ID");
     /// ```
-    fn decode(s: impl AsRef<str>) -> Result<Self, Error<Self>> {
-        let decoded = Self::inner_decode(s)?;
+    fn decode(input: impl AsRef<[u8]>) -> Result<Self, Error<Self>> {
+        let decoded = Self::inner_decode(input.as_ref())?;
         if !decoded.is_valid() {
             return Err(Error::DecodeOverflow { id: decoded });
         }
@@ -214,11 +214,17 @@ where
         }
     }
 
+    /// Returns the underlying bytes of the base32 encoding.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.buf.as_ref()
+    }
+
     /// Returns a `&str` view of the base32 encoding.
     #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
+        unsafe { core::str::from_utf8_unchecked(self.as_bytes()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
@@ -226,7 +232,7 @@ where
     #[must_use]
     pub fn as_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.as_bytes().to_vec()) }
     }
 
     /// Consumes the formatter and returns the raw buffer.
@@ -289,6 +295,15 @@ where
 {
     fn as_ref(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl<T: Base32SnowExt> AsRef<[u8]> for Base32SnowFormatter<T>
+where
+    T::Ty: BeBytes,
+{
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
     }
 }
 
@@ -381,11 +396,17 @@ where
         }
     }
 
+    /// Returns the underlying bytes of the base32 encoding.
+    #[must_use]
+    pub fn as_bytes(&self) -> &[u8] {
+        self.buf.as_ref()
+    }
+
     /// Returns a `&str` view of the base32 encoding.
     #[must_use]
     pub fn as_str(&self) -> &str {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { core::str::from_utf8_unchecked(self.buf.as_ref()) }
+        unsafe { core::str::from_utf8_unchecked(self.as_bytes()) }
     }
 
     /// Returns an allocated `String` of the base32 encoding.
@@ -393,7 +414,7 @@ where
     #[must_use]
     pub fn as_string(&self) -> alloc::string::String {
         // SAFETY: `self.buf` holds only valid Crockford Base32 ASCII characters
-        unsafe { alloc::string::String::from_utf8_unchecked(self.buf.as_ref().to_vec()) }
+        unsafe { alloc::string::String::from_utf8_unchecked(self.as_bytes().to_vec()) }
     }
 }
 
@@ -451,6 +472,15 @@ where
 {
     fn as_ref(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl<T: Base32SnowExt> AsRef<[u8]> for Base32SnowFormatterRef<'_, T>
+where
+    T::Ty: BeBytes,
+{
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
     }
 }
 

@@ -40,8 +40,8 @@ static DECODE_LUT: [u8; 256] = {
 ///
 /// - The index into `ENCODE_LUT` is masked with `0x1F` (31), ensuring it is
 ///   always in the range 0..=31.
-///   - `ENCODE_LUT` is a fixed-size array with exactly 32 elements, so all masked
-///     indices are valid.
+///   - `ENCODE_LUT` is a fixed-size array with exactly 32 elements, so all
+///     masked indices are valid.
 ///   - Therefore, `ENCODE_LUT[(acc >> bits) & 0x1F]` is guaranteed to be
 ///     in-bounds.
 #[inline(always)]
@@ -81,11 +81,11 @@ pub fn encode_base32(input: &[u8], buf_slice: &mut [u8]) {
 /// # Safety
 ///
 /// - `encoded.bytes()` produces values in the range 0..=255.
-/// - `DECODE_LUT` is a fixed-size array of 256 elements, so `DECODE_LUT[b as usize]` is
-///   always in-bounds.
+/// - `DECODE_LUT` is a fixed-size array of 256 elements, so `DECODE_LUT[b as
+///   usize]` is always in-bounds.
 #[inline(always)]
 #[allow(clippy::inline_always)]
-pub fn decode_base32<T, E>(encoded: &str) -> Result<T, Error<E>>
+pub fn decode_base32<T, E>(bytes: &[u8]) -> Result<T, Error<E>>
 where
     T: BeBytes
         + Default
@@ -93,7 +93,6 @@ where
         + core::ops::Shl<usize, Output = T>
         + core::ops::BitOr<Output = T>,
 {
-    let bytes = encoded.as_bytes();
     let mut acc = T::default();
     let mut has_error = false;
 
@@ -107,7 +106,8 @@ where
             let b2 = *chunk.get_unchecked(2);
             let b3 = *chunk.get_unchecked(3);
 
-            // SAFETY: `bX as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
+            // SAFETY: `bX as usize` is in 0..=255, and `DECODE_LUT` has 256
+            // entries.
             let v0 = *DECODE_LUT.get_unchecked(b0 as usize);
             let v1 = *DECODE_LUT.get_unchecked(b1 as usize);
             let v2 = *DECODE_LUT.get_unchecked(b2 as usize);
@@ -157,8 +157,8 @@ mod tests {
         let bytes = val.to_be_bytes();
         let mut buf = [0u8; 7]; // ceil(32/5) = 7 chars for u32
         encode_base32(&bytes, &mut buf);
+        let decoded = decode_base32::<u32, ()>(&buf).unwrap();
         let s = core::str::from_utf8(&buf).unwrap();
-        let decoded = decode_base32::<u32, ()>(s).unwrap();
         assert_eq!(val, decoded, "roundtrip for u32: input={val}, b32={s}");
     }
 
@@ -166,8 +166,8 @@ mod tests {
         let bytes = val.to_be_bytes();
         let mut buf = [0u8; 13]; // ceil(64/5) = 13 chars for u64
         encode_base32(&bytes, &mut buf);
+        let decoded = decode_base32::<u64, ()>(&buf).unwrap();
         let s = core::str::from_utf8(&buf).unwrap();
-        let decoded = decode_base32::<u64, ()>(s).unwrap();
         assert_eq!(val, decoded, "roundtrip for u64: input={val}, b32={s}");
     }
 
@@ -175,8 +175,8 @@ mod tests {
         let bytes = val.to_be_bytes();
         let mut buf = [0u8; 26]; // ceil(128/5) = 26 chars for u128
         encode_base32(&bytes, &mut buf);
+        let decoded = decode_base32::<u128, ()>(&buf).unwrap();
         let s = core::str::from_utf8(&buf).unwrap();
-        let decoded = decode_base32::<u128, ()>(s).unwrap();
         assert_eq!(val, decoded, "roundtrip for u128: input={val}, b32={s}");
     }
 
@@ -219,23 +219,19 @@ mod tests {
 
     #[test]
     fn decode_accepts_lowercase_characters() {
-        let encoded_upper = "ABCD123";
-        let encoded_lower = "abcd123";
-
+        let encoded_upper = b"ABCD123";
+        let encoded_lower = b"abcd123";
         let val_upper = decode_base32::<u32, ()>(encoded_upper).unwrap();
         let val_lower = decode_base32::<u32, ()>(encoded_lower).unwrap();
-
         assert_eq!(val_upper, val_lower);
     }
 
     #[test]
     fn decode_accepts_mixed_case_characters() {
-        let encoded_upper = "ABCD123";
-        let encoded_mixed = "aBcD123";
-
+        let encoded_upper = b"ABCD123";
+        let encoded_mixed = b"aBcD123";
         let val_upper = decode_base32::<u32, ()>(encoded_upper).unwrap();
         let val_mixed = decode_base32::<u32, ()>(encoded_mixed).unwrap();
-
         assert_eq!(val_upper, val_mixed);
     }
 
@@ -250,17 +246,11 @@ mod tests {
             (b'L', b'1'),
             (b'l', b'1'),
         ];
-
         for (alias, canonical) in aliases {
             let alias_buf = [alias; 7];
             let canonical_buf = [canonical; 7];
-
-            let alias_str = core::str::from_utf8(&alias_buf).unwrap();
-            let canonical_str = core::str::from_utf8(&canonical_buf).unwrap();
-
-            let alias_val = decode_base32::<u32, ()>(alias_str).unwrap();
-            let canonical_val = decode_base32::<u32, ()>(canonical_str).unwrap();
-
+            let alias_val = decode_base32::<u32, ()>(&alias_buf).unwrap();
+            let canonical_val = decode_base32::<u32, ()>(&canonical_buf).unwrap();
             assert_eq!(
                 alias_val, canonical_val,
                 "alias {} should decode to same value as {}",
@@ -270,17 +260,26 @@ mod tests {
     }
 
     #[test]
-    fn decode_returns_error_for_invalid_character() {
-        let invalid_input = "ZZZZZZ!"; // '!' is not in Crockford base32
+    fn decode_returns_error_for_invalid_bytes() {
+        let test_cases = [
+            (b"ZZZZZZ!" as &[u8], b'!', 6), // Invalid ASCII character
+            (b"ABCD\xFF23", 0xFF, 4),       // Invalid UTF-8 byte
+            (b"ABC\xC3\xA9EF", 0xC3, 3),    // Multi-byte UTF-8 (é)
+            (b"ZZZZZ\x80Z", 0x80, 5),       // UTF-8 continuation byte
+        ];
 
-        let result = decode_base32::<u32, ()>(invalid_input);
-
-        assert_eq!(
-            result.unwrap_err(),
-            Error::DecodeInvalidAscii {
-                byte: b'!',
-                index: 6,
-            }
-        );
+        for (input, expected_byte, expected_index) in test_cases {
+            let result = decode_base32::<u32, ()>(input);
+            assert_eq!(
+                result.unwrap_err(),
+                Error::DecodeInvalidAscii {
+                    byte: expected_byte,
+                    index: expected_index,
+                },
+                "Failed for input with byte 0x{:02X} at index {}",
+                expected_byte,
+                expected_index
+            );
+        }
     }
 }
