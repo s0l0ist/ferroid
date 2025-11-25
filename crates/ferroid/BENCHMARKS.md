@@ -43,7 +43,7 @@ Throughput is reported over the **binary ID size** (`SIZE`).
 | Helper                      | Time per ID | Throughput     |
 | --------------------------- | ----------- | -------------- |
 | `Ulid::new_ulid()`          | ~21.6 ns    | ~46.4M IDs/sec |
-| `Ulid::new_mono_ulid()`     | ~4.06 ns    | ~246M IDs/sec  |
+| `Ulid::new_ulid_mono()`     | ~4.06 ns    | ~246M IDs/sec  |
 | `Ulid::from_timestamp(...)` | ~21.1 ns    | ~47.5M IDs/sec |
 | `Ulid::from_datetime(...)`  | ~23.7 ns    | ~42.1M IDs/sec |
 

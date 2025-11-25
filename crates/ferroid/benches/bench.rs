@@ -50,7 +50,7 @@ where
         });
     });
     group.bench_function("encode_to_buf", |b| {
-        let mut buf = ID::buf();
+        let mut buf = ID::base32_array();
         b.iter(|| {
             let b = id.encode_to_buf(&mut buf);
             black_box(b);
@@ -84,7 +84,7 @@ where
         });
     });
     group.bench_function("encode_to_buf", |b| {
-        let mut buf = ID::buf();
+        let mut buf = ID::base32_array();
         b.iter(|| {
             let b = id.encode_to_buf(&mut buf);
             black_box(b);
@@ -143,9 +143,9 @@ fn bench_ulid_thread_local(c: &mut Criterion, group_name: &str) {
             black_box(Ulid::new_ulid());
         });
     });
-    group.bench_function("new_mono_ulid", |b| {
+    group.bench_function("new_ulid_mono", |b| {
         b.iter(|| {
-            black_box(Ulid::new_mono_ulid());
+            black_box(Ulid::new_ulid_mono());
         });
     });
     group.bench_function("from_timestamp", |b| {

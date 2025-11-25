@@ -16,6 +16,14 @@ pub trait Base32UlidExt: UlidId
 where
     Self::Ty: BeBytes,
 {
+    /// Returns a stack-allocated, zero-initialized buffer of the backing
+    /// primitive in the ID.
+    ///
+    /// This is a convenience method that returns a [`BeBytes::ByteArray`]
+    #[must_use]
+    fn byte_array() -> <<Self as Id>::Ty as BeBytes>::ByteArray {
+        Self::inner_byte_array()
+    }
     /// Returns a stack-allocated, zero-initialized buffer for Base32 encoding.
     ///
     /// This is a convenience method that returns a [`BeBytes::Base32Array`]
@@ -26,8 +34,8 @@ where
     ///
     /// See also: [`Base32UlidExt::encode_to_buf`] for usage.
     #[must_use]
-    fn buf() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
-        Self::inner_buf()
+    fn base32_array() -> <<Self as Id>::Ty as BeBytes>::Base32Array {
+        Self::inner_base32_array()
     }
     /// Returns a formatter containing the Crockford Base32 representation of
     /// the ID.
@@ -68,7 +76,7 @@ where
     /// let id = ULID::from_raw(2_424_242_424_242_424_242);
     ///
     /// // Stack-allocated buffer of the correct size.
-    /// let mut buf = ULID::buf();
+    /// let mut buf = ULID::base32_array();
     ///
     /// // Formatter is a view over the external buffer
     /// let formatter = id.encode_to_buf(&mut buf);
@@ -181,7 +189,7 @@ where
     T::Ty: BeBytes,
 {
     pub fn new(id: &T) -> Self {
-        let mut buf = T::buf();
+        let mut buf = T::base32_array();
         id.inner_encode_to_buf(&mut buf);
         Self {
             _id: PhantomData,

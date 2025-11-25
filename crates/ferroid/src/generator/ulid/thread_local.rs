@@ -95,10 +95,10 @@ impl Ulid {
     /// # Example
     /// ```
     /// use ferroid::generator::thread_local::Ulid;
-    /// let id = Ulid::new_mono_ulid();
+    /// let id = Ulid::new_ulid_mono();
     /// ```
     #[must_use]
-    pub fn new_mono_ulid() -> ULID {
+    pub fn new_ulid_mono() -> ULID {
         Self::with_mono_backoff(Backoff::Yield)
     }
 
