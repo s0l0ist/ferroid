@@ -1,7 +1,7 @@
 use ferroid::{
     base32::Base32UlidExt,
     generator::thread_local::Ulid,
-    id::{BeBytes, Id, ULID as FerroidULID},
+    id::{BeBytes, Id, ULID as InnerULID},
 };
 use pgrx::{
     callconv::{ArgAbi, BoxRet},
@@ -20,7 +20,7 @@ pgrx::pg_module_magic!();
 // ULID
 // ============================================================================
 
-type Bytes = <<FerroidULID as Id>::Ty as BeBytes>::ByteArray;
+type Bytes = <<InnerULID as Id>::Ty as BeBytes>::ByteArray;
 
 /// A PostgreSQL ULID type backed by `ferroid`.
 ///
@@ -52,31 +52,31 @@ impl ULID {
     }
 
     #[inline(always)]
-    fn to_ulid(&self) -> FerroidULID {
-        FerroidULID::from_raw(<<FerroidULID as Id>::Ty>::from_be_bytes(self.bytes))
+    fn to_ulid(&self) -> InnerULID {
+        InnerULID::from_raw(<<InnerULID as Id>::Ty>::from_be_bytes(self.bytes))
     }
 
     #[inline(always)]
-    fn from_ulid(ulid: FerroidULID) -> Self {
+    fn from_ulid(ulid: InnerULID) -> Self {
         Self::from_bytes(ulid.to_raw().to_be_bytes())
     }
 }
 
-impl From<FerroidULID> for ULID {
+impl From<InnerULID> for ULID {
     #[inline(always)]
-    fn from(ulid: FerroidULID) -> Self {
+    fn from(ulid: InnerULID) -> Self {
         Self::from_ulid(ulid)
     }
 }
 
-impl From<&ULID> for FerroidULID {
+impl From<&ULID> for InnerULID {
     #[inline(always)]
     fn from(p: &ULID) -> Self {
         p.to_ulid()
     }
 }
 
-impl From<ULID> for FerroidULID {
+impl From<ULID> for InnerULID {
     #[inline(always)]
     fn from(p: ULID) -> Self {
         p.to_ulid()
@@ -121,7 +121,7 @@ impl IntoDatum for ULID {
             // SAFETY:
             // - `CurrentMemoryContext` is a valid Postgres MemoryContext.
             // - `palloc_struct::<Bytes>()` allocates exactly
-            //   `size_of::<Bytes>()` bytes, properly aligned for `Bytes`.
+            //   `size_of::<Bytes>()` bytes and is aligned.
             PgMemoryContexts::CurrentMemoryContext.palloc_struct::<Bytes>()
         };
 
@@ -180,7 +180,7 @@ unsafe impl SqlTranslatable for ULID {
 // ============================================================================
 #[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
 fn ulid_in(input: &core::ffi::CStr) -> ULID {
-    FerroidULID::decode(input.to_bytes())
+    InnerULID::decode(input.to_bytes())
         .map(ULID::from_ulid)
         .unwrap_or_else(|e| pgrx::error!("invalid ULID: {}", e))
 }
@@ -234,7 +234,7 @@ fn gen_ulid() -> ULID {
 // Difference: 946684800 seconds = 946684800000000 microseconds
 const PG_EPOCH_OFFSET_MICROS: i64 = 946_684_800_000_000;
 
-/// Extract timestamp from FerroidULID as PostgreSQL timestamptz
+/// Extract timestamp from InnerULID as PostgreSQL timestamptz
 #[pg_extern(immutable, parallel_safe, strict)]
 fn ulid_to_timestamptz(ulid: ULID) -> TimestampWithTimeZone {
     let ms = ulid.to_ulid().timestamp() as i64;
@@ -245,7 +245,7 @@ fn ulid_to_timestamptz(ulid: ULID) -> TimestampWithTimeZone {
         .unwrap_or_else(|e| pgrx::error!("timestamp out of range: {}", e))
 }
 
-/// Create FerroidULID from PostgreSQL timestamptz
+/// Create ULID from PostgreSQL timestamptz
 #[pg_extern(parallel_safe, strict)]
 fn ulid_from_timestamptz(ts: TimestampWithTimeZone) -> ULID {
     let pg_micros: i64 = ts
@@ -255,7 +255,7 @@ fn ulid_from_timestamptz(ts: TimestampWithTimeZone) -> ULID {
     let unix_micros = pg_micros.saturating_add(PG_EPOCH_OFFSET_MICROS);
     let ms = (unix_micros / 1_000) as u64;
 
-    ULID::from_ulid(FerroidULID::from_timestamp(ms as u128))
+    ULID::from_ulid(InnerULID::from_timestamp(ms as u128))
 }
 
 /// Extract timestamp as Unix milliseconds
@@ -272,7 +272,7 @@ fn ulid_timestamp(ulid: ULID) -> i64 {
 /// Cast text to ULID (requires explicit cast)
 #[pg_cast]
 fn text_to_ulid(text: &str) -> ULID {
-    FerroidULID::decode(text)
+    InnerULID::decode(text)
         .map(ULID::from_ulid)
         .unwrap_or_else(|e| pgrx::error!("invalid ULID text: {}", e))
 }
@@ -289,7 +289,7 @@ fn bytea_to_ulid(bytes: &[u8]) -> ULID {
     let arr: Bytes = bytes.try_into().unwrap_or_else(|_| {
         pgrx::error!(
             "invalid bytea length for ulid: expected {} bytes, got {}",
-            <<FerroidULID as Id>::Ty as BeBytes>::SIZE,
+            <<InnerULID as Id>::Ty as BeBytes>::SIZE,
             bytes.len()
         )
     });
@@ -306,10 +306,10 @@ fn ulid_to_bytea(ulid: ULID) -> Vec<u8> {
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/// Check if a string is a valid FerroidULID
+/// Check if a string is a valid ULID
 #[pg_extern(immutable, parallel_safe, strict)]
 fn ulid_is_valid(text: &str) -> bool {
-    FerroidULID::decode(text.as_bytes()).is_ok()
+    InnerULID::decode(text.as_bytes()).is_ok()
 }
 
 // ============================================================================
@@ -336,8 +336,8 @@ extension_sql!(
 COMMENT ON TYPE ulid IS 'Universally Unique Lexicographically Sortable Identifier - 128-bit identifier with timestamp ordering';
 COMMENT ON FUNCTION gen_ulid() IS 'Generate a new random ULID';
 COMMENT ON FUNCTION gen_ulid_mono() IS 'Generate a new monotonic ULID (maintains ordering within same millisecond)';
-COMMENT ON FUNCTION ulid_to_timestamptz(ulid) IS 'Extract the timestamp component as timestamptz';
-COMMENT ON FUNCTION ulid_from_timestamptz(timestamptz) IS 'Create a ULID from a timestamp (random component will be random)';
+-- COMMENT ON FUNCTION ulid_to_timestamptz(ulid) IS 'Extract the timestamp component as timestamptz';
+-- COMMENT ON FUNCTION ulid_from_timestamptz(timestamptz) IS 'Create a ULID from a timestamp (random component will be random)';
 COMMENT ON FUNCTION ulid_timestamp(ulid) IS 'Extract the timestamp as Unix milliseconds';
 COMMENT ON FUNCTION ulid_is_valid(text) IS 'Check if a text string is a valid ULID';
 "#,
@@ -346,8 +346,8 @@ COMMENT ON FUNCTION ulid_is_valid(text) IS 'Check if a text string is a valid UL
         "concrete_type",
         gen_ulid,
         gen_ulid_mono,
-        ulid_to_timestamptz,
-        ulid_from_timestamptz,
+        // ulid_to_timestamptz,
+        // ulid_from_timestamptz,
         ulid_timestamp,
         ulid_is_valid,
     ]
@@ -521,8 +521,8 @@ mod tests {
     /// Verify Rust-level comparison operators
     #[pg_test]
     fn comparison_rust_operators() {
-        let low = ULID::from_ulid(FerroidULID::from_timestamp(1000));
-        let high = ULID::from_ulid(FerroidULID::from_timestamp(2000));
+        let low = ULID::from_ulid(InnerULID::from_timestamp(1000));
+        let high = ULID::from_ulid(InnerULID::from_timestamp(2000));
 
         assert_eq!(low, low);
         assert_ne!(low, high);
@@ -593,7 +593,11 @@ mod tests {
 
         let ms1 = ulid_timestamp(ulid);
         let ms2 = ulid_timestamp(ulid2);
-        assert!((ms1 - ms2).abs() <= 1, "Should be within same millisecond");
+        assert!(
+            (ms1 - ms2).abs() <= 1,
+            "Should be within same millisecond: {}",
+            (ms1 - ms2).abs()
+        );
     }
 
     /// Verify ULID from known timestamp
@@ -628,10 +632,10 @@ mod tests {
     /// Verify edge case: epoch timestamp
     #[pg_test]
     fn timestamp_epoch() {
-        let ulid_zero = ULID::from_ulid(FerroidULID::from_timestamp(0));
+        let ulid_zero = ULID::from_ulid(InnerULID::from_timestamp(0));
         assert_eq!(ulid_timestamp(ulid_zero), 0);
 
-        let ulid_small = ULID::from_ulid(FerroidULID::from_timestamp(1000));
+        let ulid_small = ULID::from_ulid(InnerULID::from_timestamp(1000));
         assert_eq!(ulid_timestamp(ulid_small), 1000);
     }
 
