@@ -52,45 +52,45 @@ impl ULID {
     }
 
     #[inline(always)]
-    fn to_ulid(&self) -> InnerULID {
+    pub(crate) fn to_inner(&self) -> InnerULID {
         InnerULID::from_raw(<<InnerULID as Id>::Ty>::from_be_bytes(self.bytes))
     }
 
     #[inline(always)]
-    fn from_ulid(ulid: InnerULID) -> Self {
+    pub(crate) fn from_inner(ulid: InnerULID) -> Self {
         Self::from_bytes(ulid.to_raw().to_be_bytes())
     }
 
     #[inline(always)]
-    fn timestamp(&self) -> i64 {
-        self.to_ulid().timestamp() as i64
+    pub(crate) fn timestamp(&self) -> i64 {
+        self.to_inner().timestamp() as i64
     }
 }
 
 impl From<InnerULID> for ULID {
     #[inline(always)]
     fn from(ulid: InnerULID) -> Self {
-        Self::from_ulid(ulid)
+        Self::from_inner(ulid)
     }
 }
 
 impl From<&ULID> for InnerULID {
     #[inline(always)]
     fn from(p: &ULID) -> Self {
-        p.to_ulid()
+        p.to_inner()
     }
 }
 
 impl From<ULID> for InnerULID {
     #[inline(always)]
     fn from(p: ULID) -> Self {
-        p.to_ulid()
+        p.to_inner()
     }
 }
 
 impl core::fmt::Display for ULID {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.to_ulid().encode().fmt(f)
+        self.to_inner().encode().fmt(f)
     }
 }
 
@@ -186,13 +186,13 @@ unsafe impl SqlTranslatable for ULID {
 #[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
 fn ulid_in(input: &core::ffi::CStr) -> ULID {
     InnerULID::decode(input.to_bytes())
-        .map(ULID::from_ulid)
+        .map(ULID::from_inner)
         .unwrap_or_else(|e| pgrx::error!("invalid ULID: {}", e))
 }
 
 #[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
 fn ulid_out(ulid: ULID) -> &'static core::ffi::CStr {
-    let encoded = ulid.to_ulid().encode();
+    let encoded = ulid.to_inner().encode();
     let bytes = encoded.as_bytes();
     let len = bytes
         .len()
@@ -222,13 +222,13 @@ fn ulid_out(ulid: ULID) -> &'static core::ffi::CStr {
 /// Monotonic ULIDs guarantee ordering within the same millisecond
 #[pg_extern(strict, parallel_safe)]
 fn gen_ulid_mono() -> ULID {
-    ULID::from_ulid(Ulid::new_ulid_mono())
+    ULID::from_inner(Ulid::new_ulid_mono())
 }
 
 /// Generate a new random ULID (non-monotonic)
 #[pg_extern(strict, parallel_safe)]
 fn gen_ulid() -> ULID {
-    ULID::from_ulid(Ulid::new_ulid())
+    ULID::from_inner(Ulid::new_ulid())
 }
 
 // ============================================================================
@@ -242,25 +242,37 @@ const PG_EPOCH_OFFSET_MICROS: i64 = 946_684_800_000_000;
 /// Cast ULID to timestamptz (requires explicit cast)
 #[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_timestamptz(ulid: ULID) -> TimestampWithTimeZone {
-    let ms = ulid.to_ulid().timestamp() as i64;
-    let unix_micros = ms.saturating_mul(1_000);
-    let pg_micros = unix_micros.saturating_sub(PG_EPOCH_OFFSET_MICROS);
+    let ms = ulid.to_inner().timestamp() as i64;
+    let unix_micros = ms
+        .checked_mul(1_000)
+        .unwrap_or_else(|| pgrx::error!("ULID timestamp overflow"));
+    let pg_micros = unix_micros
+        .checked_sub(PG_EPOCH_OFFSET_MICROS)
+        .unwrap_or_else(|| pgrx::error!("timestamp before PostgreSQL epoch"));
 
     TimestampWithTimeZone::try_from(pg_micros)
         .unwrap_or_else(|e| pgrx::error!("timestamp out of range: {}", e))
 }
 
 /// Cast timestamptz to ULID (requires explicit cast)
+///
+/// Note: Truncates to millisecond precision
 #[pg_cast(immutable, parallel_safe, strict)]
 fn timestamptz_to_ulid(ts: TimestampWithTimeZone) -> ULID {
     let pg_micros: i64 = ts
         .try_into()
         .unwrap_or_else(|e| pgrx::error!("invalid timestamp: {}", e));
 
-    let unix_micros = pg_micros.saturating_add(PG_EPOCH_OFFSET_MICROS);
-    let ms = (unix_micros / 1_000) as u64;
+    let unix_micros = pg_micros
+        .checked_add(PG_EPOCH_OFFSET_MICROS)
+        .unwrap_or_else(|| pgrx::error!("timestamp overflow"));
 
-    ULID::from_ulid(InnerULID::from_timestamp(ms as u128))
+    let ms = unix_micros
+        .checked_div(1_000)
+        .and_then(|v| u64::try_from(v).ok())
+        .unwrap_or_else(|| pgrx::error!("timestamp before Unix epoch (1970-01-01)"));
+
+    ULID::from_inner(InnerULID::from_timestamp(ms as u128))
 }
 
 /// Cast ULID to timestamp (requires explicit cast)
@@ -279,14 +291,14 @@ fn timestamp_to_ulid(ts: Timestamp) -> ULID {
 #[pg_cast(immutable, parallel_safe, strict)]
 fn text_to_ulid(text: &str) -> ULID {
     InnerULID::decode(text)
-        .map(ULID::from_ulid)
+        .map(ULID::from_inner)
         .unwrap_or_else(|e| pgrx::error!("invalid ULID text: {}", e))
 }
 
 /// Cast ULID to text (requires explicit cast)
 #[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_text(ulid: ULID) -> String {
-    ulid.to_ulid().encode().as_string()
+    ulid.to_inner().encode().as_string()
 }
 
 /// Cast bytea to ULID (requires explicit cast)
@@ -516,8 +528,8 @@ mod tests {
     /// Verify Rust-level comparison operators
     #[pg_test]
     fn comparison_rust_operators() {
-        let low = ULID::from_ulid(InnerULID::from_timestamp(1000));
-        let high = ULID::from_ulid(InnerULID::from_timestamp(2000));
+        let low = ULID::from_inner(InnerULID::from_timestamp(1000));
+        let high = ULID::from_inner(InnerULID::from_timestamp(2000));
 
         assert_eq!(low, low);
         assert_ne!(low, high);
@@ -643,10 +655,10 @@ mod tests {
     /// Verify edge case: epoch timestamp
     #[pg_test]
     fn timestamp_epoch() {
-        let ulid_zero = ULID::from_ulid(InnerULID::from_timestamp(0));
+        let ulid_zero = ULID::from_inner(InnerULID::from_timestamp(0));
         assert_eq!(ulid_zero.timestamp(), 0);
 
-        let ulid_small = ULID::from_ulid(InnerULID::from_timestamp(1000));
+        let ulid_small = ULID::from_inner(InnerULID::from_timestamp(1000));
         assert_eq!(ulid_small.timestamp(), 1000);
     }
 
