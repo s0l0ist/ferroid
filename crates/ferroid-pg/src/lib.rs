@@ -272,7 +272,7 @@ fn timestamptz_to_ulid(ts: TimestampWithTimeZone) -> ULID {
         .and_then(|v| u128::try_from(v).ok())
         .unwrap_or_else(|| pgrx::error!("timestamp before Unix epoch (1970-01-01)"));
 
-    ULID::from_inner(InnerULID::from_timestamp(ms))
+    ULID::from_inner(InnerULID::from(ms, 0))
 }
 
 /// Cast ULID to timestamp (requires explicit cast)
