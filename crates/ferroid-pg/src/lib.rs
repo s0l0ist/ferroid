@@ -60,6 +60,11 @@ impl ULID {
     fn from_ulid(ulid: InnerULID) -> Self {
         Self::from_bytes(ulid.to_raw().to_be_bytes())
     }
+
+    #[inline(always)]
+    fn timestamp(&self) -> i64 {
+        self.to_ulid().timestamp() as i64
+    }
 }
 
 impl From<InnerULID> for ULID {
@@ -227,15 +232,15 @@ fn gen_ulid() -> ULID {
 }
 
 // ============================================================================
-// TIMESTAMP EXTRACTION
+// CASTING SUPPORT
 // ============================================================================
 
 // PostgreSQL epoch: 2000-01-01 00:00:00 UTC Unix epoch: 1970-01-01 00:00:00 UTC
 // Difference: 946684800 seconds = 946684800000000 microseconds
 const PG_EPOCH_OFFSET_MICROS: i64 = 946_684_800_000_000;
 
-/// Extract timestamp from InnerULID as PostgreSQL timestamptz
-#[pg_extern(immutable, parallel_safe, strict)]
+/// Cast ULID to timestamptz (requires explicit cast)
+#[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_timestamptz(ulid: ULID) -> TimestampWithTimeZone {
     let ms = ulid.to_ulid().timestamp() as i64;
     let unix_micros = ms.saturating_mul(1_000);
@@ -245,9 +250,9 @@ fn ulid_to_timestamptz(ulid: ULID) -> TimestampWithTimeZone {
         .unwrap_or_else(|e| pgrx::error!("timestamp out of range: {}", e))
 }
 
-/// Create ULID from PostgreSQL timestamptz
-#[pg_extern(parallel_safe, strict)]
-fn ulid_from_timestamptz(ts: TimestampWithTimeZone) -> ULID {
+/// Cast timestamptz to ULID (requires explicit cast)
+#[pg_cast(immutable, parallel_safe, strict)]
+fn timestamptz_to_ulid(ts: TimestampWithTimeZone) -> ULID {
     let pg_micros: i64 = ts
         .try_into()
         .unwrap_or_else(|e| pgrx::error!("invalid timestamp: {}", e));
@@ -258,19 +263,20 @@ fn ulid_from_timestamptz(ts: TimestampWithTimeZone) -> ULID {
     ULID::from_ulid(InnerULID::from_timestamp(ms as u128))
 }
 
-/// Extract timestamp as Unix milliseconds
-#[pg_extern(immutable, parallel_safe, strict)]
-fn ulid_timestamp(ulid: ULID) -> i64 {
-    // Safe to cast because timestamp is only 48 bits
-    ulid.to_ulid().timestamp() as i64
+/// Cast ULID to timestamp (requires explicit cast)
+#[pg_cast(immutable, parallel_safe, strict)]
+fn ulid_to_timestamp(ulid: ULID) -> Timestamp {
+    ulid_to_timestamptz(ulid).into()
 }
 
-// ============================================================================
-// CASTING SUPPORT
-// ============================================================================
+/// Cast timestamp to ULID (requires explicit cast)
+#[pg_cast(immutable, parallel_safe, strict)]
+fn timestamp_to_ulid(ts: Timestamp) -> ULID {
+    timestamptz_to_ulid(ts.into())
+}
 
 /// Cast text to ULID (requires explicit cast)
-#[pg_cast]
+#[pg_cast(immutable, parallel_safe, strict)]
 fn text_to_ulid(text: &str) -> ULID {
     InnerULID::decode(text)
         .map(ULID::from_ulid)
@@ -278,13 +284,13 @@ fn text_to_ulid(text: &str) -> ULID {
 }
 
 /// Cast ULID to text (requires explicit cast)
-#[pg_cast]
+#[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_text(ulid: ULID) -> String {
     ulid.to_ulid().encode().as_string()
 }
 
 /// Cast bytea to ULID (requires explicit cast)
-#[pg_cast]
+#[pg_cast(immutable, parallel_safe, strict)]
 fn bytea_to_ulid(bytes: &[u8]) -> ULID {
     let arr: Bytes = bytes.try_into().unwrap_or_else(|_| {
         pgrx::error!(
@@ -297,7 +303,7 @@ fn bytea_to_ulid(bytes: &[u8]) -> ULID {
 }
 
 /// Cast ULID to bytea (requires explicit cast)
-#[pg_cast]
+#[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_bytea(ulid: ULID) -> Vec<u8> {
     ulid.as_bytes().to_vec()
 }
@@ -336,21 +342,10 @@ extension_sql!(
 COMMENT ON TYPE ulid IS 'Universally Unique Lexicographically Sortable Identifier - 128-bit identifier with timestamp ordering';
 COMMENT ON FUNCTION gen_ulid() IS 'Generate a new random ULID';
 COMMENT ON FUNCTION gen_ulid_mono() IS 'Generate a new monotonic ULID (maintains ordering within same millisecond)';
--- COMMENT ON FUNCTION ulid_to_timestamptz(ulid) IS 'Extract the timestamp component as timestamptz';
--- COMMENT ON FUNCTION ulid_from_timestamptz(timestamptz) IS 'Create a ULID from a timestamp (random component will be random)';
-COMMENT ON FUNCTION ulid_timestamp(ulid) IS 'Extract the timestamp as Unix milliseconds';
 COMMENT ON FUNCTION ulid_is_valid(text) IS 'Check if a text string is a valid ULID';
 "#,
     name = "add_comments",
-    requires = [
-        "concrete_type",
-        gen_ulid,
-        gen_ulid_mono,
-        // ulid_to_timestamptz,
-        // ulid_from_timestamptz,
-        ulid_timestamp,
-        ulid_is_valid,
-    ]
+    requires = ["concrete_type", gen_ulid, gen_ulid_mono, ulid_is_valid]
 );
 
 // ============================================================================
@@ -437,7 +432,7 @@ mod tests {
     fn generation_from_sql() {
         let ulid = Spi::get_one::<ULID>("SELECT gen_ulid()").unwrap().unwrap();
         assert!(
-            ulid_timestamp(ulid) > 0,
+            ulid.timestamp() > 0,
             "Generated ULID should have valid timestamp"
         );
     }
@@ -579,7 +574,7 @@ mod tests {
     #[pg_test]
     fn timestamp_extraction() {
         let ulid = gen_ulid();
-        let ms = ulid_timestamp(ulid);
+        let ms = ulid.timestamp();
         assert!(ms > 1_600_000_000_000, "Should be after Sept 2020");
         assert!(ms < 2_000_000_000_000, "Should be before May 2033");
     }
@@ -589,10 +584,26 @@ mod tests {
     fn timestamp_timestamptz_round_trip() {
         let ulid = gen_ulid();
         let ts = ulid_to_timestamptz(ulid);
-        let ulid2 = ulid_from_timestamptz(ts);
+        let ulid2 = timestamptz_to_ulid(ts);
 
-        let ms1 = ulid_timestamp(ulid);
-        let ms2 = ulid_timestamp(ulid2);
+        let ms1 = ulid.timestamp();
+        let ms2 = ulid2.timestamp();
+        assert!(
+            (ms1 - ms2).abs() <= 1,
+            "Should be within same millisecond: {}",
+            (ms1 - ms2).abs()
+        );
+    }
+
+    /// Verify round-trip through timestamp
+    #[pg_test]
+    fn timestamp_timestamp_round_trip() {
+        let ulid = gen_ulid();
+        let ts = ulid_to_timestamp(ulid);
+        let ulid2 = timestamp_to_ulid(ts);
+
+        let ms1 = ulid.timestamp();
+        let ms2 = ulid2.timestamp();
         assert!(
             (ms1 - ms2).abs() <= 1,
             "Should be within same millisecond: {}",
@@ -607,8 +618,8 @@ mod tests {
             Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01 00:00:00+00'::timestamptz")
                 .unwrap()
                 .unwrap();
-        let ulid = ulid_from_timestamptz(ts);
-        let ms = ulid_timestamp(ulid);
+        let ulid = timestamptz_to_ulid(ts);
+        let ms = ulid.timestamp();
         assert_eq!(ms, 1704067200000, "Jan 1, 2024 00:00:00 UTC");
     }
 
@@ -621,8 +632,8 @@ mod tests {
         let ts2 = Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-12-31'::timestamptz")
             .unwrap()
             .unwrap();
-        let ulid1 = ulid_from_timestamptz(ts1);
-        let ulid2 = ulid_from_timestamptz(ts2);
+        let ulid1 = timestamptz_to_ulid(ts1);
+        let ulid2 = timestamptz_to_ulid(ts2);
         assert!(
             ulid1 < ulid2,
             "Earlier timestamp should produce smaller ULID"
@@ -633,10 +644,10 @@ mod tests {
     #[pg_test]
     fn timestamp_epoch() {
         let ulid_zero = ULID::from_ulid(InnerULID::from_timestamp(0));
-        assert_eq!(ulid_timestamp(ulid_zero), 0);
+        assert_eq!(ulid_zero.timestamp(), 0);
 
         let ulid_small = ULID::from_ulid(InnerULID::from_timestamp(1000));
-        assert_eq!(ulid_timestamp(ulid_small), 1000);
+        assert_eq!(ulid_small.timestamp(), 1000);
     }
 
     // ========================================================================
@@ -796,9 +807,9 @@ mod tests {
                 .unwrap()
                 .unwrap();
 
-        let ulid1 = ulid_from_timestamptz(ts1);
-        let ulid2 = ulid_from_timestamptz(ts2);
-        let ulid3 = ulid_from_timestamptz(ts3);
+        let ulid1 = timestamptz_to_ulid(ts1);
+        let ulid2 = timestamptz_to_ulid(ts2);
+        let ulid3 = timestamptz_to_ulid(ts3);
 
         Spi::run("CREATE TEMP TABLE events (id ulid PRIMARY KEY)").unwrap();
         Spi::run(&format!(
