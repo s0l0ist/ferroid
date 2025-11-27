@@ -248,7 +248,7 @@ fn ulid_to_timestamptz(ulid: ULID) -> TimestampWithTimeZone {
         .unwrap_or_else(|| pgrx::error!("ULID timestamp overflow"));
     let pg_micros = unix_micros
         .checked_sub(PG_EPOCH_OFFSET_MICROS)
-        .unwrap_or_else(|| pgrx::error!("timestamp before PostgreSQL epoch"));
+        .unwrap_or_else(|| pgrx::error!("timestamp underflow"));
 
     TimestampWithTimeZone::try_from(pg_micros)
         .unwrap_or_else(|e| pgrx::error!("timestamp out of range: {}", e))
@@ -269,10 +269,10 @@ fn timestamptz_to_ulid(ts: TimestampWithTimeZone) -> ULID {
 
     let ms = unix_micros
         .checked_div(1_000)
-        .and_then(|v| u64::try_from(v).ok())
+        .and_then(|v| u128::try_from(v).ok())
         .unwrap_or_else(|| pgrx::error!("timestamp before Unix epoch (1970-01-01)"));
 
-    ULID::from_inner(InnerULID::from_timestamp(ms as u128))
+    ULID::from_inner(InnerULID::from_timestamp(ms))
 }
 
 /// Cast ULID to timestamp (requires explicit cast)
