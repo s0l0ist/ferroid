@@ -65,7 +65,7 @@ impl ULID {
     pub(crate) fn timestamp(&self) -> i64 {
         // The ULID timestamp is 48 bits, which always fits in i64 (63 bits) so
         // this cast is guaranteed not to overflow.
-        self.to_inner().timestamp() as i64
+        InnerULID::from(self).timestamp() as i64
     }
 }
 
@@ -92,7 +92,7 @@ impl From<ULID> for InnerULID {
 
 impl core::fmt::Display for ULID {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.to_inner().encode().fmt(f)
+        InnerULID::from(self).encode().fmt(f)
     }
 }
 
@@ -297,7 +297,7 @@ fn text_to_ulid(text: &str) -> ULID {
 /// Cast ULID to text (requires explicit cast)
 #[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_text(ulid: ULID) -> String {
-    ulid.to_inner().encode().as_string()
+    InnerULID::from(ulid).encode().as_string()
 }
 
 /// Cast bytea to ULID (requires explicit cast)
