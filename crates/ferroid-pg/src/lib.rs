@@ -1008,6 +1008,59 @@ mod tests {
 
         assert_eq!(count, 2, "Should find 2 rows with first ULID");
     }
+
+    /// Verify range query using date literals with ::timestamp::ulid
+    #[pg_test]
+    fn range_query_date_literal() {
+        // Make semantics deterministic
+        Spi::run("SET TIME ZONE 'UTC'").unwrap();
+
+        Spi::run("CREATE TEMP TABLE date_events (id ulid PRIMARY KEY, label text)").unwrap();
+
+        // Insert an event exactly at midnight UTC on 2024-01-01
+        Spi::run(
+            "INSERT INTO date_events (id, label)
+             VALUES ('2024-01-01'::timestamp::ulid, 'midnight')",
+        )
+        .unwrap();
+
+        // Query for all events on that calendar day using date-only bounds
+        let count = Spi::get_one::<i64>(
+            "SELECT COUNT(*) FROM date_events
+             WHERE id BETWEEN
+                 '2024-01-01'::timestamp::ulid AND
+                 '2024-01-02'::timestamp::ulid",
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(
+            count, 1,
+            "BETWEEN '2024-01-01'::timestamp::ulid AND '2024-01-02'::timestamp::ulid \
+             should capture events on 2024-01-01"
+        );
+    }
+
+    /// Verify date literal matches explicit UTC timestamptz when casting to
+    /// ULID
+    #[pg_test]
+    fn date_literal_matches_utc_timestamptz() {
+        Spi::run("SET TIME ZONE 'UTC'").unwrap();
+
+        let ulid_from_date = Spi::get_one::<ULID>("SELECT '2024-01-01'::timestamp::ulid")
+            .unwrap()
+            .unwrap();
+
+        let ulid_from_tsz =
+            Spi::get_one::<ULID>("SELECT '2024-01-01 00:00:00+00'::timestamptz::ulid")
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(
+            ulid_from_date, ulid_from_tsz,
+            "Date literal '2024-01-01'::timestamp::ulid should equal explicit UTC timestamptz::ulid"
+        );
+    }
 }
 
 #[cfg(test)]
