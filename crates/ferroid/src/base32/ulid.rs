@@ -549,7 +549,7 @@ mod alloc_test {
 mod test {
     use crate::{
         base32::{Base32UlidExt, Error},
-        id::{ULID, UlidId},
+        id::ULID,
     };
 
     #[test]

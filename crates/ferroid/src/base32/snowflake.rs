@@ -596,10 +596,7 @@ mod alloc_test {
 mod test {
     use crate::{
         base32::{Base32SnowExt, Error},
-        id::{
-            SnowflakeDiscordId, SnowflakeId, SnowflakeInstagramId, SnowflakeMastodonId,
-            SnowflakeTwitterId,
-        },
+        id::{SnowflakeDiscordId, SnowflakeInstagramId, SnowflakeMastodonId, SnowflakeTwitterId},
     };
 
     #[test]

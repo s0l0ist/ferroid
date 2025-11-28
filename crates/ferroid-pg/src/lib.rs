@@ -31,7 +31,7 @@ type Bytes = <<InnerULID as Id>::Ty as BeBytes>::ByteArray;
 /// - Fixed width: 16 bytes
 /// - Representation: big-endian binary ULID
 /// - Passed by reference (not by value)
-/// - Optimized for B-tree indexing by creation time
+/// - Optimized for B-tree indexing
 #[derive(
     Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, PostgresHash, PostgresEq, PostgresOrd,
 )]
@@ -63,6 +63,8 @@ impl ULID {
 
     #[inline(always)]
     pub(crate) fn timestamp(&self) -> i64 {
+        // The ULID timestamp is 48 bits, which always fits in i64 (63 bits) so
+        // this cast is guaranteed not to overflow.
         self.to_inner().timestamp() as i64
     }
 }
@@ -186,19 +188,16 @@ unsafe impl SqlTranslatable for ULID {
 #[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
 fn ulid_in(input: &core::ffi::CStr) -> ULID {
     InnerULID::decode(input.to_bytes())
-        .map(ULID::from_inner)
+        .map(ULID::from)
         .unwrap_or_else(|e| pgrx::error!("invalid ULID: {}", e))
 }
 
 #[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
 fn ulid_out(ulid: ULID) -> &'static core::ffi::CStr {
-    let encoded = ulid.to_inner().encode();
+    let encoded = InnerULID::from(ulid).encode();
     let bytes = encoded.as_bytes();
-    let len = bytes
-        .len()
-        .try_into()
-        .unwrap_or_else(|e| pgrx::error!("ULID base32 length overflowed i32: {}", e));
-
+    // Safe to cast as this is always 26 bytes
+    let len = bytes.len() as i32;
     let mut s = StringInfo::with_capacity(len);
     s.push_bytes(bytes);
     // SAFETY:
@@ -222,13 +221,13 @@ fn ulid_out(ulid: ULID) -> &'static core::ffi::CStr {
 /// Monotonic ULIDs guarantee ordering within the same millisecond
 #[pg_extern(strict, parallel_safe)]
 fn gen_ulid_mono() -> ULID {
-    ULID::from_inner(Ulid::new_ulid_mono())
+    Ulid::new_ulid_mono().into()
 }
 
 /// Generate a new random ULID (non-monotonic)
 #[pg_extern(strict, parallel_safe)]
 fn gen_ulid() -> ULID {
-    ULID::from_inner(Ulid::new_ulid())
+    Ulid::new_ulid().into()
 }
 
 // ============================================================================
@@ -242,7 +241,7 @@ const PG_EPOCH_OFFSET_MICROS: i64 = 946_684_800_000_000;
 /// Cast ULID to timestamptz (requires explicit cast)
 #[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_timestamptz(ulid: ULID) -> TimestampWithTimeZone {
-    let ms = ulid.to_inner().timestamp() as i64;
+    let ms = ulid.timestamp();
     let unix_micros = ms
         .checked_mul(1_000)
         .unwrap_or_else(|| pgrx::error!("ULID timestamp overflow"));
@@ -272,7 +271,7 @@ fn timestamptz_to_ulid(ts: TimestampWithTimeZone) -> ULID {
         .and_then(|v| u128::try_from(v).ok())
         .unwrap_or_else(|| pgrx::error!("timestamp before Unix epoch (1970-01-01)"));
 
-    ULID::from_inner(InnerULID::from(ms, 0))
+    InnerULID::from_components(ms, 0).into()
 }
 
 /// Cast ULID to timestamp (requires explicit cast)
@@ -291,7 +290,7 @@ fn timestamp_to_ulid(ts: Timestamp) -> ULID {
 #[pg_cast(immutable, parallel_safe, strict)]
 fn text_to_ulid(text: &str) -> ULID {
     InnerULID::decode(text)
-        .map(ULID::from_inner)
+        .map(ULID::from)
         .unwrap_or_else(|e| pgrx::error!("invalid ULID text: {}", e))
 }
 
@@ -528,8 +527,8 @@ mod tests {
     /// Verify Rust-level comparison operators
     #[pg_test]
     fn comparison_rust_operators() {
-        let low = ULID::from_inner(InnerULID::from_timestamp(1000));
-        let high = ULID::from_inner(InnerULID::from_timestamp(2000));
+        let low = ULID::from(InnerULID::from_timestamp(1000));
+        let high = ULID::from(InnerULID::from_timestamp(2000));
 
         assert_eq!(low, low);
         assert_ne!(low, high);
@@ -655,10 +654,10 @@ mod tests {
     /// Verify edge case: epoch timestamp
     #[pg_test]
     fn timestamp_epoch() {
-        let ulid_zero = ULID::from_inner(InnerULID::from_timestamp(0));
+        let ulid_zero = ULID::from(InnerULID::from_timestamp(0));
         assert_eq!(ulid_zero.timestamp(), 0);
 
-        let ulid_small = ULID::from_inner(InnerULID::from_timestamp(1000));
+        let ulid_small = ULID::from(InnerULID::from_timestamp(1000));
         assert_eq!(ulid_small.timestamp(), 1000);
     }
 
