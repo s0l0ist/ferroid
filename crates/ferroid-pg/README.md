@@ -1,0 +1,118 @@
+# pg_ferroid
+
+PostgreSQL extension for ULID (Universally Unique Lexicographically Sortable
+Identifier) support, built with
+[pgrx](https://github.com/pgcentralfoundation/pgrx) and
+[ferroid](https://github.com/s0l0ist/ferroid/tree/main/crates/ferroid).
+
+## Features
+
+- Native `ulid` type with 16-byte storage
+- Lexicographically sortable with timestamp ordering
+- Base32 encoding (26-character strings)
+- Monotonic generation for ordered inserts
+- Full indexing and comparison support
+
+## Installation
+
+```bash
+cargo pgrx install
+```
+
+## Quick Start
+
+```sql
+-- Generate ULIDs
+SELECT gen_ulid();              -- Random per millisecond
+SELECT gen_ulid_mono();         -- Monotonic per millisecond
+
+-- Use as primary key
+CREATE TABLE users (
+    id ulid PRIMARY KEY DEFAULT gen_ulid_mono(),
+    name text
+);
+
+-- Insert some records
+INSERT INTO users (name) VALUES ('alice'), ('bob'), ('charlie');
+
+-- View records with timestamps
+SELECT id, id::timestamptz as created_at, name FROM users;
+
+-- Validate
+SELECT ulid_is_valid('01JEPY8K5V3XQZW6M9N7P8Q2RT');
+```
+
+## Range Queries
+
+ULIDs are naturally sortable by timestamp, making time-based queries efficient:
+
+```sql
+-- Query by time range (convert timestamp to ULID for index usage)
+SELECT * FROM users
+WHERE id >= '2025-01-01 00:00:00+00'::timestamptz::ulid
+  AND id < '2026-01-01 00:00:00+00'::timestamptz::ulid;
+
+-- Or using timestamp (without timezone)
+SELECT * FROM users
+WHERE id >= '2025-01-01'::timestamp::ulid
+  AND id < '2026-01-01'::timestamp::ulid;
+
+-- Last 24 hours
+SELECT * FROM users
+WHERE id >= (now() - interval '24 hours')::ulid;
+
+-- Most recent records (ULIDs are naturally time-ordered)
+SELECT * FROM users
+ORDER BY id DESC
+LIMIT 10;
+
+-- Compare ULIDs directly
+SELECT * FROM users
+WHERE id > '01JEPY8K5V3XQZW6M9N7P8Q2RT'::ulid;
+```
+
+## Type Conversions
+
+All casts require explicit `::` syntax:
+
+```sql
+'01JEPY8K5V3XQZW6M9N7P8Q2RT'::ulid  -- text to ulid
+gen_ulid()::text                    -- ulid to text
+now()::ulid                         -- timestamp to ulid
+gen_ulid()::timestamptz             -- ulid to timestamp
+```
+
+## ULID Format
+
+```
+01AN4Z07BY79KA1307SR9X4MV3
+|--------||--------------|
+Timestamp   Randomness
+ (10)         (16)
+```
+
+- 128 bits total (48-bit timestamp + 80-bit random)
+- Sortable by creation time
+- Millisecond precision
+
+## Functions
+
+- `gen_ulid()` - Generate random ULID
+- `gen_ulid_mono()` - Generate monotonic ULID (maintains order within same
+  millisecond)
+- `ulid_is_valid(text)` - Validate ULID string
+
+## License
+
+Licensed under either of:
+
+- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  ([LICENSE-APACHE](LICENSE-APACHE))
+- [MIT License](https://opensource.org/licenses/MIT)
+  ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
+dual licensed as above, without any additional terms or conditions.
