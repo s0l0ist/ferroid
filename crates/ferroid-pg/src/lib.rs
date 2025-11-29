@@ -20,7 +20,7 @@ pgrx::pg_module_magic!();
 // ULID
 // ============================================================================
 
-type Bytes = <<InnerULID as Id>::Ty as BeBytes>::ByteArray;
+pub type Bytes = <<InnerULID as Id>::Ty as BeBytes>::ByteArray;
 
 /// A PostgreSQL ULID type backed by `ferroid`.
 ///
@@ -37,7 +37,7 @@ type Bytes = <<InnerULID as Id>::Ty as BeBytes>::ByteArray;
 )]
 #[repr(transparent)]
 pub struct ULID {
-    bytes: Bytes,
+    pub(crate) bytes: Bytes,
 }
 
 impl ULID {
