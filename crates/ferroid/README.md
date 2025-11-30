@@ -124,7 +124,7 @@ use ferroid::{generator::thread_local::Ulid, id::ULID};
 let id: ULID = Ulid::new_ulid();
 
 // A monotonic ULID (faster, increments within the same millisecond)
-let id: ULID = Ulid::new_mono_ulid();
+let id: ULID = Ulid::new_ulid_mono();
 ```
 
 **Note**: Thread-local generators are not currently available for

@@ -25,17 +25,26 @@ pub trait Base32Ext: Id
 where
     Self::Ty: BeBytes,
 {
+    /// Allocates a default, zero-initialized buffer for the backing integer of
+    /// the ID.
+    ///
+    /// This is a convenience method that returns a [`BeBytes::ByteArray`].
+    #[inline]
+    fn inner_byte_array() -> <Self::Ty as BeBytes>::ByteArray {
+        <Self::Ty as BeBytes>::ByteArray::default()
+    }
+
     /// Allocates a default, zero-initialized buffer for Base32 encoding.
     ///
     /// This is a convenience method that returns a [`BeBytes::Base32Array`]
-    /// suitable for use with [`Base32Ext::enc_to_buf`]. The returned buffer is
+    /// suitable for use with [`Base32Ext::inner_encode_to_buf`]. The returned buffer is
     /// stack-allocated, has a fixed size known at compile time, and is
     /// guaranteed to match the Crockford Base32 output size for the backing
     /// integer type.
     ///
     /// See also: [`Base32Ext::inner_encode_to_buf`] for usage.
     #[inline]
-    fn inner_buf() -> <Self::Ty as BeBytes>::Base32Array {
+    fn inner_base32_array() -> <Self::Ty as BeBytes>::Base32Array {
         <Self::Ty as BeBytes>::Base32Array::default()
     }
     /// Encodes this ID into the provided output buffer without heap allocation.

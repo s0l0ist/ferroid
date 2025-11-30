@@ -50,7 +50,7 @@ where
         });
     });
     group.bench_function("encode_to_buf", |b| {
-        let mut buf = ID::buf();
+        let mut buf = ID::base32_array();
         b.iter(|| {
             let b = id.encode_to_buf(&mut buf);
             black_box(b);
@@ -84,7 +84,7 @@ where
         });
     });
     group.bench_function("encode_to_buf", |b| {
-        let mut buf = ID::buf();
+        let mut buf = ID::base32_array();
         b.iter(|| {
             let b = id.encode_to_buf(&mut buf);
             black_box(b);
@@ -107,9 +107,9 @@ fn bench_ulid_constructors(c: &mut Criterion, group_name: &str) {
             black_box(ULID::now());
         });
     });
-    group.bench_function("from", |b| {
+    group.bench_function("from_components", |b| {
         b.iter(|| {
-            black_box(ULID::from(41, 42));
+            black_box(ULID::from_components(41, 42));
         });
     });
     group.bench_function("from_timestamp", |b| {
@@ -128,9 +128,9 @@ fn bench_ulid_constructors(c: &mut Criterion, group_name: &str) {
 fn bench_snow_constructors(c: &mut Criterion, group_name: &str) {
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
-    group.bench_function("from", |b| {
+    group.bench_function("from_components", |b| {
         b.iter(|| {
-            black_box(SnowflakeTwitterId::from(40, 41, 42));
+            black_box(SnowflakeTwitterId::from_components(40, 41, 42));
         });
     });
     group.finish();
@@ -143,9 +143,9 @@ fn bench_ulid_thread_local(c: &mut Criterion, group_name: &str) {
             black_box(Ulid::new_ulid());
         });
     });
-    group.bench_function("new_mono_ulid", |b| {
+    group.bench_function("new_ulid_mono", |b| {
         b.iter(|| {
-            black_box(Ulid::new_mono_ulid());
+            black_box(Ulid::new_ulid_mono());
         });
     });
     group.bench_function("from_timestamp", |b| {
