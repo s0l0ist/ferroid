@@ -1,5 +1,5 @@
 [package]
-name = "ferroid_pg"
+name = "pg_ulid"
 version = "0.0.0"
 edition = "2021"
 
@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib", "lib"]
 
 [[bin]]
-name = "pgrx_embed_ferroid_pg"
+name = "pgrx_embed_pg_ulid"
 path = "./src/bin/pgrx_embed.rs"
 
 [features]
@@ -22,7 +22,7 @@ pg_test = []
 
 [dependencies]
 pgrx = { workspace = true }
-ferroid = { version = "0.8.7", path = "../ferroid", features = ["ulid", "thread-local", "base32", "serde"] }
+ferroid = { version = "0.8.7", path = "../ferroid", features = ["ulid", "thread-local", "base32"] }
 serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]

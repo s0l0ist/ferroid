@@ -2,9 +2,9 @@
 resolver = "3"
 members = [
     "crates/ferroid",
-    "crates/ferroid-pg",
     "crates/ferroid-tonic-core",
     "crates/ferroid-tonic-server",
+    "crates/pg-ulid",
 ]
 
 [workspace.package]

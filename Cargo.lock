@@ -860,16 +860,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ferroid_pg"
-version = "0.0.0"
-dependencies = [
- "ferroid",
- "pgrx",
- "pgrx-tests",
- "serde",
-]
-
-[[package]]
 name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1810,6 +1800,16 @@ dependencies = [
  "fixedbitset",
  "hashbrown 0.15.5",
  "indexmap",
+ "serde",
+]
+
+[[package]]
+name = "pg_ulid"
+version = "0.0.0"
+dependencies = [
+ "ferroid",
+ "pgrx",
+ "pgrx-tests",
  "serde",
 ]
 

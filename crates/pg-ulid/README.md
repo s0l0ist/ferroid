@@ -23,8 +23,8 @@ cargo pgrx install
 
 ```sql
 -- Generate ULIDs
-SELECT gen_ulid();              -- Random per millisecond
-SELECT gen_ulid_mono();         -- Monotonic per millisecond
+SELECT gen_ulid();       -- Time-ordered ULID with a random tail
+SELECT gen_ulid_mono();  -- Monotonic ULID per backend/thread
 
 -- Use as primary key
 CREATE TABLE users (
@@ -101,6 +101,40 @@ Timestamp   Randomness
 - `gen_ulid_mono()` - Generate monotonic ULID (maintains order within same
   millisecond)
 - `ulid_is_valid(text)` - Validate ULID string
+
+## ULID vs UUID (v7)
+
+### gen_ulid()
+
+- 48-bit millisecond timestamp + 80-bit random tail.
+- Time-sorted in B-tree indexes, but not strictly increasing within the same
+  millisecond.
+- Uses a fast thread-local ChaCha-based RNG.
+
+### gen_ulid_mono()
+
+- Same 48+80 layout, but:
+  - On each new millisecond, picks a random 80-bit starting value.
+  - Within that millisecond, increments the 80-bit tail for each call.
+- Result: IDs are strictly increasing per backend/thread within a millisecond,
+  with very strong collision resistance and low overhead.
+
+### Comparison with PostgreSQL uuidv7()
+
+PostgreSQL's built-in uuidv7():
+
+- Uses a 48-bit ms timestamp + 12-bit sub-ms fraction + ~62 random bits.
+- Enforces per-backend monotonic timestamps via a high-resolution clock.
+- Draws fresh random bits from the OS CSPRNG (`pg_strong_random`) on every call.
+
+In spirit:
+
+- `gen_ulid_mono()` is to ULIDs what `uuidv7()` is to UUIDs: both are
+  per-backend monotonic, time-sortable ID generators, but `gen_ulid_mono()`
+  keeps more random bits (80) and uses a cheap thread-local RNG, making it very
+  fast and extremely collision-resistant for typical Postgres workloads, at the
+  cost of finer time granularity. If you need sub-millisecond time ordering,
+  PostgreSQL’s `uuidv7()` may be preferable.
 
 ## License
 
