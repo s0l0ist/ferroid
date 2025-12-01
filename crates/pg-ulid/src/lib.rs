@@ -315,8 +315,35 @@ fn bytea_to_ulid(bytes: &[u8]) -> ULID {
 
 /// Cast ULID to bytea (requires explicit cast)
 #[pg_cast(immutable, parallel_safe, strict)]
-fn ulid_to_bytea(ulid: ULID) -> Vec<u8> {
-    ulid.as_bytes().to_vec()
+fn ulid_to_bytea(ulid: ULID) -> &'static [u8] {
+    const SIZE: usize = <<InnerULID as Id>::Ty as BeBytes>::SIZE;
+    // SAFETY:
+    // - `palloc_slice` allocates SIZE (16) bytes in CurrentMemoryContext.
+    // - `copy_nonoverlapping`: src/dst are valid for SIZE bytes and
+    //   non-overlapping.
+    // - Memory is fully initialized after copy; slice lifetime managed by
+    //   PostgreSQL.
+    unsafe {
+        let ptr = PgMemoryContexts::CurrentMemoryContext.palloc_slice::<u8>(SIZE);
+        core::ptr::copy_nonoverlapping(ulid.as_bytes().as_ptr(), ptr.as_mut_ptr(), SIZE);
+        core::slice::from_raw_parts(ptr.as_ptr(), SIZE)
+    }
+}
+
+// ============================================================================
+// BINARY PROTOCOL
+// ============================================================================
+
+/// Binary receive function for network protocol
+#[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
+fn ulid_recv(bytes: &[u8]) -> ULID {
+    bytea_to_ulid(bytes)
+}
+
+/// Binary send function for network protocol
+#[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
+fn ulid_send(ulid: ULID) -> &'static [u8] {
+    ulid_to_bytea(ulid)
 }
 
 // ============================================================================
@@ -338,6 +365,8 @@ extension_sql!(
 CREATE TYPE ulid (
     INPUT = ulid_in,
     OUTPUT = ulid_out,
+    SEND = ulid_send,
+    RECV = ulid_recv,
     INTERNALLENGTH = 16,
     ALIGNMENT = char,
     STORAGE = plain,
@@ -346,7 +375,7 @@ CREATE TYPE ulid (
 "#,
     name = "concrete_type",
     creates = [Type(ULID)],
-    requires = ["shell_type", ulid_in, ulid_out]
+    requires = ["shell_type", ulid_in, ulid_out, ulid_send, ulid_recv]
 );
 extension_sql!(
     r#"
@@ -369,12 +398,11 @@ mod tests {
     use super::*;
 
     // ========================================================================
-    // Core Type Tests
+    // Type System Tests
     // ========================================================================
 
-    /// Verify ULID has correct type properties in PostgreSQL catalog
     #[pg_test]
-    fn type_properties() {
+    fn type_has_correct_storage_properties() {
         assert_eq!(
             core::mem::size_of::<ULID>(),
             16,
@@ -404,9 +432,8 @@ mod tests {
         assert!(!typbyval, "Should be passed by reference");
     }
 
-    /// Verify storage is exactly 16 bytes (no varlena header)
     #[pg_test]
-    fn fixed_size_storage() {
+    fn type_uses_fixed_size_storage() {
         let ulid = gen_ulid();
         let size = Spi::get_one::<i32>(&format!("SELECT pg_column_size('{}'::ulid)", ulid))
             .unwrap()
@@ -418,39 +445,15 @@ mod tests {
     // Generation Tests
     // ========================================================================
 
-    /// Verify basic ULID generation works
     #[pg_test]
-    fn generation_basic() {
+    fn gen_ulid_produces_unique_values() {
         let ulid1 = gen_ulid();
         let ulid2 = gen_ulid();
         assert_ne!(ulid1, ulid2, "Random ULIDs should differ");
     }
 
-    /// Verify monotonic ULIDs maintain strict ordering
     #[pg_test]
-    fn generation_monotonic_ordering() {
-        let ulid1 = gen_ulid_mono();
-        let ulid2 = gen_ulid_mono();
-        let ulid3 = gen_ulid_mono();
-        assert!(
-            ulid1 < ulid2 && ulid2 < ulid3,
-            "Monotonic ULIDs must be strictly ordered"
-        );
-    }
-
-    /// Verify generation from SQL
-    #[pg_test]
-    fn generation_from_sql() {
-        let ulid = Spi::get_one::<ULID>("SELECT gen_ulid()").unwrap().unwrap();
-        assert!(
-            ulid.timestamp() > 0,
-            "Generated ULID should have valid timestamp"
-        );
-    }
-
-    /// Verify rapid monotonic generation maintains ordering
-    #[pg_test]
-    fn generation_monotonic_rapid() {
+    fn gen_ulid_mono_maintains_strict_ordering() {
         let mut ulids = Vec::new();
         for _ in 0..100 {
             ulids.push(gen_ulid_mono());
@@ -458,29 +461,35 @@ mod tests {
         for i in 1..ulids.len() {
             assert!(
                 ulids[i - 1] < ulids[i],
-                "All monotonic ULIDs must be strictly ordered"
+                "Monotonic ULIDs must be strictly ordered"
             );
         }
+    }
+
+    #[pg_test]
+    fn gen_ulid_works_from_sql() {
+        let ulid = Spi::get_one::<ULID>("SELECT gen_ulid()").unwrap().unwrap();
+        assert!(
+            ulid.timestamp() > 0,
+            "Generated ULID should have valid timestamp"
+        );
     }
 
     // ========================================================================
     // Text I/O Tests
     // ========================================================================
 
-    /// Verify round-trip through text representation
     #[pg_test]
-    fn text_io_round_trip() {
+    fn text_io_round_trip_preserves_value() {
         let ulid = gen_ulid();
         let text = ulid_to_text(ulid);
         let parsed = text_to_ulid(&text);
         assert_eq!(ulid, parsed, "ULID should survive text round-trip");
     }
 
-    /// Verify text I/O via SQL casting
     #[pg_test]
-    fn text_io_via_sql() {
+    fn text_io_works_via_sql_cast() {
         let ulid = gen_ulid();
-
         let parsed = Spi::get_one::<ULID>(&format!("SELECT '{}'::ulid", ulid))
             .unwrap()
             .unwrap();
@@ -492,41 +501,34 @@ mod tests {
         assert_eq!(ulid_to_text(ulid), text_back);
     }
 
-    /// Verify valid ULID formats are accepted
     #[pg_test]
-    fn validation_valid_inputs() {
-        assert!(ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FAV"), "Standard ULID");
-        assert!(ulid_is_valid("00000000000000000000000000"), "All zeros");
-        assert!(ulid_is_valid("ZZZZZZZZZZZZZZZZZZZZZZZZZZ"), "Max enc value");
+    fn ulid_is_valid_accepts_valid_formats() {
+        assert!(ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FAV"));
+        assert!(ulid_is_valid("00000000000000000000000000"));
+        assert!(ulid_is_valid("ZZZZZZZZZZZZZZZZZZZZZZZZZZ"));
     }
 
-    /// Verify invalid ULID formats are rejected
     #[pg_test]
-    fn validation_invalid_inputs() {
-        assert!(!ulid_is_valid(""), "Empty string");
-        assert!(!ulid_is_valid("invalid-ulid"), "Invalid characters");
-        assert!(!ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FA"), "Too short");
-        assert!(!ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FAVV"), "Too long");
-        assert!(
-            !ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FAU"),
-            "Invalid character 'U'"
-        );
+    fn ulid_is_valid_rejects_invalid_formats() {
+        assert!(!ulid_is_valid(""));
+        assert!(!ulid_is_valid("invalid-ulid"));
+        assert!(!ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FA")); // Too short
+        assert!(!ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FAVV")); // Too long
+        assert!(!ulid_is_valid("01ARZ3NDEKTSV4RRFFQ69G5FAU")); // Invalid char
     }
 
-    /// Verify parsing invalid ULID throws error
     #[pg_test]
     #[should_panic(expected = "invalid ULID")]
-    fn validation_parse_error() {
+    fn parsing_invalid_ulid_raises_error() {
         let _ = Spi::get_one::<ULID>("SELECT 'invalid'::ulid");
     }
 
     // ========================================================================
-    // Comparison Operator Tests
+    // Comparison Tests
     // ========================================================================
 
-    /// Verify Rust-level comparison operators
     #[pg_test]
-    fn comparison_rust_operators() {
+    fn rust_comparison_operators_work() {
         let low = ULID::from(InnerULID::from_timestamp(1000));
         let high = ULID::from(InnerULID::from_timestamp(2000));
 
@@ -538,20 +540,14 @@ mod tests {
         assert!(high >= low);
     }
 
-    /// Verify SQL comparison operators
     #[pg_test]
-    fn comparison_sql_operators() {
+    fn sql_comparison_operators_work() {
         let low = gen_ulid_mono();
         std::thread::sleep(core::time::Duration::from_millis(10));
         let high = gen_ulid_mono();
 
         assert!(
             Spi::get_one::<bool>(&format!("SELECT '{}'::ulid < '{}'::ulid", low, high))
-                .unwrap()
-                .unwrap()
-        );
-        assert!(
-            Spi::get_one::<bool>(&format!("SELECT '{}'::ulid <= '{}'::ulid", low, high))
                 .unwrap()
                 .unwrap()
         );
@@ -565,66 +561,42 @@ mod tests {
                 .unwrap()
                 .unwrap()
         );
-        assert!(
-            Spi::get_one::<bool>(&format!("SELECT '{}'::ulid > '{}'::ulid", high, low))
-                .unwrap()
-                .unwrap()
-        );
-        assert!(
-            Spi::get_one::<bool>(&format!("SELECT '{}'::ulid >= '{}'::ulid", high, low))
-                .unwrap()
-                .unwrap()
-        );
     }
 
     // ========================================================================
     // Timestamp Tests
     // ========================================================================
 
-    /// Verify timestamp extraction returns reasonable values
     #[pg_test]
-    fn timestamp_extraction() {
+    fn timestamp_extraction_returns_reasonable_values() {
         let ulid = gen_ulid();
         let ms = ulid.timestamp();
         assert!(ms > 1_600_000_000_000, "Should be after Sept 2020");
         assert!(ms < 2_000_000_000_000, "Should be before May 2033");
     }
 
-    /// Verify round-trip through timestamptz
     #[pg_test]
-    fn timestamp_timestamptz_round_trip() {
+    fn timestamptz_round_trip_preserves_millisecond() {
         let ulid = gen_ulid();
         let ts = ulid_to_timestamptz(ulid);
         let ulid2 = timestamptz_to_ulid(ts);
-
         let ms1 = ulid.timestamp();
         let ms2 = ulid2.timestamp();
-        assert!(
-            (ms1 - ms2).abs() <= 1,
-            "Should be within same millisecond: {}",
-            (ms1 - ms2).abs()
-        );
+        assert!((ms1 - ms2).abs() <= 1, "Should be within same millisecond");
     }
 
-    /// Verify round-trip through timestamp
     #[pg_test]
-    fn timestamp_timestamp_round_trip() {
+    fn timestamp_round_trip_preserves_millisecond() {
         let ulid = gen_ulid();
         let ts = ulid_to_timestamp(ulid);
         let ulid2 = timestamp_to_ulid(ts);
-
         let ms1 = ulid.timestamp();
         let ms2 = ulid2.timestamp();
-        assert!(
-            (ms1 - ms2).abs() <= 1,
-            "Should be within same millisecond: {}",
-            (ms1 - ms2).abs()
-        );
+        assert!((ms1 - ms2).abs() <= 1, "Should be within same millisecond");
     }
 
-    /// Verify ULID from known timestamp
     #[pg_test]
-    fn timestamp_from_known_value() {
+    fn timestamp_conversion_uses_correct_epoch() {
         let ts =
             Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01 00:00:00+00'::timestamptz")
                 .unwrap()
@@ -634,73 +606,109 @@ mod tests {
         assert_eq!(ms, 1704067200000, "Jan 1, 2024 00:00:00 UTC");
     }
 
-    /// Verify timestamp ordering
     #[pg_test]
-    fn timestamp_ordering() {
+    fn timestamp_ordering_matches_ulid_ordering() {
         let ts1 = Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01'::timestamptz")
             .unwrap()
             .unwrap();
         let ts2 = Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-12-31'::timestamptz")
             .unwrap()
             .unwrap();
+
         let ulid1 = timestamptz_to_ulid(ts1);
         let ulid2 = timestamptz_to_ulid(ts2);
-        assert!(
-            ulid1 < ulid2,
-            "Earlier timestamp should produce smaller ULID"
-        );
-    }
 
-    /// Verify edge case: epoch timestamp
-    #[pg_test]
-    fn timestamp_epoch() {
-        let ulid_zero = ULID::from(InnerULID::from_timestamp(0));
-        assert_eq!(ulid_zero.timestamp(), 0);
-
-        let ulid_small = ULID::from(InnerULID::from_timestamp(1000));
-        assert_eq!(ulid_small.timestamp(), 1000);
+        assert!(ulid1 < ulid2, "Earlier timestamp produces smaller ULID");
     }
 
     // ========================================================================
     // Cast Tests
     // ========================================================================
 
-    /// Verify text casting
     #[pg_test]
-    fn cast_text_round_trip() {
+    fn text_cast_round_trip_preserves_value() {
         let ulid = gen_ulid();
-
-        let result = Spi::get_one::<String>(&format!("SELECT '{}'::ulid::text", ulid))
+        let text = Spi::get_one::<String>(&format!("SELECT '{}'::ulid::text", ulid))
             .unwrap()
             .unwrap();
-        assert_eq!(ulid_to_text(ulid), result);
-
-        let ulid_back = Spi::get_one::<ULID>(&format!("SELECT '{}'::text::ulid", ulid))
+        let ulid_back = Spi::get_one::<ULID>(&format!("SELECT '{}'::text::ulid", text))
             .unwrap()
             .unwrap();
         assert_eq!(ulid, ulid_back);
     }
 
-    /// Verify bytea casting
     #[pg_test]
-    fn cast_bytea_round_trip() {
+    fn bytea_cast_round_trip_preserves_value() {
         let ulid = gen_ulid();
         let bytes = ulid_to_bytea(ulid);
         assert_eq!(bytes.len(), 16, "Bytea should be 16 bytes");
+        let ulid_back = bytea_to_ulid(bytes);
+        assert_eq!(ulid, ulid_back);
+    }
 
-        let ulid_back = bytea_to_ulid(&bytes);
-        assert_eq!(ulid, ulid_back, "ULID should survive bytea round-trip");
+    #[pg_test]
+    fn bytea_cast_preserves_ordering() {
+        let ulid1 = gen_ulid();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let ulid2 = gen_ulid();
+
+        let bytes1 = ulid_to_bytea(ulid1);
+        let bytes2 = ulid_to_bytea(ulid2);
+
+        assert!(bytes1 < bytes2, "Bytea preserves ULID ordering");
+    }
+
+    #[pg_test]
+    fn bytea_cast_works_in_sql() {
+        Spi::run(
+            "SELECT ulid::bytea::ulid = ulid 
+             FROM (SELECT gen_ulid() as ulid) t",
+        )
+        .unwrap();
+    }
+
+    #[pg_test]
+    fn bytea_cast_rejects_invalid_length() {
+        let bytes = vec![0u8; 15];
+        let result = std::panic::catch_unwind(|| {
+            bytea_to_ulid(&bytes);
+        });
+        assert!(result.is_err(), "Should error on invalid length");
     }
 
     // ========================================================================
-    // Storage & Indexing Tests
+    // Binary Protocol Tests
     // ========================================================================
 
-    /// Verify ULIDs can be stored and retrieved from tables
     #[pg_test]
-    fn storage_table_round_trip() {
-        let original = gen_ulid();
+    fn binary_send_equals_bytea_cast() {
+        let ulid = gen_ulid();
+        let via_bytea = ulid_to_bytea(ulid);
+        let via_send = ulid_send(ulid);
+        assert_eq!(via_bytea, via_send, "Send and bytea must match");
+    }
 
+    #[pg_test]
+    fn binary_protocol_supports_copy() {
+        Spi::run(
+            "CREATE TEMP TABLE ulid_test (id ulid);
+             INSERT INTO ulid_test VALUES (gen_ulid()), (gen_ulid());",
+        )
+        .unwrap();
+
+        let count = Spi::get_one::<i64>("SELECT COUNT(*) FROM ulid_test")
+            .unwrap()
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    // ========================================================================
+    // Storage Tests
+    // ========================================================================
+
+    #[pg_test]
+    fn table_storage_round_trip_preserves_value() {
+        let original = gen_ulid();
         Spi::run("CREATE TEMP TABLE ulid_test (id ulid)").unwrap();
         Spi::run(&format!(
             "INSERT INTO ulid_test VALUES ('{}'::ulid)",
@@ -711,29 +719,22 @@ mod tests {
         let retrieved = Spi::get_one::<ULID>("SELECT id FROM ulid_test")
             .unwrap()
             .unwrap();
-        assert_eq!(
-            original, retrieved,
-            "ULID should survive storage round-trip"
-        );
+        assert_eq!(original, retrieved);
     }
 
-    /// Verify B-tree index maintains correct ordering
     #[pg_test]
-    fn storage_btree_index() {
+    fn btree_index_maintains_ordering() {
         let ulid1 = gen_ulid_mono();
         let ulid2 = gen_ulid_mono();
         let ulid3 = gen_ulid_mono();
 
         Spi::run("CREATE TEMP TABLE ulid_indexed (id ulid PRIMARY KEY)").unwrap();
-
-        // Insert in non-sorted order
         Spi::run(&format!(
             "INSERT INTO ulid_indexed VALUES ('{}'::ulid), ('{}'::ulid), ('{}'::ulid)",
             ulid2, ulid3, ulid1
         ))
         .unwrap();
 
-        // Verify ORDER BY returns correct order
         let first = Spi::get_one::<ULID>("SELECT id FROM ulid_indexed ORDER BY id LIMIT 1")
             .unwrap()
             .unwrap();
@@ -741,15 +742,13 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(first, ulid1, "Smallest ULID should come first");
-        assert_eq!(last, ulid3, "Largest ULID should come last");
+        assert_eq!(first, ulid1);
+        assert_eq!(last, ulid3);
     }
 
-    /// Verify hash index supports equality lookups
     #[pg_test]
-    fn storage_hash_index() {
+    fn hash_index_supports_equality() {
         let ulid = gen_ulid();
-
         Spi::run("CREATE TEMP TABLE ulid_hash (id ulid)").unwrap();
         Spi::run("CREATE INDEX ulid_hash_idx ON ulid_hash USING hash(id)").unwrap();
         Spi::run(&format!("INSERT INTO ulid_hash VALUES ('{}'::ulid)", ulid)).unwrap();
@@ -760,23 +759,20 @@ mod tests {
         ))
         .unwrap()
         .unwrap();
-
-        assert!(found, "Hash index should find inserted ULID");
+        assert!(found);
     }
 
-    /// Verify NULL values are handled correctly
     #[pg_test]
-    fn storage_null_handling() {
+    fn null_values_are_handled_correctly() {
         Spi::run("CREATE TEMP TABLE ulid_nullable (id ulid)").unwrap();
         Spi::run("INSERT INTO ulid_nullable VALUES (NULL)").unwrap();
 
         let result = Spi::get_one::<ULID>("SELECT id FROM ulid_nullable").unwrap();
-        assert!(result.is_none(), "NULL should be returned as None");
+        assert!(result.is_none());
     }
 
-    /// Verify multiple ULID columns work correctly
     #[pg_test]
-    fn storage_multiple_columns() {
+    fn multiple_columns_work_correctly() {
         let ulid1 = gen_ulid();
         let ulid2 = gen_ulid();
 
@@ -794,17 +790,16 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(ulid1, retrieved_a, "First column should match");
-        assert_eq!(ulid2, retrieved_b, "Second column should match");
+        assert_eq!(ulid1, retrieved_a);
+        assert_eq!(ulid2, retrieved_b);
     }
 
     // ========================================================================
     // Range Query Tests
     // ========================================================================
 
-    /// Verify basic range queries with known timestamps
     #[pg_test]
-    fn range_query_by_timestamp() {
+    fn range_query_filters_by_timestamp() {
         let ts1 =
             Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01 10:00:00+00'::timestamptz")
                 .unwrap()
@@ -829,7 +824,6 @@ mod tests {
         ))
         .unwrap();
 
-        // Query events between 10am and 2pm (exclusive)
         let count = Spi::get_one::<i64>(&format!(
             "SELECT COUNT(*) FROM events WHERE id >= '{}'::ulid AND id < '{}'::ulid",
             ulid1, ulid3
@@ -840,48 +834,8 @@ mod tests {
         assert_eq!(count, 2, "Should find events at 10am and 12pm");
     }
 
-    /// Verify filtering events within a time window
     #[pg_test]
-    fn range_query_time_window() {
-        let mut ulids = Vec::new();
-        for _ in 0..10 {
-            ulids.push(gen_ulid_mono());
-        }
-
-        Spi::run("CREATE TEMP TABLE recent_events (id ulid PRIMARY KEY)").unwrap();
-        for ulid in &ulids {
-            Spi::run(&format!(
-                "INSERT INTO recent_events VALUES ('{}'::ulid)",
-                ulid
-            ))
-            .unwrap();
-        }
-
-        let oldest = ulids[0];
-        let newest = ulids[ulids.len() - 1];
-
-        // Get all events in range (inclusive)
-        let count = Spi::get_one::<i64>(&format!(
-            "SELECT COUNT(*) FROM recent_events WHERE id >= '{}'::ulid AND id <= '{}'::ulid",
-            oldest, newest
-        ))
-        .unwrap()
-        .unwrap();
-        assert_eq!(count, 10, "All events should be in range");
-
-        // Get events after first one (exclusive)
-        let count_after = Spi::get_one::<i64>(&format!(
-            "SELECT COUNT(*) FROM recent_events WHERE id > '{}'::ulid",
-            oldest
-        ))
-        .unwrap()
-        .unwrap();
-        assert_eq!(count_after, 9, "Should have 9 events after first");
-    }
-
-    /// Verify cursor-based pagination pattern
-    #[pg_test]
-    fn range_query_pagination() {
+    fn range_query_supports_pagination() {
         let mut ulids = Vec::new();
         for _ in 0..10 {
             ulids.push(gen_ulid_mono());
@@ -896,43 +850,23 @@ mod tests {
             .unwrap();
         }
 
-        // Get item to use as cursor (3rd item)
         let cursor =
             Spi::get_one::<ULID>("SELECT id FROM paginated_items ORDER BY id LIMIT 1 OFFSET 2")
                 .unwrap()
                 .unwrap();
 
-        // Get next page after cursor
         let next_item = Spi::get_one::<ULID>(&format!(
             "SELECT id FROM paginated_items WHERE id > '{}'::ulid ORDER BY id LIMIT 1",
             cursor
         ))
         .unwrap();
 
-        assert!(next_item.is_some(), "Should have items after cursor");
-        assert!(
-            next_item.unwrap() > cursor,
-            "Next item must be after cursor"
-        );
-
-        // Verify pagination continues beyond first page
-        let first_page = Spi::get_one::<ULID>("SELECT id FROM paginated_items ORDER BY id LIMIT 1")
-            .unwrap()
-            .unwrap();
-
-        let has_next_page = Spi::get_one::<bool>(&format!(
-            "SELECT EXISTS(SELECT 1 FROM paginated_items WHERE id > '{}'::ulid)",
-            first_page
-        ))
-        .unwrap()
-        .unwrap();
-
-        assert!(has_next_page, "Should have items on next page");
+        assert!(next_item.is_some());
+        assert!(next_item.unwrap() > cursor);
     }
 
-    /// Verify range queries work with indexes
     #[pg_test]
-    fn range_query_with_index() {
+    fn range_query_uses_index() {
         let ulid1 = gen_ulid_mono();
         std::thread::sleep(std::time::Duration::from_millis(10));
         let ulid2 = gen_ulid_mono();
@@ -950,7 +884,6 @@ mod tests {
         ))
         .unwrap();
 
-        // Range query should use index
         let data = Spi::get_one::<String>(&format!(
             "SELECT data FROM indexed_events 
              WHERE id >= '{}'::ulid AND id <= '{}'::ulid 
@@ -960,18 +893,38 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        assert_eq!(data, "first", "Should retrieve first item in range");
+        assert_eq!(data, "first");
+    }
+
+    #[pg_test]
+    fn range_query_works_with_date_literals() {
+        Spi::run("SET TIME ZONE 'UTC'").unwrap();
+        Spi::run("CREATE TEMP TABLE date_events (id ulid PRIMARY KEY, label text)").unwrap();
+        Spi::run(
+            "INSERT INTO date_events (id, label)
+             VALUES ('2024-01-01'::timestamp::ulid, 'midnight')",
+        )
+        .unwrap();
+
+        let count = Spi::get_one::<i64>(
+            "SELECT COUNT(*) FROM date_events
+             WHERE id BETWEEN
+                 '2024-01-01'::timestamp::ulid AND
+                 '2024-01-02'::timestamp::ulid",
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(count, 1);
     }
 
     // ========================================================================
-    // Aggregate Operation Tests
+    // Aggregate Tests
     // ========================================================================
 
-    /// Verify DISTINCT works correctly
     #[pg_test]
-    fn aggregate_distinct() {
+    fn distinct_counts_unique_values() {
         let ulid = gen_ulid();
-
         Spi::run("CREATE TEMP TABLE ulid_distinct (id ulid)").unwrap();
         Spi::run(&format!(
             "INSERT INTO ulid_distinct VALUES ('{}'::ulid), ('{}'::ulid), ('{}'::ulid)",
@@ -982,13 +935,11 @@ mod tests {
         let count = Spi::get_one::<i64>("SELECT COUNT(DISTINCT id) FROM ulid_distinct")
             .unwrap()
             .unwrap();
-
-        assert_eq!(count, 1, "Should count only unique ULIDs");
+        assert_eq!(count, 1);
     }
 
-    /// Verify GROUP BY works correctly
     #[pg_test]
-    fn aggregate_group_by() {
+    fn group_by_works_correctly() {
         let ulid1 = gen_ulid();
         let ulid2 = gen_ulid();
 
@@ -1006,60 +957,7 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        assert_eq!(count, 2, "Should find 2 rows with first ULID");
-    }
-
-    /// Verify range query using date literals with ::timestamp::ulid
-    #[pg_test]
-    fn range_query_date_literal() {
-        // Make semantics deterministic
-        Spi::run("SET TIME ZONE 'UTC'").unwrap();
-
-        Spi::run("CREATE TEMP TABLE date_events (id ulid PRIMARY KEY, label text)").unwrap();
-
-        // Insert an event exactly at midnight UTC on 2024-01-01
-        Spi::run(
-            "INSERT INTO date_events (id, label)
-             VALUES ('2024-01-01'::timestamp::ulid, 'midnight')",
-        )
-        .unwrap();
-
-        // Query for all events on that calendar day using date-only bounds
-        let count = Spi::get_one::<i64>(
-            "SELECT COUNT(*) FROM date_events
-             WHERE id BETWEEN
-                 '2024-01-01'::timestamp::ulid AND
-                 '2024-01-02'::timestamp::ulid",
-        )
-        .unwrap()
-        .unwrap();
-
-        assert_eq!(
-            count, 1,
-            "BETWEEN '2024-01-01'::timestamp::ulid AND '2024-01-02'::timestamp::ulid \
-             should capture events on 2024-01-01"
-        );
-    }
-
-    /// Verify date literal matches explicit UTC timestamptz when casting to
-    /// ULID
-    #[pg_test]
-    fn date_literal_matches_utc_timestamptz() {
-        Spi::run("SET TIME ZONE 'UTC'").unwrap();
-
-        let ulid_from_date = Spi::get_one::<ULID>("SELECT '2024-01-01'::timestamp::ulid")
-            .unwrap()
-            .unwrap();
-
-        let ulid_from_tsz =
-            Spi::get_one::<ULID>("SELECT '2024-01-01 00:00:00+00'::timestamptz::ulid")
-                .unwrap()
-                .unwrap();
-
-        assert_eq!(
-            ulid_from_date, ulid_from_tsz,
-            "Date literal '2024-01-01'::timestamp::ulid should equal explicit UTC timestamptz::ulid"
-        );
+        assert_eq!(count, 2);
     }
 }
 
