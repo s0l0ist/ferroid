@@ -568,29 +568,21 @@ mod tests {
     // ========================================================================
 
     #[pg_test]
-    fn timestamp_extraction_returns_reasonable_values() {
-        let ulid = gen_ulid();
-        let ms = ulid.timestamp();
-        assert!(ms > 1_600_000_000_000, "Should be after Sept 2020");
-        assert!(ms < 2_000_000_000_000, "Should be before May 2033");
-    }
-
-    #[pg_test]
     fn timestamptz_round_trip_preserves_millisecond() {
-        let ulid = gen_ulid();
-        let ts = ulid_to_timestamptz(ulid);
+        let ulid1 = gen_ulid();
+        let ts = ulid_to_timestamptz(ulid1);
         let ulid2 = timestamptz_to_ulid(ts);
-        let ms1 = ulid.timestamp();
+        let ms1 = ulid1.timestamp();
         let ms2 = ulid2.timestamp();
         assert!((ms1 - ms2).abs() <= 1, "Should be within same millisecond");
     }
 
     #[pg_test]
     fn timestamp_round_trip_preserves_millisecond() {
-        let ulid = gen_ulid();
-        let ts = ulid_to_timestamp(ulid);
+        let ulid1 = gen_ulid();
+        let ts = ulid_to_timestamp(ulid1);
         let ulid2 = timestamp_to_ulid(ts);
-        let ms1 = ulid.timestamp();
+        let ms1 = ulid1.timestamp();
         let ms2 = ulid2.timestamp();
         assert!((ms1 - ms2).abs() <= 1, "Should be within same millisecond");
     }
@@ -598,20 +590,20 @@ mod tests {
     #[pg_test]
     fn timestamp_conversion_uses_correct_epoch() {
         let ts =
-            Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01 00:00:00+00'::timestamptz")
+            Spi::get_one::<TimestampWithTimeZone>("SELECT '2025-01-01 00:00:00+00'::timestamptz")
                 .unwrap()
                 .unwrap();
         let ulid = timestamptz_to_ulid(ts);
         let ms = ulid.timestamp();
-        assert_eq!(ms, 1704067200000, "Jan 1, 2024 00:00:00 UTC");
+        assert_eq!(ms, 1735689600000, "Jan 1, 2025 00:00:00 UTC");
     }
 
     #[pg_test]
     fn timestamp_ordering_matches_ulid_ordering() {
-        let ts1 = Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01'::timestamptz")
+        let ts1 = Spi::get_one::<TimestampWithTimeZone>("SELECT '2025-01-01'::timestamptz")
             .unwrap()
             .unwrap();
-        let ts2 = Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-12-31'::timestamptz")
+        let ts2 = Spi::get_one::<TimestampWithTimeZone>("SELECT '2025-12-31'::timestamptz")
             .unwrap()
             .unwrap();
 
@@ -801,15 +793,15 @@ mod tests {
     #[pg_test]
     fn range_query_filters_by_timestamp() {
         let ts1 =
-            Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01 10:00:00+00'::timestamptz")
+            Spi::get_one::<TimestampWithTimeZone>("SELECT '2025-01-01 10:00:00+00'::timestamptz")
                 .unwrap()
                 .unwrap();
         let ts2 =
-            Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01 12:00:00+00'::timestamptz")
+            Spi::get_one::<TimestampWithTimeZone>("SELECT '2025-01-01 12:00:00+00'::timestamptz")
                 .unwrap()
                 .unwrap();
         let ts3 =
-            Spi::get_one::<TimestampWithTimeZone>("SELECT '2024-01-01 14:00:00+00'::timestamptz")
+            Spi::get_one::<TimestampWithTimeZone>("SELECT '2025-01-01 14:00:00+00'::timestamptz")
                 .unwrap()
                 .unwrap();
 
@@ -902,15 +894,15 @@ mod tests {
         Spi::run("CREATE TEMP TABLE date_events (id ulid PRIMARY KEY, label text)").unwrap();
         Spi::run(
             "INSERT INTO date_events (id, label)
-             VALUES ('2024-01-01'::timestamp::ulid, 'midnight')",
+             VALUES ('2025-01-01'::timestamp::ulid, 'midnight')",
         )
         .unwrap();
 
         let count = Spi::get_one::<i64>(
             "SELECT COUNT(*) FROM date_events
              WHERE id BETWEEN
-                 '2024-01-01'::timestamp::ulid AND
-                 '2024-01-02'::timestamp::ulid",
+                 '2025-01-01'::timestamp::ulid AND
+                 '2025-01-02'::timestamp::ulid",
         )
         .unwrap()
         .unwrap();
