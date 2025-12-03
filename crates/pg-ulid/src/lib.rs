@@ -125,7 +125,7 @@ impl FromDatum for ULID {
         // - `Bytes` is `[u8; 16]` with alignment 1, so this cast is sound.
         // - We copy into a local `Bytes` and do not retain a pointer into
         //   Postgres-managed memory.
-        let ptr = datum.cast_mut_ptr::<u8>() as *const Bytes;
+        let ptr = datum.cast_mut_ptr::<Bytes>() as *const Bytes;
         Some(ULID::from_bytes(*ptr))
     }
 }
@@ -133,7 +133,7 @@ impl FromDatum for ULID {
 impl IntoDatum for ULID {
     fn into_datum(self) -> Option<pg_sys::Datum> {
         // Allocate space for a single `Bytes` in the current memory context.
-        let raw: *mut Bytes = unsafe {
+        let raw = unsafe {
             // SAFETY:
             // - `CurrentMemoryContext` is a valid Postgres MemoryContext.
             // - `palloc_struct::<Bytes>()` allocates exactly
@@ -148,8 +148,7 @@ impl IntoDatum for ULID {
             *raw = self.bytes;
         }
 
-        // Postgres expects a pointer to the first byte as the Datum.
-        Some((raw as *mut u8).into())
+        Some(raw.into())
     }
 
     fn type_oid() -> pg_sys::Oid {
