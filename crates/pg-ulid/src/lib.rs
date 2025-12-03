@@ -20,7 +20,16 @@ pgrx::pg_module_magic!();
 // ULID
 // ============================================================================
 
+/// Big-endian byte array for the backing integer of `InnerULID`.
+///
+/// This is the `BeBytes::ByteArray` for `<InnerULID as Id>::Ty`, so it is a
+/// fixed-size `[u8; SIZE]` (currently `[u8; 16]` for ULIDs).
 pub type Bytes = <<InnerULID as Id>::Ty as BeBytes>::ByteArray;
+
+/// Size of the backing integer for `InnerULID`, in bytes.
+///
+/// This is identical to `core::mem::size_of::<Bytes>()`
+pub const SIZE: usize = <<InnerULID as Id>::Ty as BeBytes>::SIZE;
 
 /// A PostgreSQL ULID type backed by `ferroid`.
 ///
@@ -306,7 +315,7 @@ fn bytea_to_ulid(bytes: &[u8]) -> ULID {
     let arr: Bytes = bytes.try_into().unwrap_or_else(|_| {
         pgrx::error!(
             "invalid bytea length for ulid: expected {} bytes, got {}",
-            <<InnerULID as Id>::Ty as BeBytes>::SIZE,
+            SIZE,
             bytes.len()
         )
     });
@@ -316,7 +325,6 @@ fn bytea_to_ulid(bytes: &[u8]) -> ULID {
 /// Cast ULID to bytea (requires explicit cast)
 #[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_bytea(ulid: ULID) -> &'static [u8] {
-    const SIZE: usize = <<InnerULID as Id>::Ty as BeBytes>::SIZE;
     // SAFETY:
     // - `palloc_slice` allocates SIZE (16) bytes in CurrentMemoryContext.
     // - `copy_nonoverlapping`: src/dst are valid for SIZE bytes and
