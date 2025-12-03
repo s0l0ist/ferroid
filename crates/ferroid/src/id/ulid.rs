@@ -147,7 +147,7 @@ macro_rules! define_ulid {
             }
 
             #[must_use]
-            pub const fn from(timestamp: $int, random: $int) -> Self {
+            pub const fn from_components(timestamp: $int, random: $int) -> Self {
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let r = (random & Self::RANDOM_MASK) << Self::RANDOM_SHIFT;
                 Self { id: t | r }
@@ -261,7 +261,7 @@ macro_rules! define_ulid {
                 R: $crate::rand::RandSource<<Self as $crate::id::Id>::Ty>,
             {
                 let random = rng.rand();
-                Self::from(timestamp, random)
+                Self::from_components(timestamp, random)
             }
 
             $crate::cfg_std! {
@@ -291,7 +291,7 @@ macro_rules! define_ulid {
                         .unwrap_or(core::time::Duration::ZERO)
                         .as_millis();
                     let random = rng.rand();
-                    Self::from(timestamp, random)
+                    Self::from_components(timestamp, random)
                 }
             }
         }
@@ -335,7 +335,7 @@ macro_rules! define_ulid {
                 // this is expected behavior. However, the timestamp should
                 // never overflow.
                 debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
-                Self::from(timestamp, random)
+                Self::from_components(timestamp, random)
             }
 
             fn is_valid(&self) -> bool {
@@ -477,7 +477,7 @@ mod tests {
         let ts = ULID::max_timestamp();
         let rand = ULID::max_random();
 
-        let id = ULID::from(ts, rand);
+        let id = ULID::from_components(ts, rand);
         println!("ID: {id:#?}");
         assert_eq!(id.timestamp(), ts);
         assert_eq!(id.random(), rand);
