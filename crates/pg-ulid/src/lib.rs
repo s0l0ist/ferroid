@@ -204,19 +204,14 @@ fn ulid_in(input: &core::ffi::CStr) -> ULID {
 fn ulid_out(ulid: ULID) -> &'static core::ffi::CStr {
     let encoded = InnerULID::from(ulid).encode();
     let bytes = encoded.as_bytes();
-    // Safe to cast as this is always 26 bytes
+    // ULID encoding is always exactly 26 bytes, safe to cast to i32
     let len = bytes.len() as i32;
     let mut s = StringInfo::with_capacity(len);
     s.push_bytes(bytes);
     // SAFETY:
-    // - `s` was created via `StringInfo::with_capacity` and only modified with
-    //   `push_bytes`, which maintains the internal trailing NUL and correct
-    //   len.
-    // - `encode().as_bytes()` yields only non-NUL ASCII bytes, so there are no
-    //   interior NULs.
-    // - `leak_cstr` docs state this combination upholds
-    //   `CStr::from_bytes_with_nul` invariants; Postgres owns and frees the
-    //   underlying memory.
+    // - `StringInfo::with_capacity` + `push_bytes` maintains trailing NUL
+    // - ULID encoding contains only ASCII alphanumeric (no interior NULs)
+    // - Transfers ownership to Postgres for memory management
     unsafe { s.leak_cstr() }
 }
 
