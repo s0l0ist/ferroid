@@ -1,6 +1,0 @@
-comment = 'pg_ulid:  Created by pgrx'
-default_version = '@CARGO_VERSION@'
-module_pathname = 'pg_ulid'
-relocatable = false
-superuser = true
-trusted = false

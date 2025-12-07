@@ -123,7 +123,7 @@ Timestamp   Randomness
 
 PostgreSQL's built-in uuidv7():
 
-- Uses a 48-bit ms timestamp + 12-bit sub-ms fraction + ~62 random bits.
+- Uses a 48-bit ms timestamp + 12/10-bit sub-ms fraction + ~62 random bits.
 - Enforces per-backend monotonic timestamps via a high-resolution clock.
 - Draws fresh random bits from the OS CSPRNG (`pg_strong_random`) on every call.
 

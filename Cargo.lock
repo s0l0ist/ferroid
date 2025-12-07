@@ -1804,7 +1804,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pg_ulid"
+name = "pg_ferroid"
 version = "0.0.0"
 dependencies = [
  "ferroid",

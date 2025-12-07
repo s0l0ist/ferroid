@@ -4,7 +4,7 @@ members = [
     "crates/ferroid",
     "crates/ferroid-tonic-core",
     "crates/ferroid-tonic-server",
-    "crates/pg-ulid",
+    "crates/pg-ferroid",
 ]
 
 [workspace.package]
