@@ -572,7 +572,7 @@ mod tests {
         let ulid2 = timestamptz_to_ulid(ts);
         let ms1 = ulid1.timestamp();
         let ms2 = ulid2.timestamp();
-        assert!((ms1 - ms2).abs() <= 1, "Should be within same millisecond");
+        assert_eq!(ms1, ms2, "Should be within same millisecond");
     }
 
     #[pg_test]
@@ -582,7 +582,7 @@ mod tests {
         let ulid2 = timestamp_to_ulid(ts);
         let ms1 = ulid1.timestamp();
         let ms2 = ulid2.timestamp();
-        assert!((ms1 - ms2).abs() <= 1, "Should be within same millisecond");
+        assert_eq!(ms1, ms2, "Should be within same millisecond");
     }
 
     #[pg_test]
