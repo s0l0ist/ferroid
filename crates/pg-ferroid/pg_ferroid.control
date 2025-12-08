@@ -1,0 +1,6 @@
+comment = 'pg_ferroid:  Created by pgrx'
+default_version = '@CARGO_VERSION@'
+module_pathname = 'pg_ferroid'
+relocatable = true
+superuser = true
+trusted = false
