@@ -14,7 +14,7 @@ use crate::id::Id;
 /// ```
 /// use ferroid::id::{SnowflakeId, SnowflakeTwitterId};
 ///
-/// let id = SnowflakeTwitterId::from(1000, 2, 1);
+/// let id = SnowflakeTwitterId::from_components(1000, 2, 1);
 /// assert_eq!(id.timestamp(), 1000);
 /// assert_eq!(id.machine_id(), 2);
 /// assert_eq!(id.sequence(), 1);
@@ -169,6 +169,10 @@ macro_rules! define_snowflake_id {
 
             #[must_use]
             pub const fn from_components(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
+                debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
+                debug_assert!(machine_id <= Self::MACHINE_ID_MASK, "machine_id overflow");
+                debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
+
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let m = (machine_id & Self::MACHINE_ID_MASK) << Self::MACHINE_ID_SHIFT;
                 let s = (sequence & Self::SEQUENCE_MASK) << Self::SEQUENCE_SHIFT;
@@ -264,9 +268,6 @@ macro_rules! define_snowflake_id {
             }
 
             fn from_components(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
-                debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
-                debug_assert!(machine_id <= Self::MACHINE_ID_MASK, "machine_id overflow");
-                debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
                 Self::from_components(timestamp, machine_id, sequence)
             }
 

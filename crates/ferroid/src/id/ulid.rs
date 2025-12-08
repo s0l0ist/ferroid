@@ -148,6 +148,12 @@ macro_rules! define_ulid {
 
             #[must_use]
             pub const fn from_components(timestamp: $int, random: $int) -> Self {
+                // Random bits can frequencly overflow, but this is okay since
+                // they're masked. We don't need a debug assertion here because
+                // this is expected behavior. However, the timestamp should
+                // never overflow.
+                debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
+
                 let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
                 let r = (random & Self::RANDOM_MASK) << Self::RANDOM_SHIFT;
                 Self { id: t | r }
@@ -330,11 +336,6 @@ macro_rules! define_ulid {
             }
 
             fn from_components(timestamp: $int, random: $int) -> Self {
-                // Random bits can frequencly overflow, but this is okay since
-                // they're masked. We don't need a debug assertion here because
-                // this is expected behavior. However, the timestamp should
-                // never overflow.
-                debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
                 Self::from_components(timestamp, random)
             }
 

@@ -375,14 +375,14 @@ use ferroid::{
     id::{SnowflakeId, SnowflakeTwitterId, ULID, UlidId},
 };
 
-let id = SnowflakeTwitterId::from(123_456, 0, 42);
+let id = SnowflakeTwitterId::from_components(123_456, 0, 42);
 assert_eq!(format!("{id}"), "00000F280001A");
 assert_eq!(id.encode(), "00000F280001A");
 assert_eq!(SnowflakeTwitterId::decode("00000F280001A").unwrap(), id);
 assert_eq!(SnowflakeTwitterId::try_from("00000F280001A").unwrap(), id);
 assert_eq!(SnowflakeTwitterId::from_str("00000F280001A").unwrap(), id);
 
-let id = ULID::from(123_456, 42);
+let id = ULID::from_components(123_456, 42);
 assert_eq!(format!("{id}"), "0000003RJ0000000000000001A");
 assert_eq!(id.encode(), "0000003RJ0000000000000001A");
 assert_eq!(ULID::decode("0000003RJ0000000000000001A").unwrap(), id);
