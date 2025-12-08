@@ -6,6 +6,11 @@ members = [
     "crates/ferroid-tonic-server",
     "crates/pg-ferroid",
 ]
+default-members = [
+    "crates/ferroid",
+    "crates/ferroid-tonic-core",
+    "crates/ferroid-tonic-server",
+]
 
 [workspace.package]
 version = "0.8.7"
