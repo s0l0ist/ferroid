@@ -132,19 +132,16 @@ impl FromDatum for ULID {
 
 impl IntoDatum for ULID {
     fn into_datum(self) -> Option<pg_sys::Datum> {
-        // Allocate space for a single `Bytes` in the current memory context.
-        let raw = unsafe {
-            // SAFETY:
-            // - `CurrentMemoryContext` is a valid Postgres MemoryContext.
-            // - `palloc_struct::<Bytes>()` allocates exactly
-            //   `size_of::<Bytes>()` bytes and is aligned.
-            PgMemoryContexts::CurrentMemoryContext.palloc_struct::<Bytes>()
-        };
+        // SAFETY:
+        // - `CurrentMemoryContext` is a valid Postgres MemoryContext.
+        // - `palloc_struct::<Bytes>()` allocates exactly `size_of::<Bytes>()`
+        //   bytes and is aligned.
+        let raw = unsafe { PgMemoryContexts::CurrentMemoryContext.palloc_struct::<Bytes>() };
 
+        // SAFETY:
+        // - `raw` points to uninitialized but valid memory for one `Bytes`.
+        // - We fully initialize it with `self.bytes` before exposing it.
         unsafe {
-            // SAFETY:
-            // - `raw` points to uninitialized but valid memory for one `Bytes`.
-            // - We fully initialize it with `self.bytes` before exposing it.
             *raw = self.bytes;
         }
 
@@ -152,7 +149,6 @@ impl IntoDatum for ULID {
     }
 
     fn type_oid() -> pg_sys::Oid {
-        // Look up the OID of the 'ulid' type once it exists
         rust_regtypein::<Self>()
     }
 }
