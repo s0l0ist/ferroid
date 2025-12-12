@@ -120,12 +120,9 @@ impl FromDatum for ULID {
             return None;
         }
 
-        // Postgres stores exactly 16 bytes for this type (INTERNALLENGTH = 16).
+        // SAFETY: Datum points to Bytes allocated by PostgreSQL (INTERNALLENGTH = 16).
         let ptr = datum.cast_mut_ptr::<Bytes>() as *const Bytes;
-
-        // SAFETY: `ptr` points to `Bytes` stored by Postgres for this datum.
-        let bytes = unsafe { ptr.read() };
-
+        let bytes = unsafe { ptr.read_unaligned() };
         Some(ULID::from_bytes(bytes))
     }
 }
@@ -345,12 +342,8 @@ fn ulid_recv(mut internal: pgrx::Internal) -> ULID {
             .get_mut::<pg_sys::StringInfoData>()
             .unwrap_or_else(|| pgrx::error!("ulid_recv: NULL internal buffer"));
 
-        // pq_getmsgbytes() advances the cursor and ERRORs if short.
         let src = pg_sys::pq_getmsgbytes(buf, SIZE as i32) as *const Bytes;
-        // Bytes is [u8; 16] with alignment 1, so this is safe and avoids
-        // zero+copy.
-        let out: Bytes = src.read_unaligned();
-        // Validates no trailing bytes remain in message.
+        let out = src.read_unaligned();
         pg_sys::pq_getmsgend(buf);
         ULID::from_bytes(out)
     }
