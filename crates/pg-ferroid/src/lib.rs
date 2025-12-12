@@ -120,7 +120,9 @@ impl FromDatum for ULID {
             return None;
         }
 
-        // SAFETY: Datum points to Bytes allocated by PostgreSQL (INTERNALLENGTH = 16).
+        // SAFETY:
+        // - Datum points to `Bytes` allocated by PostgreSQL (INTERNALLENGTH =
+        //   16).
         let ptr = datum.cast_mut_ptr::<Bytes>() as *const Bytes;
         let bytes = unsafe { ptr.read_unaligned() };
         Some(ULID::from_bytes(bytes))
@@ -313,11 +315,9 @@ fn bytea_to_ulid(bytes: &[u8]) -> ULID {
 #[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_bytea(ulid: ULID) -> &'static [u8] {
     // SAFETY:
-    // - `palloc_slice` allocates SIZE (16) bytes in CurrentMemoryContext.
-    // - `copy_nonoverlapping`: src/dst are valid for SIZE bytes and
-    //   non-overlapping.
-    // - Memory is fully initialized after copy; slice lifetime managed by
-    //   PostgreSQL.
+    // - `palloc_slice()` allocates SIZE bytes in CurrentMemoryContext.
+    // - `copy_nonoverlapping()` copies SIZE bytes from aligned source.
+    // - Memory lifetime managed by PostgreSQL until end of transaction.
     unsafe {
         let ptr = PgMemoryContexts::CurrentMemoryContext.palloc_slice::<u8>(SIZE);
         core::ptr::copy_nonoverlapping(ulid.as_bytes().as_ptr(), ptr.as_mut_ptr(), SIZE);
