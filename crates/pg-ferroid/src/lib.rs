@@ -4,6 +4,7 @@ use ferroid::{
     id::{BeBytes, Id, ULID as InnerULID},
 };
 use pgrx::{
+    PgMemoryContexts, StringInfo,
     callconv::{ArgAbi, BoxRet},
     datum::{FromDatum, IntoDatum},
     pg_sys,
@@ -11,7 +12,7 @@ use pgrx::{
         ArgumentError, Returns, ReturnsError, SqlMapping, SqlTranslatable,
     },
     prelude::*,
-    rust_regtypein, PgMemoryContexts, StringInfo,
+    rust_regtypein,
 };
 
 pgrx::pg_module_magic!();
@@ -119,14 +120,13 @@ impl FromDatum for ULID {
             return None;
         }
 
-        // SAFETY:
-        // - `ulid` is defined with INTERNALLENGTH = 16 and STORAGE = plain, so
-        //   Postgres stores exactly `size_of::<Bytes>()` bytes here.
-        // - `Bytes` is `[u8; 16]` with alignment 1, so this cast is sound.
-        // - We copy into a local `Bytes` and do not retain a pointer into
-        //   Postgres-managed memory.
+        // Postgres stores exactly 16 bytes for this type (INTERNALLENGTH = 16).
         let ptr = datum.cast_mut_ptr::<Bytes>() as *const Bytes;
-        Some(ULID::from_bytes(*ptr))
+
+        // SAFETY: `ptr` points to `Bytes` stored by Postgres for this datum.
+        let bytes = unsafe { ptr.read() };
+
+        Some(ULID::from_bytes(bytes))
     }
 }
 
@@ -334,8 +334,26 @@ fn ulid_to_bytea(ulid: ULID) -> &'static [u8] {
 
 /// Binary receive function for network protocol
 #[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
-fn ulid_recv(bytes: &[u8]) -> ULID {
-    bytea_to_ulid(bytes)
+fn ulid_recv(mut internal: pgrx::Internal) -> ULID {
+    // SAFETY:
+    // - `get_mut()` casts Internal to StringInfoData, valid for recv functions.
+    // - `pq_getmsgbytes()` advances cursor and ERRORs if insufficient data.
+    // - `read_unaligned()` is safe for [u8; SIZE] which has alignment 1.
+    // - `pq_getmsgend()` validates no trailing bytes (optional validation).
+    unsafe {
+        let buf = internal
+            .get_mut::<pg_sys::StringInfoData>()
+            .unwrap_or_else(|| pgrx::error!("ulid_recv: NULL internal buffer"));
+
+        // pq_getmsgbytes() advances the cursor and ERRORs if short.
+        let src = pg_sys::pq_getmsgbytes(buf, SIZE as i32) as *const Bytes;
+        // Bytes is [u8; 16] with alignment 1, so this is safe and avoids
+        // zero+copy.
+        let out: Bytes = src.read_unaligned();
+        // Validates no trailing bytes remain in message.
+        pg_sys::pq_getmsgend(buf);
+        ULID::from_bytes(out)
+    }
 }
 
 /// Binary send function for network protocol
@@ -364,7 +382,7 @@ CREATE TYPE ulid (
     INPUT = ulid_in,
     OUTPUT = ulid_out,
     SEND = ulid_send,
-    RECV = ulid_recv,
+    RECEIVE = ulid_recv,
     INTERNALLENGTH = 16,
     ALIGNMENT = char,
     STORAGE = plain,

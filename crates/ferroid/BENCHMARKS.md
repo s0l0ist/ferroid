@@ -30,13 +30,13 @@ Throughput is reported over the **binary ID size** (`SIZE`).
 
 ### Constructors
 
-| Function                        | Time per call | Throughput     |
-| ------------------------------- | ------------- | -------------- |
-| `SnowflakeTwitterId::from(...)` | ~0.31 ns      | ~3.21B IDs/sec |
-| `ULID::from(...)`               | ~0.31 ns      | ~3.19B IDs/sec |
-| `ULID::from_timestamp(...)`     | ~21.4 ns      | ~46.8M IDs/sec |
-| `ULID::from_datetime(...)`      | ~23.1 ns      | ~43.4M IDs/sec |
-| `ULID::now()`                   | ~42.2 ns      | ~23.7M IDs/sec |
+| Function                                  | Time per call | Throughput     |
+| ----------------------------------------- | ------------- | -------------- |
+| `SnowflakeTwitterId::from_componens(...)` | ~0.31 ns      | ~3.21B IDs/sec |
+| `ULID::from_componens(...)`               | ~0.31 ns      | ~3.19B IDs/sec |
+| `ULID::from_timestamp(...)`               | ~21.4 ns      | ~46.8M IDs/sec |
+| `ULID::from_datetime(...)`                | ~23.1 ns      | ~43.4M IDs/sec |
+| `ULID::now()`                             | ~42.2 ns      | ~23.7M IDs/sec |
 
 ### Thread-Local ULID
 
