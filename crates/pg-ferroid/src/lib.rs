@@ -677,6 +677,81 @@ mod tests {
         assert!(result.is_err(), "Should error on invalid length");
     }
 
+    #[pg_test]
+    fn copy_binary_roundtrip_uses_send_recv_for_three_ulids() {
+        const ULIDS: [&str; 3] = [
+            "00000000000000000000000000",
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            "7ZZZZZZZZZZZZZZZZZZZZZZZZZ",
+        ];
+
+        struct TempCopyFile {
+            path: std::path::PathBuf,
+        }
+
+        impl TempCopyFile {
+            fn new(prefix: &str) -> Self {
+                let path = std::env::temp_dir().join(format!(
+                    "{}_{}_{}.bin",
+                    prefix,
+                    std::process::id(),
+                    Ulid::new_ulid().encode(),
+                ));
+                Self { path }
+            }
+
+            fn sql_path(&self) -> String {
+                self.path.to_string_lossy().replace('\'', "''")
+            }
+        }
+
+        impl Drop for TempCopyFile {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.path);
+            }
+        }
+
+        let tmp = TempCopyFile::new("pg_ferroid_copy_binary");
+        let path_sql = tmp.sql_path();
+
+        Spi::run("CREATE TEMP TABLE wire_test (id ulid)").unwrap();
+
+        let values = ULIDS
+            .iter()
+            .map(|u| format!("('{}'::ulid)", u))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Spi::run(&format!("INSERT INTO wire_test VALUES {}", values)).unwrap();
+
+        // Export via COPY BINARY (exercises ulid_send)
+        Spi::run(&format!(
+            "COPY wire_test TO '{}' WITH (FORMAT binary)",
+            path_sql
+        ))
+        .unwrap();
+
+        Spi::run("TRUNCATE wire_test").unwrap();
+
+        // Import via COPY BINARY (exercises ulid_recv)
+        Spi::run(&format!(
+            "COPY wire_test FROM '{}' WITH (FORMAT binary)",
+            path_sql
+        ))
+        .unwrap();
+
+        // Verify all ULIDs restored in correct order
+        let restored =
+            Spi::get_one::<Vec<String>>("SELECT array_agg(id::text ORDER BY id) FROM wire_test")
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(
+            restored, ULIDS,
+            "All ULIDs must survive COPY BINARY round-trip in order"
+        );
+    }
+
     // ========================================================================
     // Binary Protocol Tests
     // ========================================================================
