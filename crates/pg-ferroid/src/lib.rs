@@ -4,6 +4,7 @@ use ferroid::{
     id::{BeBytes, Id, ULID as InnerULID},
 };
 use pgrx::{
+    PgMemoryContexts, StringInfo,
     callconv::{ArgAbi, BoxRet},
     datum::{FromDatum, IntoDatum},
     pg_sys,
@@ -11,7 +12,7 @@ use pgrx::{
         ArgumentError, Returns, ReturnsError, SqlMapping, SqlTranslatable,
     },
     prelude::*,
-    rust_regtypein, PgMemoryContexts, StringInfo,
+    rust_regtypein,
 };
 
 pgrx::pg_module_magic!();
@@ -120,13 +121,11 @@ impl FromDatum for ULID {
         }
 
         // SAFETY:
-        // - `ulid` is defined with INTERNALLENGTH = 16 and STORAGE = plain, so
-        //   Postgres stores exactly `size_of::<Bytes>()` bytes here.
-        // - `Bytes` is `[u8; 16]` with alignment 1, so this cast is sound.
-        // - We copy into a local `Bytes` and do not retain a pointer into
-        //   Postgres-managed memory.
+        // - Datum points to `Bytes` allocated by PostgreSQL (INTERNALLENGTH =
+        //   16).
         let ptr = datum.cast_mut_ptr::<Bytes>() as *const Bytes;
-        Some(ULID::from_bytes(*ptr))
+        let bytes = unsafe { ptr.read_unaligned() };
+        Some(ULID::from_bytes(bytes))
     }
 }
 
@@ -316,11 +315,9 @@ fn bytea_to_ulid(bytes: &[u8]) -> ULID {
 #[pg_cast(immutable, parallel_safe, strict)]
 fn ulid_to_bytea(ulid: ULID) -> &'static [u8] {
     // SAFETY:
-    // - `palloc_slice` allocates SIZE (16) bytes in CurrentMemoryContext.
-    // - `copy_nonoverlapping`: src/dst are valid for SIZE bytes and
-    //   non-overlapping.
-    // - Memory is fully initialized after copy; slice lifetime managed by
-    //   PostgreSQL.
+    // - `palloc_slice()` allocates SIZE bytes in CurrentMemoryContext.
+    // - `copy_nonoverlapping()` copies SIZE bytes from aligned source.
+    // - Memory lifetime managed by PostgreSQL until end of transaction.
     unsafe {
         let ptr = PgMemoryContexts::CurrentMemoryContext.palloc_slice::<u8>(SIZE);
         core::ptr::copy_nonoverlapping(ulid.as_bytes().as_ptr(), ptr.as_mut_ptr(), SIZE);
@@ -334,8 +331,22 @@ fn ulid_to_bytea(ulid: ULID) -> &'static [u8] {
 
 /// Binary receive function for network protocol
 #[pg_extern(immutable, parallel_safe, strict, requires = ["shell_type"])]
-fn ulid_recv(bytes: &[u8]) -> ULID {
-    bytea_to_ulid(bytes)
+fn ulid_recv(mut internal: pgrx::Internal) -> ULID {
+    // SAFETY:
+    // - `get_mut()` casts Internal to StringInfoData, valid for recv functions.
+    // - `pq_getmsgbytes()` advances cursor and ERRORs if insufficient data.
+    // - `read_unaligned()` is safe for [u8; SIZE] which has alignment 1.
+    // - `pq_getmsgend()` validates no trailing bytes (optional validation).
+    unsafe {
+        let buf = internal
+            .get_mut::<pg_sys::StringInfoData>()
+            .unwrap_or_else(|| pgrx::error!("ulid_recv: NULL internal buffer"));
+
+        let src = pg_sys::pq_getmsgbytes(buf, SIZE as i32) as *const Bytes;
+        let out = src.read_unaligned();
+        pg_sys::pq_getmsgend(buf);
+        ULID::from_bytes(out)
+    }
 }
 
 /// Binary send function for network protocol
@@ -364,7 +375,7 @@ CREATE TYPE ulid (
     INPUT = ulid_in,
     OUTPUT = ulid_out,
     SEND = ulid_send,
-    RECV = ulid_recv,
+    RECEIVE = ulid_recv,
     INTERNALLENGTH = 16,
     ALIGNMENT = char,
     STORAGE = plain,
@@ -664,6 +675,81 @@ mod tests {
             bytea_to_ulid(&bytes);
         });
         assert!(result.is_err(), "Should error on invalid length");
+    }
+
+    #[pg_test]
+    fn copy_binary_roundtrip_uses_send_recv_for_three_ulids() {
+        const ULIDS: [&str; 3] = [
+            "00000000000000000000000000",
+            "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+            "7ZZZZZZZZZZZZZZZZZZZZZZZZZ",
+        ];
+
+        struct TempCopyFile {
+            path: std::path::PathBuf,
+        }
+
+        impl TempCopyFile {
+            fn new(prefix: &str) -> Self {
+                let path = std::env::temp_dir().join(format!(
+                    "{}_{}_{}.bin",
+                    prefix,
+                    std::process::id(),
+                    Ulid::new_ulid().encode(),
+                ));
+                Self { path }
+            }
+
+            fn sql_path(&self) -> String {
+                self.path.to_string_lossy().replace('\'', "''")
+            }
+        }
+
+        impl Drop for TempCopyFile {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.path);
+            }
+        }
+
+        let tmp = TempCopyFile::new("pg_ferroid_copy_binary");
+        let path_sql = tmp.sql_path();
+
+        Spi::run("CREATE TEMP TABLE wire_test (id ulid)").unwrap();
+
+        let values = ULIDS
+            .iter()
+            .map(|u| format!("('{}'::ulid)", u))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Spi::run(&format!("INSERT INTO wire_test VALUES {}", values)).unwrap();
+
+        // Export via COPY BINARY (exercises ulid_send)
+        Spi::run(&format!(
+            "COPY wire_test TO '{}' WITH (FORMAT binary)",
+            path_sql
+        ))
+        .unwrap();
+
+        Spi::run("TRUNCATE wire_test").unwrap();
+
+        // Import via COPY BINARY (exercises ulid_recv)
+        Spi::run(&format!(
+            "COPY wire_test FROM '{}' WITH (FORMAT binary)",
+            path_sql
+        ))
+        .unwrap();
+
+        // Verify all ULIDs restored in correct order
+        let restored =
+            Spi::get_one::<Vec<String>>("SELECT array_agg(id::text ORDER BY id) FROM wire_test")
+                .unwrap()
+                .unwrap();
+
+        assert_eq!(
+            restored, ULIDS,
+            "All ULIDs must survive COPY BINARY round-trip in order"
+        );
     }
 
     // ========================================================================

@@ -1,7 +1,19 @@
 [package]
-name = "pg_ferroid"
-version = "0.0.0"
-edition = "2021"
+name = "pg-ferroid"
+version.workspace = true
+rust-version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+readme = "README.md"
+description = "A PostgreSQL extension for ferroid"
+repository = "https://github.com/s0l0ist/ferroid/blob/main/crates/pg-ferroid"
+categories = [
+  "database",
+]
+documentation.workspace = true
+keywords = ["ferroid", "postgres", "ulid", "monotonic"]
+publish = false
 
 [lib]
 crate-type = ["cdylib", "lib"]
