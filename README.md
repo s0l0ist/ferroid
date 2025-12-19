@@ -11,59 +11,8 @@ This workspace includes:
   and shared types
 - [`ferroid-tonic-server`](./crates/ferroid-tonic-server): High-performance gRPC
   server that streams binary-packed ID chunks
-
-## 📦 Workspace Structure
-
-### [`crates/ferroid`](./crates/ferroid)
-
-The core library provides:
-
-- **ID Types**: Snowflake (`u64`, `u128`), ULID (`u128`)
-- **Custom Layout**: macros to help build your own ID layouts
-- **Generators**:
-
-  - `BasicSnowflakeGenerator`: single-threaded
-  - `LockSnowflakeGenerator`: multi-threaded with locking
-  - `AtomicSnowflakeGenerator`: multi-threaded, lock-free
-  - `BasicUlidGenerator`: thread-safe, high-entropy ULID generation
-  - `BasicMonoUlidGenerator`: single-threaded, monotonic, high-entropy ULID generation
-  - `LockMonoUlidGenerator`: multi-threaded, monotonic, high-entropy ULID generation
-  - `AtomicMonoUlidGenerator`: multi-threaded, monotonic, high-entropy ULID generation, lock-free
-
-- **Async Support**: Integrates with `tokio` and `smol`
-- **Encoding Support**: Crockford base32 encoding/decoding for compact, sortable
-  string IDs
-
-This is the crate you'll typically depend on for ID generation.
-
-### [`crates/ferroid-tonic-core`](./crates/ferroid-tonic-core)
-
-Defines the gRPC protocol and shared types for ID streaming:
-
-- `ferroid.proto` for ID stream requests and packed binary responses
-- Shared types used by both client and server
-- Ensures type compatibility across deployments
-
-⚠️ Note: The server and client should be compiled with the same
-`ferroid-tonic-core`. If you're overriding the default ID
-(`SnowflakeTwitterId`), please fork this repo to ensure contract stability
-between client and server.
-
-### [`crates/ferroid-tonic-server`](./crates/ferroid-tonic-server)
-
-A gRPC server for streaming IDs:
-
-- Supports streaming chunked IDs
-- Concurrent worker task pool with backpressure
-- Graceful shutdown and stream cancellation
-- Optional compression (`zstd`, `gzip`, `deflate`)
-- OpenTelemetry metrics and tracing
-
-Run this to expose high-throughput ID generation as a network service.
-
-```bash
-cargo run -p ferroid-tonic-server --features tracing
-```
+- [`pg-ferroid`](./crates/pg-ferroid): A PostgreSQL extension for high-throughput
+  ULID generation using ferroid
 
 ## 🚀 Getting Started
 
