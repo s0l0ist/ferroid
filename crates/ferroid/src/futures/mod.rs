@@ -1,5 +1,5 @@
 mod runtime;
-mod sleep_provider;
+mod interface;
 #[cfg(feature = "snowflake")]
 mod snowflake;
 #[cfg(feature = "ulid")]
@@ -7,7 +7,7 @@ mod ulid;
 
 pub use runtime::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "futures")))]
-pub use sleep_provider::*;
+pub use interface::*;
 #[cfg_attr(docsrs, doc(cfg(all(feature = "futures", feature = "snowflake"))))]
 #[cfg(feature = "snowflake")]
 pub use snowflake::*;
