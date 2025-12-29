@@ -258,7 +258,7 @@ impl<T: Base32UlidExt> From<&Base32UlidFormatter<T>> for alloc::string::String
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: &Base32UlidFormatter<T>) -> alloc::string::String {
+    fn from(formatter: &Base32UlidFormatter<T>) -> Self {
         formatter.as_string()
     }
 }
@@ -267,7 +267,7 @@ impl<T: Base32UlidExt> From<Base32UlidFormatter<T>> for alloc::string::String
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: Base32UlidFormatter<T>) -> alloc::string::String {
+    fn from(formatter: Base32UlidFormatter<T>) -> Self {
         formatter.as_string()
     }
 }
@@ -435,7 +435,7 @@ impl<T: Base32UlidExt> From<&Base32UlidFormatterRef<'_, T>> for alloc::string::S
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: &Base32UlidFormatterRef<'_, T>) -> alloc::string::String {
+    fn from(formatter: &Base32UlidFormatterRef<'_, T>) -> Self {
         formatter.as_string()
     }
 }
@@ -444,7 +444,7 @@ impl<T: Base32UlidExt> From<Base32UlidFormatterRef<'_, T>> for alloc::string::St
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: Base32UlidFormatterRef<'_, T>) -> alloc::string::String {
+    fn from(formatter: Base32UlidFormatterRef<'_, T>) -> Self {
         formatter.as_string()
     }
 }

@@ -123,7 +123,7 @@ where
     }
 
     // Handle remainder
-    for &b in remainder.iter() {
+    for &b in remainder {
         // SAFETY: `b as usize` is in 0..=255, and `DECODE_LUT` has 256 entries.
         let v = unsafe { *DECODE_LUT.get_unchecked(b as usize) };
         acc = (acc << BITS_PER_CHAR) | T::from(v);

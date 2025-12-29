@@ -284,7 +284,7 @@ impl<T: Base32SnowExt> From<&Base32SnowFormatter<T>> for alloc::string::String
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: &Base32SnowFormatter<T>) -> alloc::string::String {
+    fn from(formatter: &Base32SnowFormatter<T>) -> Self {
         formatter.as_string()
     }
 }
@@ -293,7 +293,7 @@ impl<T: Base32SnowExt> From<Base32SnowFormatter<T>> for alloc::string::String
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: Base32SnowFormatter<T>) -> alloc::string::String {
+    fn from(formatter: Base32SnowFormatter<T>) -> Self {
         formatter.as_string()
     }
 }
@@ -461,7 +461,7 @@ impl<T: Base32SnowExt> From<&Base32SnowFormatterRef<'_, T>> for alloc::string::S
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: &Base32SnowFormatterRef<'_, T>) -> alloc::string::String {
+    fn from(formatter: &Base32SnowFormatterRef<'_, T>) -> Self {
         formatter.as_string()
     }
 }
@@ -470,7 +470,7 @@ impl<T: Base32SnowExt> From<Base32SnowFormatterRef<'_, T>> for alloc::string::St
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: Base32SnowFormatterRef<'_, T>) -> alloc::string::String {
+    fn from(formatter: Base32SnowFormatterRef<'_, T>) -> Self {
         formatter.as_string()
     }
 }
