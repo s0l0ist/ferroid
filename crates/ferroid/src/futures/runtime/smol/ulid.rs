@@ -1,4 +1,4 @@
-use core::future::Future;
+use core::{convert::Infallible, future::Future};
 
 use crate::{
     futures::SmolSleep,
@@ -11,11 +11,11 @@ use crate::{
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
 ///
-/// This trait provides a convenience method for using a [`SleepProvider`]
-/// backed by the `smol` runtime, allowing you to call `.try_next_id_async()`
-/// without needing to specify the sleep strategy manually.
+/// This trait provides convenience methods that use [`SmolSleep`] as the sleep
+/// provider, allowing you to call async methods without manually specifying the
+/// sleep strategy.
 ///
-/// [`SleepProvider`]: crate::futures::SleepProvider
+/// [`SmolSleep`]: crate::futures::SmolSleep
 pub trait UlidGeneratorAsyncSmolExt<ID, T, R>
 where
     ID: UlidId,
@@ -23,19 +23,25 @@ where
     R: RandSource<ID::Ty>,
 {
     type Err;
-    /// Returns a future that resolves to the next available Ulid using
-    /// the [`SmolSleep`] provider.
+
+    /// Returns a future that resolves to the next available ULID.
     ///
-    /// Internally delegates to
-    /// [`UlidGeneratorAsyncExt::try_next_id_async`] method with
-    /// [`SmolSleep`] as the sleep strategy.
+    /// This infallible method uses [`SmolSleep`] and is only available for
+    /// generators with infallible error types.
+    ///
+    /// [`SmolSleep`]: crate::futures::SmolSleep
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>;
+
+    /// Returns a future that resolves to the next available ULID using
+    /// [`SmolSleep`].
     ///
     /// # Errors
     ///
-    /// This future may return an error if the underlying generator does.
+    /// Returns an error if the underlying generator fails.
     ///
-    /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::futures::UlidGeneratorAsyncExt::try_next_id_async
+    /// [`SmolSleep`]: crate::futures::SmolSleep
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
@@ -48,10 +54,19 @@ where
 {
     type Err = G::Err;
 
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
+    async fn next_id_async(&self) -> ID
+    where
+        Self::Err: Into<Infallible>,
+    {
+        <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::next_id_async::<SmolSleep>(self)
+            .await
+    }
+
+    async fn try_next_id_async(&self) -> Result<ID, Self::Err> {
         <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<SmolSleep>(
             self,
         )
+        .await
     }
 }
 

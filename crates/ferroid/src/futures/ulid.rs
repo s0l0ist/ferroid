@@ -1,4 +1,4 @@
-use core::{future::Future, time::Duration};
+use core::{convert::Infallible, future::Future, time::Duration};
 
 use super::SleepProvider;
 use crate::{
@@ -23,14 +23,26 @@ where
 {
     type Err;
 
-    /// Returns a future that resolves to the next available Snowflake ID.
+    /// Returns a future that resolves to the next available ULID.
     ///
-    /// If the generator is not ready to issue a new ID immediately, the future
-    /// will sleep for the amount of time indicated by the generator and retry.
+    /// This infallible method automatically retries when the generator is
+    /// temporarily unable to produce an ID. Only available for generators with
+    /// infallible error types.
+    ///
+    /// For fallible generators, use [`Self::try_next_id_async`]
+    fn next_id_async<S>(&self) -> impl Future<Output = ID>
+    where
+        S: SleepProvider,
+        Self::Err: Into<Infallible>;
+
+    /// Returns a future that resolves to the next available ULID.
+    ///
+    /// Automatically retries when the generator is temporarily unable to
+    /// produce an ID.
     ///
     /// # Errors
     ///
-    /// This future may return an error if the generator encounters one.
+    /// Returns an error if the generator fails, such as from lock poisoning.
     fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID, Self::Err>>
     where
         S: SleepProvider;
@@ -45,18 +57,31 @@ where
 {
     type Err = G::Err;
 
-    fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID, Self::Err>>
+    async fn next_id_async<S>(&self) -> ID
+    where
+        S: SleepProvider,
+        Self::Err: Into<Infallible>,
+    {
+        match self.try_next_id_async::<S>().await {
+            Ok(id) => id,
+            Err(e) =>
+            {
+                #[allow(unreachable_code)]
+                match e.into() {}
+            }
+        }
+    }
+
+    async fn try_next_id_async<S>(&self) -> Result<ID, Self::Err>
     where
         S: SleepProvider,
     {
-        async {
-            loop {
-                let dur = match self.try_next_id()? {
-                    IdGenStatus::Ready { id } => return Ok(id),
-                    IdGenStatus::Pending { yield_for } => Duration::from_millis(yield_for.to_u64()),
-                };
-                S::sleep_for(dur).await;
-            }
+        loop {
+            let dur = match self.try_next_id()? {
+                IdGenStatus::Ready { id } => return Ok(id),
+                IdGenStatus::Pending { yield_for } => Duration::from_millis(yield_for.to_u64()),
+            };
+            S::sleep_for(dur).await;
         }
     }
 }

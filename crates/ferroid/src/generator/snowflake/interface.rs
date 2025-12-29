@@ -18,6 +18,7 @@ where
     fn new(machine_id: ID::Ty, time: T) -> Self;
 
     /// Returns the next available ID
+    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     fn next_id(&self) -> IdGenStatus<ID>;
 
     /// A fallible version of [`Self::next_id`] that returns a [`Result`].

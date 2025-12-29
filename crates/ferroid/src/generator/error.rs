@@ -31,9 +31,9 @@ pub enum Error {
     ///
     /// If lock poisoning cannot occur (`lock` is disabled, or `parking-lot` is
     /// enabled), there is nothing fallible at runtime. This variant exists
-    /// solely to satisfy `Result<T, Error>` and should never be constructed.
+    /// solely to satisfy `Result<T, Error>` and cannot be constructed.
     #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
-    Infallible,
+    Infallible(core::convert::Infallible),
 }
 
 impl fmt::Display for Error {
@@ -50,5 +50,14 @@ use crate::generator::{MutexGuard, PoisonError};
 impl<T> From<PoisonError<MutexGuard<'_, T>>> for Error {
     fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {
         Self::LockPoisoned
+    }
+}
+
+#[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
+impl From<Error> for core::convert::Infallible {
+    fn from(e: Error) -> Self {
+        match e {
+            Error::Infallible(i) => i,
+        }
     }
 }

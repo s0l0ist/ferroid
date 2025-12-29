@@ -116,14 +116,9 @@ where
 
     /// Generates a new ULID.
     ///
-    /// Internally calls [`Self::try_next_id`] and unwraps the result. This
-    /// method will panic on error, so prefer the fallible version if you want
-    /// explicit control over error handling.
-    ///
-    /// # Panics
-    /// This method currently has no fallible code paths, but may panic if an
-    /// internal error occurs in future implementations. For explicitly fallible
-    /// behavior, use [`Self::try_next_id`] instead.
+    /// Returns a new, time-ordered, unique ID if generation succeeds. If the
+    /// generator is temporarily exhausted (e.g., the sequence is full and the
+    /// time has not advanced), it returns [`IdGenStatus::Pending`].
     ///
     /// # Example
     /// ```
@@ -144,7 +139,14 @@ where
     /// };
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
-        self.try_next_id().unwrap()
+        match self.try_next_id() {
+            Ok(id) => id,
+            Err(e) =>
+            {
+                #[allow(unreachable_code)]
+                match e {}
+            }
+        }
     }
 
     /// Attempts to generate a new ULID with fallible error handling.
@@ -232,6 +234,7 @@ where
         Self::new(time, rng)
     }
 
+    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     fn next_id(&self) -> IdGenStatus<ID> {
         self.next_id()
     }

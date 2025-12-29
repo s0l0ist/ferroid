@@ -133,10 +133,6 @@ where
     /// generator is temporarily exhausted (e.g., the sequence is full and the
     /// time has not advanced), it returns [`IdGenStatus::Pending`].
     ///
-    /// # Panics
-    /// Panics if the lock is poisoned. For explicitly fallible behavior, use
-    /// [`Self::try_next_id`] instead.
-    ///
     /// # Example
     /// ```
     /// use ferroid::{
@@ -154,8 +150,16 @@ where
     ///     }
     /// };
     /// ```
+    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     pub fn next_id(&self) -> IdGenStatus<ID> {
-        self.try_next_id().unwrap()
+        match self.try_next_id() {
+            Ok(id) => id,
+            Err(e) =>
+            {
+                #[allow(unreachable_code)]
+                match e {}
+            }
+        }
     }
 
     /// A fallible version of [`Self::next_id`] that returns a [`Result`].
@@ -243,6 +247,7 @@ where
         Self::new(machine_id, time)
     }
 
+    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     fn next_id(&self) -> IdGenStatus<ID> {
         self.next_id()
     }

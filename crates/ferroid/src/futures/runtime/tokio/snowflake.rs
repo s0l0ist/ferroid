@@ -1,4 +1,4 @@
-use core::future::Future;
+use core::{convert::Infallible, future::Future};
 
 use crate::{
     futures::TokioSleep,
@@ -10,30 +10,36 @@ use crate::{
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
 ///
-/// This trait provides a convenience method for using a [`SleepProvider`]
-/// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
-/// without specifying the sleep strategy manually.
+/// This trait provides convenience methods that use [`TokioSleep`] as the sleep
+/// provider, allowing you to call async methods without manually specifying the
+/// sleep strategy.
 ///
-/// [`SleepProvider`]: crate::futures::SleepProvider
+/// [`TokioSleep`]: crate::futures::TokioSleep
 pub trait SnowflakeGeneratorAsyncTokioExt<ID, T>
 where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err;
-    /// Returns a future that resolves to the next available Snowflake ID using
-    /// the [`TokioSleep`] provider.
+
+    /// Returns a future that resolves to the next available Snowflake ID.
     ///
-    /// Internally delegates to
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] method with
-    /// [`TokioSleep`] as the sleep strategy.
+    /// This infallible method uses [`TokioSleep`] and is only available for
+    /// generators with infallible error types.
+    ///
+    /// [`TokioSleep`]: crate::futures::TokioSleep
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>;
+
+    /// Returns a future that resolves to the next available Snowflake ID using
+    /// [`TokioSleep`].
     ///
     /// # Errors
     ///
-    /// This future may return an error if the underlying generator does.
+    /// Returns an error if the underlying generator fails.
     ///
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::futures::SnowflakeGeneratorAsyncExt::try_next_id_async
+    /// [`TokioSleep`]: crate::futures::TokioSleep
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
@@ -45,10 +51,21 @@ where
 {
     type Err = G::Err;
 
-    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
+    async fn next_id_async(&self) -> ID
+    where
+        Self::Err: Into<Infallible>,
+    {
+        <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::next_id_async::<TokioSleep>(
+            self,
+        )
+        .await
+    }
+
+    async fn try_next_id_async(&self) -> Result<ID, Self::Err> {
         <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<TokioSleep>(
             self,
         )
+        .await
     }
 }
 

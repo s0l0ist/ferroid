@@ -139,11 +139,6 @@ where
     /// time has not advanced, or CAS fails), it returns
     /// [`IdGenStatus::Pending`].
     ///
-    /// # Panics
-    /// This method currently has no fallible code paths, but may panic if an
-    /// internal error occurs in future implementations. For explicitly fallible
-    /// behavior, use [`Self::try_next_id`] instead.
-    ///
     /// # Example
     /// ```
     /// use ferroid::{
@@ -162,7 +157,14 @@ where
     /// };
     /// ```
     pub fn next_id(&self) -> IdGenStatus<ID> {
-        self.try_next_id().unwrap()
+        match self.try_next_id() {
+            Ok(id) => id,
+            Err(e) =>
+            {
+                #[allow(unreachable_code)]
+                match e {}
+            }
+        }
     }
 
     /// A fallible version of [`Self::next_id`] that returns a [`Result`].
@@ -263,6 +265,7 @@ where
         Self::new(machine_id, time)
     }
 
+    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     fn next_id(&self) -> IdGenStatus<ID> {
         self.next_id()
     }
