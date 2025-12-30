@@ -6,7 +6,7 @@ use crate::futures::SleepProvider;
 pub struct TokioSleep;
 impl SleepProvider for TokioSleep {
     async fn sleep_for(dur: core::time::Duration) {
-        tokio::time::sleep(dur).await
+        tokio::time::sleep(dur).await;
     }
 }
 
@@ -22,6 +22,6 @@ impl SleepProvider for TokioSleep {
 pub struct TokioYield;
 impl SleepProvider for TokioYield {
     async fn sleep_for(_dur: core::time::Duration) {
-        tokio::task::yield_now().await
+        tokio::task::yield_now().await;
     }
 }

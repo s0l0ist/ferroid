@@ -24,6 +24,6 @@ impl SleepProvider for SmolSleep {
 pub struct SmolYield;
 impl SleepProvider for SmolYield {
     async fn sleep_for(_dur: core::time::Duration) {
-        smol::future::yield_now().await
+        smol::future::yield_now().await;
     }
 }
