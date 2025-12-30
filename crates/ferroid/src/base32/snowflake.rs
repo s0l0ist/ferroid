@@ -369,7 +369,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &alloc::string::String) -> bool {
-        self == other
+        self.as_str() == other.as_str()
     }
 }
 #[cfg(feature = "alloc")]
@@ -378,7 +378,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &Base32SnowFormatter<T>) -> bool {
-        other == self
+        self.as_str() == other.as_str()
     }
 }
 
@@ -544,7 +544,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &alloc::string::String) -> bool {
-        self == other
+        self.as_str() == other.as_str()
     }
 }
 #[cfg(feature = "alloc")]
@@ -553,7 +553,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &Base32SnowFormatterRef<'_, T>) -> bool {
-        other == self
+        self.as_str() == other.as_str()
     }
 }
 
