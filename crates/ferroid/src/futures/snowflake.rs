@@ -12,9 +12,6 @@ use crate::{
 /// This trait enables `SnowflakeGenerator` types to yield IDs in a
 /// `Future`-based context by awaiting until the generator is ready to produce a
 /// new ID.
-///
-/// The default implementation uses [`SnowflakeGeneratorFuture`] and a specified
-/// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait SnowflakeGeneratorAsyncExt<ID, T>
 where
     ID: SnowflakeId,

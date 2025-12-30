@@ -65,7 +65,7 @@ where
     /// [`Base32SnowExt::encode`].
     ///
     /// The buffer must be exactly [`BeBytes::BASE32_SIZE`] bytes long, which is
-    /// guaranteed at compile time when using [`Base32SnowExt::buf`].
+    /// guaranteed at compile time when using [`Base32SnowExt::base32_array`].
     /// # Example
     /// ```
     /// use ferroid::{

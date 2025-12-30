@@ -162,7 +162,7 @@ where
         }
     }
 
-    /// A fallible version of [`Self::next_id`] that returns a [`Result`].
+    /// Attempts to generate a new ULID with fallible error handling.
     ///
     /// This method attempts to generate the next ID based on the current time
     /// and internal state. If successful, it returns [`IdGenStatus::Ready`]

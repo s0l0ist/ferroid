@@ -12,9 +12,6 @@ use crate::{
 ///
 /// This trait enables `UlidGenerator` types to yield IDs in a `Future`-based
 /// context by awaiting until the generator is ready to produce a new ID.
-///
-/// The default implementation uses [`UlidGeneratorFuture`] and a specified
-/// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait UlidGeneratorAsyncExt<ID, T, R>
 where
     ID: UlidId,

@@ -64,7 +64,7 @@ where
     /// [`Base32UlidExt::encode`].
     ///
     /// The buffer must be exactly [`BeBytes::BASE32_SIZE`] bytes long, which is
-    /// guaranteed at compile time when using [`Base32UlidExt::buf`].
+    /// guaranteed at compile time when using [`Base32UlidExt::base32_array`].
     ///
     /// # Example
     /// ```
