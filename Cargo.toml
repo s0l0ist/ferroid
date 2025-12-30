@@ -33,7 +33,6 @@ dotenvy = { version = "0.15", default-features = false }
 futures = { version = "0.3", default-features = false }
 hyper = { version = "1.8", default-features = false }
 mimalloc = { version = "0.1", default-features = false }
-num_cpus = { version = "1.17", default-features = false }
 opentelemetry = { version = "0.31", default-features = false }
 opentelemetry-appender-log = { version = "0.31", default-features = false }
 opentelemetry-otlp = { version = "0.31", default-features = false }
@@ -43,7 +42,6 @@ opentelemetry_sdk = { version = "0.31", default-features = false }
 parking_lot = { version = "0.12", default-features = false }
 pgrx = { version = "0.16", default-features = false }
 pgrx-tests = { version = "0.16", default-features = false }
-pin-project-lite = { version = "0.2", default-features = false }
 portable-atomic = { version = "1.13", default-features = false }
 prost = { version = "0.14", default-features = false }
 prost-types = { version = "0.14", default-features = false }

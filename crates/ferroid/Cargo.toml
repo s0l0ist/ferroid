@@ -29,7 +29,6 @@ crate-type = ["rlib"]
 crossbeam-utils = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 parking_lot = { workspace = true, optional = true }
-pin-project-lite = { workspace = true, optional = true }
 portable-atomic = { workspace = true }
 rand = { workspace = true, optional = true, features = ["thread_rng"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
@@ -43,7 +42,6 @@ web-time = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
 futures = { workspace = true, features = ["alloc"] }
-num_cpus = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync"] }
 
@@ -69,6 +67,6 @@ atomic = []
 tracing = ["dep:tracing"]
 serde = ["dep:serde"]
 base32 = []
-futures = ["dep:futures", "dep:pin-project-lite"]
+futures = ["dep:futures"]
 async-tokio = ["std", "alloc", "futures", "dep:tokio"]
 async-smol = ["std", "alloc", "futures", "dep:smol"]

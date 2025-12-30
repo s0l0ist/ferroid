@@ -311,7 +311,6 @@ fn bench_async_ulid_smol<ID, G, T, R>(
     T: TimeSource<ID::Ty> + Send,
     R: RandSource<ID::Ty> + Send,
 {
-    // unsafe { std::env::set_var("SMOL_THREADS", num_cpus::get().to_string()) };
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
     group.bench_function("try_next_id_async", |b| {
