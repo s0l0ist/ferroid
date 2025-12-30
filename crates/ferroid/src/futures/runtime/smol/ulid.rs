@@ -90,6 +90,36 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
+    #[cfg(feature = "parking-lot")]
+    #[test]
+    fn lock_can_call_next_id_async() {
+        smol::block_on(async {
+            let clock = MonotonicClock::default();
+            let rand = ThreadRandom::default();
+            let generator: LockMonoUlidGenerator<ULID, _, _> =
+                LockMonoUlidGenerator::new(clock, rand);
+            let id = generator.next_id_async().await;
+
+            assert!(matches!(id, ULID { .. }));
+        })
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[test]
+    fn lock_can_call_next_id_async_trait() {
+        use crate::futures::UlidGeneratorAsyncSmolExt;
+
+        smol::block_on(async {
+            let clock = MonotonicClock::default();
+            let rand = ThreadRandom::default();
+            let generator: LockMonoUlidGenerator<ULID, _, _> =
+                LockMonoUlidGenerator::new(clock, rand);
+            let id = UlidGeneratorAsyncSmolExt::next_id_async(&generator).await;
+
+            assert!(matches!(id, ULID { .. }));
+        });
+    }
+
     // Test the explicit SleepProvider approach
     #[test]
     fn generates_many_unique_ids_basic_smol_sleep() {

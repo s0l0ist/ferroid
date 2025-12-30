@@ -88,6 +88,34 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
+    #[cfg(feature = "parking-lot")]
+    #[test]
+    fn lock_can_call_next_id_async() {
+        smol::block_on(async {
+            let clock = MonotonicClock::default();
+            let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+                LockSnowflakeGenerator::new(0u64, clock);
+            let id = generator.next_id_async().await;
+
+            assert!(matches!(id, SnowflakeTwitterId { .. }));
+        })
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[test]
+    fn lock_can_call_next_id_async_trait() {
+        use crate::futures::SnowflakeGeneratorAsyncSmolExt;
+
+        smol::block_on(async {
+            let clock = MonotonicClock::default();
+            let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+                LockSnowflakeGenerator::new(0u64, clock);
+            let id = SnowflakeGeneratorAsyncSmolExt::next_id_async(&generator).await;
+
+            assert!(matches!(id, SnowflakeTwitterId { .. }));
+        });
+    }
+
     #[test]
     fn generates_many_unique_ids_lock_smol_sleep() {
         smol::block_on(async {

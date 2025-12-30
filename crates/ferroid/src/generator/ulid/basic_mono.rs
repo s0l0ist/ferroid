@@ -234,7 +234,6 @@ where
         Self::new(time, rng)
     }
 
-    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     fn next_id(&self) -> IdGenStatus<ID> {
         self.next_id()
     }

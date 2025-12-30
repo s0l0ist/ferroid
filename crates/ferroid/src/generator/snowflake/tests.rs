@@ -402,3 +402,17 @@ fn lock_is_poisoned_on_panic_parking_lot_mutex() {
         .try_next_id()
         .expect_err("parking_lot::Mutex cannot be poisoned");
 }
+
+#[cfg(feature = "parking-lot")]
+#[test]
+fn lock_can_call_next_id() {
+    let clock = MonotonicClock::default();
+
+    let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+        LockSnowflakeGenerator::new(0u64, clock);
+
+    {
+        let status = thread::spawn(move || generator.next_id()).join().unwrap();
+        assert!(matches!(status, IdGenStatus::Ready { .. }));
+    }
+}

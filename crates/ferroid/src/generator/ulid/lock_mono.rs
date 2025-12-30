@@ -149,14 +149,17 @@ where
     ///     }
     /// };
     /// ```
-    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
-    pub fn next_id(&self) -> IdGenStatus<ID> {
+    #[cfg(feature = "parking-lot")]
+    pub fn next_id(&self) -> IdGenStatus<ID>
+    where
+        Error: Into<core::convert::Infallible>,
+    {
         match self.try_next_id() {
             Ok(id) => id,
             Err(e) =>
             {
                 #[allow(unreachable_code)]
-                match e {}
+                match Into::<core::convert::Infallible>::into(e) {}
             }
         }
     }
@@ -245,11 +248,6 @@ where
 
     fn new(time: T, rng: R) -> Self {
         Self::new(time, rng)
-    }
-
-    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
-    fn next_id(&self) -> IdGenStatus<ID> {
-        self.next_id()
     }
 
     fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {

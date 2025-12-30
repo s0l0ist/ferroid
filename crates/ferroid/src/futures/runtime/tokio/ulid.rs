@@ -89,6 +89,33 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
 
+    #[cfg(feature = "parking-lot")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn lock_can_call_next_id_async() -> Result<()> {
+        let clock = MonotonicClock::default();
+        let rand = ThreadRandom::default();
+        let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
+        let id = generator.next_id_async().await;
+
+        assert!(matches!(id, ULID { .. }));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn lock_can_call_next_id_async_trait() -> Result<()> {
+        use crate::futures::UlidGeneratorAsyncTokioExt;
+
+        let clock = MonotonicClock::default();
+        let rand = ThreadRandom::default();
+        let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
+        let id = UlidGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, ULID { .. }));
+
+        Ok(())
+    }
+
     // Test the explicit SleepProvider approach
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_basic_sleep() -> Result<()> {

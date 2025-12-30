@@ -26,11 +26,19 @@ where
     /// The returned [`IdGenStatus`] contains either:
     /// - the newly generated ID, or
     /// - a duration to yield/sleep if the timestamp sequence is exhausted.
-    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
     fn next_id(&self) -> IdGenStatus<ID>
     where
-        Self::Err: Into<core::convert::Infallible>;
-
+        Self::Err: Into<core::convert::Infallible>,
+    {
+        match self.try_next_id() {
+            Ok(status) => status,
+            Err(e) =>
+            {
+                #[allow(unreachable_code)]
+                match e.into() {}
+            }
+        }
+    }
     /// Generates the next available ID.
     ///
     /// The returned [`IdGenStatus`] contains either:

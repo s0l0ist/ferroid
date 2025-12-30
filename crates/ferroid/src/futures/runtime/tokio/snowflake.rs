@@ -87,6 +87,34 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
 
+    #[cfg(feature = "parking-lot")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn lock_can_call_next_id_async() -> Result<()> {
+        let clock = MonotonicClock::default();
+        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+            LockSnowflakeGenerator::new(0u64, clock);
+        let id = generator.next_id_async().await;
+
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn lock_can_call_next_id_async_trait() -> Result<()> {
+        use crate::futures::SnowflakeGeneratorAsyncTokioExt;
+
+        let clock = MonotonicClock::default();
+        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+            LockSnowflakeGenerator::new(0u64, clock);
+        let id = SnowflakeGeneratorAsyncTokioExt::next_id_async(&generator).await;
+
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
+
+        Ok(())
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_lock_sleep() -> Result<()> {
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioSleep>(
