@@ -7,7 +7,5 @@ use core::{future::Future, time::Duration};
 /// `Smol`.
 pub trait SleepProvider {
     /// We require `Send` so that the future can be safely moved across threads
-    type Sleep: Future<Output = ()> + Send;
-
-    fn sleep_for(dur: Duration) -> Self::Sleep;
+    fn sleep_for(dur: Duration) -> impl Future<Output = ()> + Send;
 }
