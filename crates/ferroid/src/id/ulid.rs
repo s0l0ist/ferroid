@@ -236,8 +236,10 @@ macro_rules! define_ulid {
                 ///
                 /// # ⚠️ Note
                 /// The precision is limited to whole milliseconds, matching the
-                /// ULID specification.
+                /// ULID specification. Timestamp values exceeding `u64::MAX` will
+                /// be truncated.
                 #[must_use]
+                #[allow(clippy::cast_possible_truncation)]
                 pub fn datetime(&self) -> std::time::SystemTime {
                     std::time::SystemTime::UNIX_EPOCH
                         + std::time::Duration::from_millis(self.timestamp() as u64)
