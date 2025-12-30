@@ -69,21 +69,23 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{
-    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
-    ///     id::ULID,
-    ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
-    /// };
+    /// # #[cfg(feature = "parking-lot")] {
+    ///     use ferroid::{
+    ///         generator::{IdGenStatus, LockMonoUlidGenerator},
+    ///         id::ULID,
+    ///         rand::ThreadRandom,
+    ///         time::MonotonicClock,
+    ///     };
     ///
-    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    /// let id: ULID = loop {
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///     }
-    /// };
+    ///     let id: ULID = loop {
+    ///         match generator.next_id() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///         }
+    ///     };
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource

@@ -55,7 +55,7 @@ jobs:
       - name: Run all unit tests
         run: |
           cargo test --features all -- --nocapture
-          cargo test --features all,cache-padded,parking-lot -- --nocapture
+          cargo test --all-features -- --nocapture
 
       - name: Save Cargo Cache
         id: cargo-cache-save

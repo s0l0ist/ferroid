@@ -70,20 +70,22 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{
-    ///     generator::{IdGenStatus, LockSnowflakeGenerator},
-    ///     id::SnowflakeTwitterId,
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
-    /// };
+    /// # #[cfg(feature = "parking-lot")] {
+    ///     use ferroid::{
+    ///         generator::{IdGenStatus, LockSnowflakeGenerator},
+    ///         id::SnowflakeTwitterId,
+    ///         time::{MonotonicClock, TWITTER_EPOCH},
+    ///     };
     ///
-    /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
-    /// let id: SnowflakeTwitterId = loop {
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///     }
-    /// };
+    ///     let id: SnowflakeTwitterId = loop {
+    ///         match generator.next_id() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///         }
+    ///     };
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
