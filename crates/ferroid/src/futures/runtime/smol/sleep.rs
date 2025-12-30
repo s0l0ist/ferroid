@@ -1,5 +1,3 @@
-use smol::Timer;
-
 use crate::futures::SleepProvider;
 
 /// An implementation of [`SleepProvider`] using Smol's timer.
@@ -8,7 +6,7 @@ use crate::futures::SleepProvider;
 pub struct SmolSleep;
 impl SleepProvider for SmolSleep {
     async fn sleep_for(dur: core::time::Duration) {
-        Timer::after(dur).await;
+        smol::Timer::after(dur).await;
     }
 }
 
