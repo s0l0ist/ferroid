@@ -257,7 +257,7 @@ where
 impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId<Ty = u64>,
-    T: TimeSource<ID::Ty>,
+    T: TimeSource<u64>,
 {
     type Err = core::convert::Infallible;
 

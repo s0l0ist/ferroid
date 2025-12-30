@@ -178,7 +178,7 @@ fn bench_generator_snow<ID, G, T>(
         let g = generator_fn(0, clock);
         b.iter(|| {
             loop {
-                match g.next_id() {
+                match g.try_next_id().unwrap() {
                     IdGenStatus::Ready { id } => {
                         black_box(id);
                         break;
@@ -210,7 +210,7 @@ fn bench_generator_ulid<ID, G, T, R>(
         let g = generator_fn(clock, rand);
         b.iter(|| {
             loop {
-                match g.next_id() {
+                match g.try_next_id().unwrap() {
                     IdGenStatus::Ready { id } => {
                         black_box(id);
                         break;

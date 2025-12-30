@@ -256,8 +256,8 @@ where
 impl<ID, T, R> UlidGenerator<ID, T, R> for AtomicMonoUlidGenerator<ID, T, R>
 where
     ID: UlidId<Ty = u128>,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
+    T: TimeSource<u128>,
+    R: RandSource<u128>,
 {
     type Err = core::convert::Infallible;
 
