@@ -1,12 +1,4 @@
-use core::{
-    future::Future,
-    marker::PhantomData,
-    pin::Pin,
-    task::{Context, Poll},
-    time::Duration,
-};
-
-use pin_project_lite::pin_project;
+use core::{convert::Infallible, future::Future, time::Duration};
 
 use super::SleepProvider;
 use crate::{
@@ -20,9 +12,6 @@ use crate::{
 ///
 /// This trait enables `UlidGenerator` types to yield IDs in a `Future`-based
 /// context by awaiting until the generator is ready to produce a new ID.
-///
-/// The default implementation uses [`UlidGeneratorFuture`] and a specified
-/// [`SleepProvider`] to yield when the generator is not yet ready.
 pub trait UlidGeneratorAsyncExt<ID, T, R>
 where
     ID: UlidId,
@@ -31,14 +20,26 @@ where
 {
     type Err;
 
-    /// Returns a future that resolves to the next available Snowflake ID.
+    /// Returns a future that resolves to the next available ULID.
     ///
-    /// If the generator is not ready to issue a new ID immediately, the future
-    /// will sleep for the amount of time indicated by the generator and retry.
+    /// This infallible method automatically retries when the generator is
+    /// temporarily unable to produce an ID. Only available for generators with
+    /// infallible error types.
+    ///
+    /// For fallible generators, use [`Self::try_next_id_async`]
+    fn next_id_async<S>(&self) -> impl Future<Output = ID>
+    where
+        S: SleepProvider,
+        Self::Err: Into<Infallible>;
+
+    /// Returns a future that resolves to the next available ULID.
+    ///
+    /// Automatically retries when the generator is temporarily unable to
+    /// produce an ID.
     ///
     /// # Errors
     ///
-    /// This future may return an error if the generator encounters one.
+    /// Returns an error if the generator fails, such as from lock poisoning.
     fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID, Self::Err>>
     where
         S: SleepProvider;
@@ -53,92 +54,31 @@ where
 {
     type Err = G::Err;
 
-    fn try_next_id_async<'a, S>(&'a self) -> impl Future<Output = Result<ID, Self::Err>>
+    async fn next_id_async<S>(&self) -> ID
+    where
+        S: SleepProvider,
+        Self::Err: Into<Infallible>,
+    {
+        match self.try_next_id_async::<S>().await {
+            Ok(id) => id,
+            Err(e) => {
+                #[allow(unreachable_code)]
+                // `into()` satisfies the trait bound at compile time.
+                match e.into() {}
+            }
+        }
+    }
+
+    async fn try_next_id_async<S>(&self) -> Result<ID, Self::Err>
     where
         S: SleepProvider,
     {
-        UlidGeneratorFuture::<'a, G, ID, T, R, S>::new(self)
-    }
-}
-
-pin_project! {
-    /// A future that polls a [`UlidGenerator`] until it is ready to produce an
-    /// ID.
-    ///
-    /// This future handles `Pending` responses by sleeping for a recommended
-    /// amount of time before polling the generator again.
-    #[must_use = "futures do nothing unless you `.await` or poll them"]
-    pub struct UlidGeneratorFuture<'a, G, ID, T, R, S>
-    where
-        G: UlidGenerator<ID, T, R>,
-        ID: UlidId,
-        T: TimeSource<ID::Ty>,
-        R: RandSource<ID::Ty>,
-        S: SleepProvider,
-    {
-        generator: &'a G,
-        #[pin]
-        sleep: Option<S::Sleep>,
-        _idt: PhantomData<(ID, T, R)>
-    }
-}
-
-impl<'a, G, ID, T, R, S> UlidGeneratorFuture<'a, G, ID, T, R, S>
-where
-    G: UlidGenerator<ID, T, R>,
-    ID: UlidId,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
-    S: SleepProvider,
-{
-    /// Constructs a new [`UlidGeneratorFuture`] from a given generator.
-    ///
-    /// This does not immediately begin polling the generator; instead, it will
-    /// attempt to produce an ID when `.poll()` is called.
-    pub const fn new(generator: &'a G) -> Self {
-        Self {
-            generator,
-            sleep: None,
-            _idt: PhantomData,
-        }
-    }
-}
-
-impl<G, ID, T, R, S> Future for UlidGeneratorFuture<'_, G, ID, T, R, S>
-where
-    G: UlidGenerator<ID, T, R>,
-    ID: UlidId,
-    T: TimeSource<ID::Ty>,
-    R: RandSource<ID::Ty>,
-    S: SleepProvider,
-{
-    type Output = Result<ID, G::Err>;
-
-    /// Polls the generator for a new ID.
-    ///
-    /// If the generator is not ready, this will register the task waker and
-    /// sleep for the time recommended by the generator before polling again.
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut this = self.project();
-
-        if let Some(sleep) = this.sleep.as_mut().as_pin_mut() {
-            match sleep.poll(cx) {
-                Poll::Pending => {
-                    return Poll::Pending;
-                }
-                Poll::Ready(()) => {
-                    this.sleep.set(None);
-                }
-            }
-        }
-        match this.generator.try_next_id()? {
-            IdGenStatus::Ready { id } => Poll::Ready(Ok(id)),
-            IdGenStatus::Pending { yield_for } => {
-                let sleep_fut = S::sleep_for(Duration::from_millis(yield_for.to_u64()));
-                this.sleep.as_mut().set(Some(sleep_fut));
-                cx.waker().wake_by_ref();
-                Poll::Pending
-            }
+        loop {
+            let dur = match self.try_next_id()? {
+                IdGenStatus::Ready { id } => return Ok(id),
+                IdGenStatus::Pending { yield_for } => Duration::from_millis(yield_for.to_u64()),
+            };
+            S::sleep_for(dur).await;
         }
     }
 }

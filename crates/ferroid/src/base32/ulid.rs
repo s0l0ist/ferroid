@@ -64,7 +64,7 @@ where
     /// [`Base32UlidExt::encode`].
     ///
     /// The buffer must be exactly [`BeBytes::BASE32_SIZE`] bytes long, which is
-    /// guaranteed at compile time when using [`Base32UlidExt::buf`].
+    /// guaranteed at compile time when using [`Base32UlidExt::base32_array`].
     ///
     /// # Example
     /// ```
@@ -258,7 +258,7 @@ impl<T: Base32UlidExt> From<&Base32UlidFormatter<T>> for alloc::string::String
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: &Base32UlidFormatter<T>) -> alloc::string::String {
+    fn from(formatter: &Base32UlidFormatter<T>) -> Self {
         formatter.as_string()
     }
 }
@@ -267,7 +267,7 @@ impl<T: Base32UlidExt> From<Base32UlidFormatter<T>> for alloc::string::String
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: Base32UlidFormatter<T>) -> alloc::string::String {
+    fn from(formatter: Base32UlidFormatter<T>) -> Self {
         formatter.as_string()
     }
 }
@@ -343,7 +343,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &alloc::string::String) -> bool {
-        self == other
+        self.as_str() == other.as_str()
     }
 }
 #[cfg(feature = "alloc")]
@@ -352,7 +352,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &Base32UlidFormatter<T>) -> bool {
-        other == self
+        self.as_str() == other.as_str()
     }
 }
 
@@ -435,7 +435,7 @@ impl<T: Base32UlidExt> From<&Base32UlidFormatterRef<'_, T>> for alloc::string::S
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: &Base32UlidFormatterRef<'_, T>) -> alloc::string::String {
+    fn from(formatter: &Base32UlidFormatterRef<'_, T>) -> Self {
         formatter.as_string()
     }
 }
@@ -444,7 +444,7 @@ impl<T: Base32UlidExt> From<Base32UlidFormatterRef<'_, T>> for alloc::string::St
 where
     T::Ty: BeBytes,
 {
-    fn from(formatter: Base32UlidFormatterRef<'_, T>) -> alloc::string::String {
+    fn from(formatter: Base32UlidFormatterRef<'_, T>) -> Self {
         formatter.as_string()
     }
 }
@@ -518,7 +518,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &alloc::string::String) -> bool {
-        self == other
+        self.as_str() == other.as_str()
     }
 }
 #[cfg(feature = "alloc")]
@@ -527,7 +527,7 @@ where
     T::Ty: BeBytes,
 {
     fn eq(&self, other: &Base32UlidFormatterRef<'_, T>) -> bool {
-        other == self
+        self.as_str() == other.as_str()
     }
 }
 

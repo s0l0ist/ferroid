@@ -1,4 +1,4 @@
-use core::future::Future;
+use core::{convert::Infallible, future::Future};
 
 use crate::{
     futures::TokioSleep,
@@ -11,11 +11,11 @@ use crate::{
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
 ///
-/// This trait provides a convenience method for using a [`SleepProvider`]
-/// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
-/// without specifying the sleep strategy manually.
+/// This trait provides convenience methods that use [`TokioSleep`] as the sleep
+/// provider, allowing you to call async methods without manually specifying the
+/// sleep strategy.
 ///
-/// [`SleepProvider`]: crate::futures::SleepProvider
+/// [`TokioSleep`]: crate::futures::TokioSleep
 pub trait UlidGeneratorAsyncTokioExt<ID, T, R>
 where
     ID: UlidId,
@@ -24,19 +24,24 @@ where
 {
     type Err;
 
-    /// Returns a future that resolves to the next available ULID using
-    /// the [`TokioSleep`] provider.
+    /// Returns a future that resolves to the next available ULID.
     ///
-    /// Internally delegates to
-    /// [`UlidGeneratorAsyncExt::try_next_id_async`] method with
-    /// [`TokioSleep`] as the sleep strategy.
+    /// This infallible method uses [`TokioSleep`] and is only available for
+    /// generators with infallible error types.
+    ///
+    /// [`TokioSleep`]: crate::futures::TokioSleep
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>;
+
+    /// Returns a future that resolves to the next available ULID using
+    /// [`TokioSleep`].
     ///
     /// # Errors
     ///
-    /// This future may return an error if the underlying generator does.
+    /// Returns an error if the underlying generator fails.
     ///
-    /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::futures::UlidGeneratorAsyncExt::try_next_id_async
+    /// [`TokioSleep`]: crate::futures::TokioSleep
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
@@ -48,6 +53,13 @@ where
     R: RandSource<ID::Ty> + Send,
 {
     type Err = G::Err;
+
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>,
+    {
+        <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::next_id_async::<TokioSleep>(self)
+    }
 
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<TokioSleep>(
@@ -65,7 +77,7 @@ mod tests {
     use super::*;
     use crate::{
         futures::{SleepProvider, TokioYield},
-        generator::{LockMonoUlidGenerator, Result},
+        generator::{BasicUlidGenerator, LockMonoUlidGenerator, Result},
         id::ULID,
         rand::ThreadRandom,
         time::{MonotonicClock, TimeSource},
@@ -74,6 +86,42 @@ mod tests {
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn basic_can_call_next_id_async() {
+        let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+        let id = generator.next_id_async().await;
+        assert!(matches!(id, ULID { .. }));
+
+        let id = UlidGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, ULID { .. }));
+    }
+
+    #[cfg(target_has_atomic = "128")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn atomic_can_call_next_id_async() {
+        use crate::generator::AtomicMonoUlidGenerator;
+
+        let generator =
+            AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+        let id = generator.next_id_async().await;
+        assert!(matches!(id, ULID { .. }));
+
+        let id = UlidGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, ULID { .. }));
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn lock_can_call_next_id_async() {
+        let generator =
+            LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+        let id = generator.next_id_async().await;
+        assert!(matches!(id, ULID { .. }));
+
+        let id = UlidGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, ULID { .. }));
+    }
 
     // Test the explicit SleepProvider approach
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

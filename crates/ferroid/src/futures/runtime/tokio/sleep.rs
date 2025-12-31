@@ -1,6 +1,3 @@
-use alloc::boxed::Box;
-use core::{future::Future, pin::Pin};
-
 use crate::futures::SleepProvider;
 
 /// An implementation of [`SleepProvider`] using Tokio's timer.
@@ -8,10 +5,8 @@ use crate::futures::SleepProvider;
 /// This is the default provider for use in async applications built on Tokio.
 pub struct TokioSleep;
 impl SleepProvider for TokioSleep {
-    type Sleep = tokio::time::Sleep;
-
-    fn sleep_for(dur: core::time::Duration) -> Self::Sleep {
-        tokio::time::sleep(dur)
+    async fn sleep_for(dur: core::time::Duration) {
+        tokio::time::sleep(dur).await;
     }
 }
 
@@ -26,11 +21,7 @@ impl SleepProvider for TokioSleep {
 /// more efficient due to reduced scheduler churn.
 pub struct TokioYield;
 impl SleepProvider for TokioYield {
-    /// Tokio's `yield_now()` returns a private future type, so we must use a
-    /// boxed `dyn Future` to abstract over it.
-    type Sleep = Pin<Box<dyn Future<Output = ()> + Send>>;
-
-    fn sleep_for(_dur: core::time::Duration) -> Self::Sleep {
-        Box::pin(tokio::task::yield_now())
+    async fn sleep_for(_dur: core::time::Duration) {
+        tokio::task::yield_now().await;
     }
 }

@@ -1,11 +1,11 @@
-mod tokio;
+mod sleep;
 #[cfg(feature = "snowflake")]
-mod tokio_snowflake;
+mod snowflake;
 #[cfg(feature = "ulid")]
-mod tokio_ulid;
+mod ulid;
 
-pub use tokio::*;
+pub use sleep::*;
 #[cfg(feature = "snowflake")]
-pub use tokio_snowflake::*;
+pub use snowflake::*;
 #[cfg(feature = "ulid")]
-pub use tokio_ulid::*;
+pub use ulid::*;

@@ -70,20 +70,22 @@ where
     ///
     /// # Example
     /// ```
-    /// use ferroid::{
-    ///     generator::{IdGenStatus, LockSnowflakeGenerator},
-    ///     id::SnowflakeTwitterId,
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
-    /// };
+    /// # #[cfg(feature = "parking-lot")] {
+    ///     use ferroid::{
+    ///         generator::{IdGenStatus, LockSnowflakeGenerator},
+    ///         id::SnowflakeTwitterId,
+    ///         time::{MonotonicClock, TWITTER_EPOCH},
+    ///     };
     ///
-    /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    ///     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
-    /// let id: SnowflakeTwitterId = loop {
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///     }
-    /// };
+    ///     let id: SnowflakeTwitterId = loop {
+    ///         match generator.next_id() {
+    ///             IdGenStatus::Ready { id } => break id,
+    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
+    ///         }
+    ///     };
+    /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
@@ -133,10 +135,6 @@ where
     /// generator is temporarily exhausted (e.g., the sequence is full and the
     /// time has not advanced), it returns [`IdGenStatus::Pending`].
     ///
-    /// # Panics
-    /// Panics if the lock is poisoned. For explicitly fallible behavior, use
-    /// [`Self::try_next_id`] instead.
-    ///
     /// # Example
     /// ```
     /// use ferroid::{
@@ -154,11 +152,22 @@ where
     ///     }
     /// };
     /// ```
-    pub fn next_id(&self) -> IdGenStatus<ID> {
-        self.try_next_id().unwrap()
+    #[cfg(feature = "parking-lot")]
+    pub fn next_id(&self) -> IdGenStatus<ID>
+    where
+        Error: Into<core::convert::Infallible>,
+    {
+        match self.try_next_id() {
+            Ok(id) => id,
+            Err(e) => {
+                #[allow(unreachable_code)]
+                // `into()` satisfies the trait bound at compile time.
+                match Into::<core::convert::Infallible>::into(e) {}
+            }
+        }
     }
 
-    /// A fallible version of [`Self::next_id`] that returns a [`Result`].
+    /// Attempts to generate a new ULID with fallible error handling.
     ///
     /// This method attempts to generate the next ID based on the current time
     /// and internal state. If successful, it returns [`IdGenStatus::Ready`]
@@ -200,10 +209,16 @@ where
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error> {
         let now = self.time.current_millis();
 
-        #[cfg(feature = "parking-lot")]
-        let mut id = self.state.lock();
-        #[cfg(not(feature = "parking-lot"))]
-        let mut id = self.state.lock()?;
+        let mut id = {
+            #[cfg(feature = "parking-lot")]
+            {
+                self.state.lock()
+            }
+            #[cfg(not(feature = "parking-lot"))]
+            {
+                self.state.lock()?
+            }
+        };
 
         let current_ts = id.timestamp();
         match now.cmp(&current_ts) {
@@ -241,10 +256,6 @@ where
 
     fn new(machine_id: ID::Ty, time: T) -> Self {
         Self::new(machine_id, time)
-    }
-
-    fn next_id(&self) -> IdGenStatus<ID> {
-        self.next_id()
     }
 
     fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {

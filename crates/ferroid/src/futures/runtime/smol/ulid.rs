@@ -1,4 +1,4 @@
-use core::future::Future;
+use core::{convert::Infallible, future::Future};
 
 use crate::{
     futures::SmolSleep,
@@ -11,11 +11,11 @@ use crate::{
 /// Extension trait for asynchronously generating ULIDs using the
 /// [`smol`](https://docs.rs/smol) async runtime.
 ///
-/// This trait provides a convenience method for using a [`SleepProvider`]
-/// backed by the `smol` runtime, allowing you to call `.try_next_id_async()`
-/// without needing to specify the sleep strategy manually.
+/// This trait provides convenience methods that use [`SmolSleep`] as the sleep
+/// provider, allowing you to call async methods without manually specifying the
+/// sleep strategy.
 ///
-/// [`SleepProvider`]: crate::futures::SleepProvider
+/// [`SmolSleep`]: crate::futures::SmolSleep
 pub trait UlidGeneratorAsyncSmolExt<ID, T, R>
 where
     ID: UlidId,
@@ -23,19 +23,25 @@ where
     R: RandSource<ID::Ty>,
 {
     type Err;
-    /// Returns a future that resolves to the next available Ulid using
-    /// the [`SmolSleep`] provider.
+
+    /// Returns a future that resolves to the next available ULID.
     ///
-    /// Internally delegates to
-    /// [`UlidGeneratorAsyncExt::try_next_id_async`] method with
-    /// [`SmolSleep`] as the sleep strategy.
+    /// This infallible method uses [`SmolSleep`] and is only available for
+    /// generators with infallible error types.
+    ///
+    /// [`SmolSleep`]: crate::futures::SmolSleep
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>;
+
+    /// Returns a future that resolves to the next available ULID using
+    /// [`SmolSleep`].
     ///
     /// # Errors
     ///
-    /// This future may return an error if the underlying generator does.
+    /// Returns an error if the underlying generator fails.
     ///
-    /// [`UlidGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::futures::UlidGeneratorAsyncExt::try_next_id_async
+    /// [`SmolSleep`]: crate::futures::SmolSleep
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
@@ -47,6 +53,13 @@ where
     R: RandSource<ID::Ty> + Send,
 {
     type Err = G::Err;
+
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>,
+    {
+        <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::next_id_async::<SmolSleep>(self)
+    }
 
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::futures::UlidGeneratorAsyncExt<ID, T, R>>::try_next_id_async::<SmolSleep>(
@@ -65,7 +78,7 @@ mod tests {
     use super::*;
     use crate::{
         futures::{SleepProvider, SmolYield},
-        generator::{LockMonoUlidGenerator, Result},
+        generator::{BasicUlidGenerator, LockMonoUlidGenerator, Result},
         id::ULID,
         rand::{RandSource, ThreadRandom},
         time::{MonotonicClock, TimeSource},
@@ -74,6 +87,49 @@ mod tests {
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
+
+    #[test]
+    fn basic_can_call_next_id_async() {
+        smol::block_on(async {
+            let generator =
+                BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+            let id = generator.next_id_async().await;
+            assert!(matches!(id, ULID { .. }));
+
+            let id = UlidGeneratorAsyncSmolExt::next_id_async(&generator).await;
+            assert!(matches!(id, ULID { .. }));
+        })
+    }
+
+    #[cfg(target_has_atomic = "128")]
+    #[test]
+    fn atomic_can_call_next_id_async() {
+        use crate::generator::AtomicMonoUlidGenerator;
+
+        smol::block_on(async {
+            let generator =
+                AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+            let id = generator.next_id_async().await;
+            assert!(matches!(id, ULID { .. }));
+
+            let id = UlidGeneratorAsyncSmolExt::next_id_async(&generator).await;
+            assert!(matches!(id, ULID { .. }));
+        })
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[test]
+    fn lock_can_call_next_id_async() {
+        smol::block_on(async {
+            let generator =
+                LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+            let id = generator.next_id_async().await;
+            assert!(matches!(id, ULID { .. }));
+
+            let id = UlidGeneratorAsyncSmolExt::next_id_async(&generator).await;
+            assert!(matches!(id, ULID { .. }));
+        })
+    }
 
     // Test the explicit SleepProvider approach
     #[test]

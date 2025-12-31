@@ -118,9 +118,9 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    let id1 = generator.next_id().unwrap_ready();
-    let id2 = generator.next_id().unwrap_ready();
-    let id3 = generator.next_id().unwrap_ready();
+    let id1 = generator.try_next_id().unwrap().unwrap_ready();
+    let id2 = generator.try_next_id().unwrap().unwrap_ready();
+    let id3 = generator.try_next_id().unwrap().unwrap_ready();
 
     assert_eq!(id1.timestamp().to_u64(), 42);
     assert_eq!(id2.timestamp().to_u64(), 42);
@@ -138,7 +138,7 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    let yield_for = generator.next_id().unwrap_pending();
+    let yield_for = generator.try_next_id().unwrap().unwrap_pending();
     assert_eq!(yield_for, ID::ONE);
 }
 
@@ -149,15 +149,15 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    let id = generator.next_id().unwrap_ready();
+    let id = generator.try_next_id().unwrap().unwrap_ready();
     assert_eq!(id.timestamp().to_u64(), 42);
 
-    let yield_for = generator.next_id().unwrap_pending();
+    let yield_for = generator.try_next_id().unwrap().unwrap_pending();
     assert_eq!(yield_for, ID::ONE);
 
     shared_time.clock.index.set(1);
 
-    let id = generator.next_id().unwrap_ready();
+    let id = generator.try_next_id().unwrap().unwrap_ready();
     assert_eq!(id.timestamp().to_u64(), 43);
 }
 
@@ -175,7 +175,7 @@ where
 
     for _ in 0..TOTAL_IDS {
         loop {
-            match generator.next_id() {
+            match generator.try_next_id().unwrap() {
                 IdGenStatus::Ready { id } => {
                     let ts = id.timestamp();
                     if ts > last_timestamp {
@@ -219,7 +219,7 @@ where
             s.spawn(move || {
                 for _ in 0..IDS_PER_THREAD {
                     loop {
-                        match generator.next_id() {
+                        match generator.try_next_id().unwrap() {
                             IdGenStatus::Ready { id } => {
                                 assert!(seen_ids.lock().unwrap().insert(id));
                                 break;
@@ -402,7 +402,6 @@ fn lock_is_poisoned_on_panic_std_mutex() {
 
 #[cfg(feature = "parking-lot")]
 #[test]
-#[should_panic(expected = "parking_lot::Mutex cannot be poisoned")]
 fn lock_is_poisoned_on_panic_parking_lot_mutex() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
@@ -420,5 +419,49 @@ fn lock_is_poisoned_on_panic_parking_lot_mutex() {
 
     generator
         .try_next_id()
-        .expect_err("parking_lot::Mutex cannot be poisoned");
+        .expect("parking_lot::Mutex cannot be poisoned");
+}
+
+#[test]
+fn basic_can_call_next_id() {
+    let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
+#[test]
+fn basic_mono_can_call_next_id() {
+    let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
+#[cfg(all(feature = "atomic", target_has_atomic = "128"))]
+#[test]
+fn atomic_mono_can_call_next_id() {
+    use crate::generator::AtomicMonoUlidGenerator;
+    let generator =
+        AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
+#[cfg(feature = "parking-lot")]
+#[test]
+fn lock_mono_can_call_next_id() {
+    let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
 }

@@ -1,4 +1,4 @@
-use core::future::Future;
+use core::{convert::Infallible, future::Future};
 
 use crate::{
     futures::TokioSleep,
@@ -10,30 +10,36 @@ use crate::{
 /// Extension trait for asynchronously generating Snowflake IDs using the
 /// [`tokio`](https://docs.rs/tokio) async runtime.
 ///
-/// This trait provides a convenience method for using a [`SleepProvider`]
-/// backed by the `tokio` runtime, allowing you to call `.try_next_id_async()`
-/// without specifying the sleep strategy manually.
+/// This trait provides convenience methods that use [`TokioSleep`] as the sleep
+/// provider, allowing you to call async methods without manually specifying the
+/// sleep strategy.
 ///
-/// [`SleepProvider`]: crate::futures::SleepProvider
+/// [`TokioSleep`]: crate::futures::TokioSleep
 pub trait SnowflakeGeneratorAsyncTokioExt<ID, T>
 where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
     type Err;
-    /// Returns a future that resolves to the next available Snowflake ID using
-    /// the [`TokioSleep`] provider.
+
+    /// Returns a future that resolves to the next available Snowflake ID.
     ///
-    /// Internally delegates to
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`] method with
-    /// [`TokioSleep`] as the sleep strategy.
+    /// This infallible method uses [`TokioSleep`] and is only available for
+    /// generators with infallible error types.
+    ///
+    /// [`TokioSleep`]: crate::futures::TokioSleep
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>;
+
+    /// Returns a future that resolves to the next available Snowflake ID using
+    /// [`TokioSleep`].
     ///
     /// # Errors
     ///
-    /// This future may return an error if the underlying generator does.
+    /// Returns an error if the underlying generator fails.
     ///
-    /// [`SnowflakeGeneratorAsyncExt::try_next_id_async`]:
-    ///     crate::futures::SnowflakeGeneratorAsyncExt::try_next_id_async
+    /// [`TokioSleep`]: crate::futures::TokioSleep
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>>;
 }
 
@@ -44,6 +50,15 @@ where
     T: TimeSource<ID::Ty> + Send,
 {
     type Err = G::Err;
+
+    fn next_id_async(&self) -> impl Future<Output = ID>
+    where
+        Self::Err: Into<Infallible>,
+    {
+        <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::next_id_async::<TokioSleep>(
+            self,
+        )
+    }
 
     fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<TokioSleep>(
@@ -61,7 +76,7 @@ mod tests {
     use super::*;
     use crate::{
         futures::{SleepProvider, TokioYield},
-        generator::{AtomicSnowflakeGenerator, LockSnowflakeGenerator, Result, SnowflakeGenerator},
+        generator::{LockSnowflakeGenerator, Result, SnowflakeGenerator},
         id::{SnowflakeId, SnowflakeTwitterId},
         time::{MonotonicClock, TimeSource},
     };
@@ -69,6 +84,30 @@ mod tests {
     const TOTAL_IDS: usize = 4096;
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
+
+    #[cfg(target_has_atomic = "64")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn atomic_can_call_next_id_async() {
+        use crate::generator::AtomicSnowflakeGenerator;
+
+        let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
+        let id = generator.next_id_async().await;
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
+
+        let id = SnowflakeGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    async fn lock_can_call_next_id_async() {
+        let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
+        let id = generator.next_id_async().await;
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
+
+        let id = SnowflakeGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_lock_sleep() -> Result<()> {
@@ -98,8 +137,11 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(target_has_atomic = "64")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic_sleep() -> Result<()> {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioSleep>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
@@ -107,8 +149,12 @@ mod tests {
         .await?;
         Ok(())
     }
+
+    #[cfg(target_has_atomic = "64")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic_yield() -> Result<()> {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioYield>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
@@ -116,8 +162,12 @@ mod tests {
         .await?;
         Ok(())
     }
+
+    #[cfg(target_has_atomic = "64")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic_convenience() -> Result<()> {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,

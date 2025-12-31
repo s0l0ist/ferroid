@@ -178,7 +178,7 @@ fn bench_generator_snow<ID, G, T>(
         let g = generator_fn(0, clock);
         b.iter(|| {
             loop {
-                match g.next_id() {
+                match g.try_next_id().unwrap() {
                     IdGenStatus::Ready { id } => {
                         black_box(id);
                         break;
@@ -210,7 +210,7 @@ fn bench_generator_ulid<ID, G, T, R>(
         let g = generator_fn(clock, rand);
         b.iter(|| {
             loop {
-                match g.next_id() {
+                match g.try_next_id().unwrap() {
                     IdGenStatus::Ready { id } => {
                         black_box(id);
                         break;
@@ -311,7 +311,6 @@ fn bench_async_ulid_smol<ID, G, T, R>(
     T: TimeSource<ID::Ty> + Send,
     R: RandSource<ID::Ty> + Send,
 {
-    // unsafe { std::env::set_var("SMOL_THREADS", num_cpus::get().to_string()) };
     let mut group = c.benchmark_group(group_name);
     group.throughput(Throughput::Elements(1));
     group.bench_function("try_next_id_async", |b| {

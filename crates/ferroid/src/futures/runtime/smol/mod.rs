@@ -1,11 +1,11 @@
-mod smol;
+mod sleep;
 #[cfg(feature = "snowflake")]
-mod smol_snowflake;
+mod snowflake;
 #[cfg(feature = "ulid")]
-mod smol_ulid;
+mod ulid;
 
-pub use smol::*;
+pub use sleep::*;
 #[cfg(feature = "snowflake")]
-pub use smol_snowflake::*;
+pub use snowflake::*;
 #[cfg(feature = "ulid")]
-pub use smol_ulid::*;
+pub use ulid::*;
