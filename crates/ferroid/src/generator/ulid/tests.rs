@@ -402,8 +402,6 @@ fn lock_is_poisoned_on_panic_std_mutex() {
 
 #[cfg(feature = "parking-lot")]
 #[test]
-#[should_panic(expected = "parking_lot::Mutex cannot be poisoned")]
-#[allow(unreachable_code)]
 fn lock_is_poisoned_on_panic_parking_lot_mutex() {
     let clock = MonotonicClock::default();
     let rand = ThreadRandom;
@@ -421,7 +419,7 @@ fn lock_is_poisoned_on_panic_parking_lot_mutex() {
 
     generator
         .try_next_id()
-        .expect_err("parking_lot::Mutex cannot be poisoned");
+        .expect("parking_lot::Mutex cannot be poisoned");
 }
 
 #[test]
