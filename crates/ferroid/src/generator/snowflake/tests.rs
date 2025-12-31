@@ -384,6 +384,7 @@ fn lock_is_poisoned_on_panic_std_mutex() {
 #[cfg(feature = "parking-lot")]
 #[test]
 #[should_panic(expected = "parking_lot::Mutex cannot be poisoned")]
+#[allow(unreachable_code)]
 fn lock_is_poisoned_on_panic_parking_lot_mutex() {
     // Arrange
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
