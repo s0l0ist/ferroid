@@ -156,9 +156,9 @@ where
     {
         match self.try_next_id() {
             Ok(id) => id,
-            Err(e) =>
-            {
+            Err(e) => {
                 #[allow(unreachable_code)]
+                // `into()` satisfies the trait bound at compile time.
                 match Into::<core::convert::Infallible>::into(e) {}
             }
         }
@@ -204,10 +204,16 @@ where
     pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error> {
         let now = self.time.current_millis();
 
-        #[cfg(feature = "parking-lot")]
-        let mut id = self.state.lock();
-        #[cfg(not(feature = "parking-lot"))]
-        let mut id = self.state.lock()?;
+        let mut id = {
+            #[cfg(feature = "parking-lot")]
+            {
+                self.state.lock()
+            }
+            #[cfg(not(feature = "parking-lot"))]
+            {
+                self.state.lock()?
+            }
+        };
 
         let current_ts = id.timestamp();
 

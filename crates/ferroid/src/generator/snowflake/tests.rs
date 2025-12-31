@@ -8,7 +8,10 @@ use std::{
 };
 
 use crate::{
-    generator::{BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator, SnowflakeGenerator},
+    generator::{
+        AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
+        SnowflakeGenerator,
+    },
     id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
     time::{MonotonicClock, TimeSource},
 };
@@ -403,16 +406,33 @@ fn lock_is_poisoned_on_panic_parking_lot_mutex() {
         .expect_err("parking_lot::Mutex cannot be poisoned");
 }
 
+#[test]
+fn basic_can_call_next_id() {
+    let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::default());
+    let status: IdGenStatus<SnowflakeTwitterId> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<SnowflakeTwitterId> = SnowflakeGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
+#[test]
+fn atomic_can_call_next_id() {
+    let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
+    let status: IdGenStatus<SnowflakeTwitterId> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<SnowflakeTwitterId> = SnowflakeGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
 #[cfg(feature = "parking-lot")]
 #[test]
 fn lock_can_call_next_id() {
-    let clock = MonotonicClock::default();
+    let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
+    let status: IdGenStatus<SnowflakeTwitterId> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
 
-    let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-        LockSnowflakeGenerator::new(0u64, clock);
-
-    {
-        let status = thread::spawn(move || generator.next_id()).join().unwrap();
-        assert!(matches!(status, IdGenStatus::Ready { .. }));
-    }
+    let status: IdGenStatus<SnowflakeTwitterId> = SnowflakeGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
 }

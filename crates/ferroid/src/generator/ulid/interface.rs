@@ -32,9 +32,9 @@ where
     {
         match self.try_next_id() {
             Ok(status) => status,
-            Err(e) =>
-            {
+            Err(e) => {
                 #[allow(unreachable_code)]
+                // `into()` satisfies the trait bound at compile time.
                 match e.into() {}
             }
         }

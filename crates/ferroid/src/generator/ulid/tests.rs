@@ -8,8 +8,8 @@ use std::{
 
 use crate::{
     generator::{
-        BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator,
-        UlidGenerator,
+        AtomicMonoUlidGenerator, BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus,
+        LockMonoUlidGenerator, UlidGenerator,
     },
     id::{Id, ToU64, ULID, UlidId},
     rand::{RandSource, ThreadRandom},
@@ -423,16 +423,44 @@ fn lock_is_poisoned_on_panic_parking_lot_mutex() {
         .expect_err("parking_lot::Mutex cannot be poisoned");
 }
 
+#[test]
+fn basic_can_call_next_id() {
+    let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
+#[test]
+fn basic_mono_can_call_next_id() {
+    let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
+#[test]
+fn atomic_mono_can_call_next_id() {
+    let generator =
+        AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
+}
+
 #[cfg(feature = "parking-lot")]
 #[test]
-fn lock_can_call_next_id() {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
+fn lock_mono_can_call_next_id() {
+    let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    let status: IdGenStatus<ULID> = generator.next_id();
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
 
-    let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
-
-    {
-        let status = thread::spawn(move || generator.next_id()).join().unwrap();
-        assert!(matches!(status, IdGenStatus::Ready { .. }));
-    }
+    let status: IdGenStatus<ULID> = UlidGenerator::next_id(&generator);
+    assert!(matches!(status, IdGenStatus::Ready { .. }));
 }

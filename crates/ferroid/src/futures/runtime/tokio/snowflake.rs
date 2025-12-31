@@ -51,21 +51,19 @@ where
 {
     type Err = G::Err;
 
-    async fn next_id_async(&self) -> ID
+    fn next_id_async(&self) -> impl Future<Output = ID>
     where
         Self::Err: Into<Infallible>,
     {
         <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::next_id_async::<TokioSleep>(
             self,
         )
-        .await
     }
 
-    async fn try_next_id_async(&self) -> Result<ID, Self::Err> {
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<TokioSleep>(
             self,
         )
-        .await
     }
 }
 
@@ -87,32 +85,25 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
 
-    #[cfg(feature = "parking-lot")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    async fn lock_can_call_next_id_async() -> Result<()> {
-        let clock = MonotonicClock::default();
-        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-            LockSnowflakeGenerator::new(0u64, clock);
+    async fn atomic_can_call_next_id_async() {
+        let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
         let id = generator.next_id_async().await;
-
         assert!(matches!(id, SnowflakeTwitterId { .. }));
 
-        Ok(())
+        let id = SnowflakeGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
     }
 
     #[cfg(feature = "parking-lot")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    async fn lock_can_call_next_id_async_trait() -> Result<()> {
-        use crate::futures::SnowflakeGeneratorAsyncTokioExt;
-
-        let clock = MonotonicClock::default();
-        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-            LockSnowflakeGenerator::new(0u64, clock);
-        let id = SnowflakeGeneratorAsyncTokioExt::next_id_async(&generator).await;
-
+    async fn lock_can_call_next_id_async() {
+        let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
+        let id = generator.next_id_async().await;
         assert!(matches!(id, SnowflakeTwitterId { .. }));
 
-        Ok(())
+        let id = SnowflakeGeneratorAsyncTokioExt::next_id_async(&generator).await;
+        assert!(matches!(id, SnowflakeTwitterId { .. }));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]

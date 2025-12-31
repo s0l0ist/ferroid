@@ -62,6 +62,7 @@ where
             Err(e) =>
             {
                 #[allow(unreachable_code)]
+                // `into()` satisfies the trait bound at compile time.
                 match e.into() {}
             }
         }

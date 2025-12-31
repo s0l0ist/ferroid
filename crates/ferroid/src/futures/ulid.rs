@@ -61,9 +61,9 @@ where
     {
         match self.try_next_id_async::<S>().await {
             Ok(id) => id,
-            Err(e) =>
-            {
+            Err(e) => {
                 #[allow(unreachable_code)]
+                // `into()` satisfies the trait bound at compile time.
                 match e.into() {}
             }
         }

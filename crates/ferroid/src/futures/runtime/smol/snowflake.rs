@@ -51,21 +51,19 @@ where
 {
     type Err = G::Err;
 
-    async fn next_id_async(&self) -> ID
+    fn next_id_async(&self) -> impl Future<Output = ID>
     where
         Self::Err: Into<Infallible>,
     {
         <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::next_id_async::<SmolSleep>(
             self,
         )
-        .await
     }
 
-    async fn try_next_id_async(&self) -> Result<ID, Self::Err> {
+    fn try_next_id_async(&self) -> impl Future<Output = Result<ID, Self::Err>> {
         <Self as crate::futures::SnowflakeGeneratorAsyncExt<ID, T>>::try_next_id_async::<SmolSleep>(
             self,
         )
-        .await
     }
 }
 
@@ -88,32 +86,29 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
-    #[cfg(feature = "parking-lot")]
     #[test]
-    fn lock_can_call_next_id_async() {
+    fn atomic_can_call_next_id_async() {
         smol::block_on(async {
-            let clock = MonotonicClock::default();
-            let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-                LockSnowflakeGenerator::new(0u64, clock);
+            let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
             let id = generator.next_id_async().await;
+            assert!(matches!(id, SnowflakeTwitterId { .. }));
 
+            let id = SnowflakeGeneratorAsyncSmolExt::next_id_async(&generator).await;
             assert!(matches!(id, SnowflakeTwitterId { .. }));
         })
     }
 
     #[cfg(feature = "parking-lot")]
     #[test]
-    fn lock_can_call_next_id_async_trait() {
-        use crate::futures::SnowflakeGeneratorAsyncSmolExt;
-
+    fn lock_can_call_next_id_async() {
         smol::block_on(async {
-            let clock = MonotonicClock::default();
-            let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-                LockSnowflakeGenerator::new(0u64, clock);
-            let id = SnowflakeGeneratorAsyncSmolExt::next_id_async(&generator).await;
-
+            let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
+            let id = generator.next_id_async().await;
             assert!(matches!(id, SnowflakeTwitterId { .. }));
-        });
+
+            let id = SnowflakeGeneratorAsyncSmolExt::next_id_async(&generator).await;
+            assert!(matches!(id, SnowflakeTwitterId { .. }));
+        })
     }
 
     #[test]
