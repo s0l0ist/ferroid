@@ -77,7 +77,7 @@ mod tests {
     use super::*;
     use crate::{
         futures::{SleepProvider, SmolYield},
-        generator::{AtomicSnowflakeGenerator, LockSnowflakeGenerator, Result, SnowflakeGenerator},
+        generator::{LockSnowflakeGenerator, Result, SnowflakeGenerator},
         id::{SnowflakeId, SnowflakeTwitterId},
         time::{MonotonicClock, TimeSource},
     };
@@ -86,8 +86,11 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8;
 
+    #[cfg(target_has_atomic = "64")]
     #[test]
     fn atomic_can_call_next_id_async() {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         smol::block_on(async {
             let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
             let id = generator.next_id_async().await;
@@ -145,8 +148,11 @@ mod tests {
         });
     }
 
+    #[cfg(target_has_atomic = "64")]
     #[test]
     fn generates_many_unique_ids_atomic_smol_sleep() {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         smol::block_on(async {
             test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolSleep>(
                 AtomicSnowflakeGenerator::new,
@@ -156,8 +162,12 @@ mod tests {
             .unwrap();
         });
     }
+
+    #[cfg(target_has_atomic = "64")]
     #[test]
     fn generates_many_unique_ids_atomic_smol_yield() {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         smol::block_on(async {
             test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, SmolYield>(
                 AtomicSnowflakeGenerator::new,
@@ -169,6 +179,8 @@ mod tests {
     }
     #[test]
     fn generates_many_unique_ids_atomic_smol_convenience() {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         smol::block_on(async {
             test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
                 AtomicSnowflakeGenerator::new,

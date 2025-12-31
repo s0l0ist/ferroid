@@ -77,7 +77,7 @@ mod tests {
     use super::*;
     use crate::{
         futures::{SleepProvider, TokioYield},
-        generator::{AtomicMonoUlidGenerator, BasicUlidGenerator, LockMonoUlidGenerator, Result},
+        generator::{BasicUlidGenerator, LockMonoUlidGenerator, Result},
         id::ULID,
         rand::ThreadRandom,
         time::{MonotonicClock, TimeSource},
@@ -97,8 +97,11 @@ mod tests {
         assert!(matches!(id, ULID { .. }));
     }
 
+    #[cfg(target_has_atomic = "128")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn atomic_can_call_next_id_async() {
+        use crate::generator::AtomicMonoUlidGenerator;
+
         let generator =
             AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
         let id = generator.next_id_async().await;

@@ -8,8 +8,8 @@ use std::{
 
 use crate::{
     generator::{
-        AtomicMonoUlidGenerator, BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus,
-        LockMonoUlidGenerator, UlidGenerator,
+        BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator,
+        UlidGenerator,
     },
     id::{Id, ToU64, ULID, UlidId},
     rand::{RandSource, ThreadRandom},
@@ -443,8 +443,10 @@ fn basic_mono_can_call_next_id() {
     assert!(matches!(status, IdGenStatus::Ready { .. }));
 }
 
+#[cfg(all(feature = "atomic", target_has_atomic = "128"))]
 #[test]
 fn atomic_mono_can_call_next_id() {
+    use crate::generator::AtomicMonoUlidGenerator;
     let generator =
         AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     let status: IdGenStatus<ULID> = generator.next_id();

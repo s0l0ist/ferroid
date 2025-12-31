@@ -8,10 +8,7 @@ use std::{
 };
 
 use crate::{
-    generator::{
-        AtomicSnowflakeGenerator, BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator,
-        SnowflakeGenerator,
-    },
+    generator::{BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator, SnowflakeGenerator},
     id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
     time::{MonotonicClock, TimeSource},
 };
@@ -416,8 +413,11 @@ fn basic_can_call_next_id() {
     assert!(matches!(status, IdGenStatus::Ready { .. }));
 }
 
+#[cfg(target_has_atomic = "64")]
 #[test]
 fn atomic_can_call_next_id() {
+    use crate::generator::AtomicSnowflakeGenerator;
+
     let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
     let status: IdGenStatus<SnowflakeTwitterId> = generator.next_id();
     assert!(matches!(status, IdGenStatus::Ready { .. }));

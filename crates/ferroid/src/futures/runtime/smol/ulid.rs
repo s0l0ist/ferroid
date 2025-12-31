@@ -78,7 +78,7 @@ mod tests {
     use super::*;
     use crate::{
         futures::{SleepProvider, SmolYield},
-        generator::{AtomicMonoUlidGenerator, BasicUlidGenerator, LockMonoUlidGenerator, Result},
+        generator::{BasicUlidGenerator, LockMonoUlidGenerator, Result},
         id::ULID,
         rand::{RandSource, ThreadRandom},
         time::{MonotonicClock, TimeSource},
@@ -101,8 +101,11 @@ mod tests {
         })
     }
 
+    #[cfg(target_has_atomic = "128")]
     #[test]
     fn atomic_can_call_next_id_async() {
+        use crate::generator::AtomicMonoUlidGenerator;
+
         smol::block_on(async {
             let generator =
                 AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());

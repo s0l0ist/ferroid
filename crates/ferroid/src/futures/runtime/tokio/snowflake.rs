@@ -76,7 +76,7 @@ mod tests {
     use super::*;
     use crate::{
         futures::{SleepProvider, TokioYield},
-        generator::{AtomicSnowflakeGenerator, LockSnowflakeGenerator, Result, SnowflakeGenerator},
+        generator::{LockSnowflakeGenerator, Result, SnowflakeGenerator},
         id::{SnowflakeId, SnowflakeTwitterId},
         time::{MonotonicClock, TimeSource},
     };
@@ -85,8 +85,11 @@ mod tests {
     const NUM_GENERATORS: u64 = 8;
     const IDS_PER_GENERATOR: usize = TOTAL_IDS * 8; // Enough to simulate at least 8 Pending cycles
 
+    #[cfg(target_has_atomic = "64")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn atomic_can_call_next_id_async() {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
         let id = generator.next_id_async().await;
         assert!(matches!(id, SnowflakeTwitterId { .. }));
@@ -134,8 +137,11 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(target_has_atomic = "64")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic_sleep() -> Result<()> {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioSleep>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
@@ -143,8 +149,12 @@ mod tests {
         .await?;
         Ok(())
     }
+
+    #[cfg(target_has_atomic = "64")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic_yield() -> Result<()> {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         test_many_snow_unique_ids_explicit::<SnowflakeTwitterId, _, _, TokioYield>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
@@ -152,8 +162,12 @@ mod tests {
         .await?;
         Ok(())
     }
+
+    #[cfg(target_has_atomic = "64")]
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn generates_many_unique_ids_atomic_convenience() -> Result<()> {
+        use crate::generator::AtomicSnowflakeGenerator;
+
         test_many_snow_unique_ids_convenience::<SnowflakeTwitterId, _, _>(
             AtomicSnowflakeGenerator::new,
             MonotonicClock::default,
