@@ -33,7 +33,7 @@ portable-atomic = { workspace = true }
 rand = { workspace = true, optional = true, features = ["thread_rng"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
 smol = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true, features = ["time", "rt-multi-thread"] }
+tokio = { workspace = true, optional = true, features = ["time"] }
 tracing = { workspace = true, optional = true, features = ["attributes"] }
 
 [target.wasm32-unknown-unknown.dependencies]
@@ -43,7 +43,7 @@ web-time = { workspace = true }
 criterion = { workspace = true, features = ["async_tokio", "async_smol"] }
 futures = { workspace = true, features = ["alloc"] }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync"] }
 
 [[bench]]
 name = "bench"
