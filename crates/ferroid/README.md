@@ -158,47 +158,36 @@ let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
 
 #### Generating IDs
 
-Calling `next_id()` may yield `Pending` if the current sequence is exhausted.
-Please note that while this behavior is exposed to provide maximum flexibility,
-you must be generating enough IDs **per millisecond** to draw out the `Pending`
-path. You may spin, yield, or sleep depending on your environment:
+Calling `next_id()` will call the passed in backoff strategy closure if the
+underlying generator needs to yield. Please note that while this behavior is
+exposed to provide maximum flexibility, you must be generating enough IDs **per
+millisecond** to draw out the path. You may spin, yield, or sleep depending on
+your environment:
 
 ```rust
 use ferroid::{
     generator::{BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus},
-    id::{SnowflakeTwitterId, ToU64, ULID},
+    id::{Id, SnowflakeTwitterId, ToU64, ULID},
     rand::ThreadRandom,
     time::{MonotonicClock, TWITTER_EPOCH},
 };
 
 let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
-let id: SnowflakeTwitterId = loop {
-    match snow_gen.next_id() {
-        IdGenStatus::Ready { id } => break id,
-        IdGenStatus::Pending { yield_for } => {
-            // Spin: lowest latency, but generally avoid.
-            core::hint::spin_loop();
+let id: SnowflakeTwitterId = snow_gen.next_id(|yield_for: <SnowflakeTwitterId as Id>::Ty| {
+    // Spin: lowest latency, but generally avoid.
+    core::hint::spin_loop();
 
-            // Yield to the scheduler: lets another thread run; still may busy-wait.
-            std::thread::yield_now();
+    // Yield to the scheduler: lets another thread run; still may busy-wait.
+    std::thread::yield_now();
 
-            // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
-            std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
+    // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
+    std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
 
-            // For use in runtimes such as `tokio` or `smol`, use the async API (see below).
-        }
-    }
-};
+    // For use in runtimes such as `tokio` or `smol`, use the async API (see below).
+});
 
 let ulid_gen = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-let id: ULID = loop {
-    match ulid_gen.next_id() {
-        IdGenStatus::Ready { id } => break id,
-        IdGenStatus::Pending { yield_for } => {
-            std::thread::yield_now();
-        }
-    }
-};
+let id: ULID = ulid_gen.next_id(|_| std::thread::yield_now());
 ```
 
 ### Asynchronous Generators
@@ -323,9 +312,9 @@ Users must explicitly choose a serialization strategy using `#[serde(with =
 
 There are two serialization strategies:
 
-- `as_native_snow`/`as_native_ulid`: Serialize as native integer types
+- `snow_as_int`/`ulid_as_int`: Serialize as native integer types
   (u64/u128)
-- `as_base32_snow`/`as_base32_ulid`: Serialize as Crockford base32 encoded
+- `snow_as_base32`/`ulid_as_base32`: Serialize as Crockford base32 encoded
   strings
 
 Both strategies validate during deserialization and return errors for invalid
@@ -338,16 +327,16 @@ Base32 section).
 ```rust
 use ferroid::{
     id::SnowflakeTwitterId,
-    serde::{as_base32_snow, as_native_snow},
+    serde::{snow_as_base32, snow_as_int},
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct Event {
-    #[serde(with = "as_native_snow")]
+    #[serde(with = "snow_as_int")]
     id_snow_int: SnowflakeTwitterId, // Serializes as an int: 123456789
 
-    #[serde(with = "as_base32_snow")]
+    #[serde(with = "snow_as_base32")]
     id_snow_base32: SnowflakeTwitterId, // Serializes as a base32 string: "000000000001A"
 }
 ```

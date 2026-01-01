@@ -30,7 +30,7 @@ use crate::id::Id;
 ///     SnowflakeTwitterId::max_sequence(),
 ///     FixedTime,
 /// );
-/// match generator.next_id() {
+/// match generator.gen_id() {
 ///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
 ///     IdGenStatus::Pending { yield_for } => println!("Back off for: {yield_for}"),
 /// }

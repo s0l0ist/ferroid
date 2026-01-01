@@ -72,12 +72,7 @@ where
     ///
     /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    /// let id: ULID = loop {
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///     }
-    /// };
+    /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
@@ -116,6 +111,66 @@ where
 
     /// Generates a new ULID.
     ///
+    /// Returns a new, time-ordered, unique ID.
+    ///
+    /// # Example
+    /// ```
+    /// use ferroid::{
+    ///     generator::{BasicMonoUlidGenerator, IdGenStatus},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
+    ///
+    /// let generator =
+    ///     BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
+    /// ```
+    pub fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
+        match self.try_next_id(f) {
+            Ok(id) => id,
+            Err(e) =>
+            {
+                #[allow(unreachable_code)]
+                match e {}
+            }
+        }
+    }
+
+    /// Generates a new ULID.
+    ///
+    /// Returns a new, time-ordered, unique ID with fallible error handling.
+    ///
+    /// # Example
+    /// ```
+    /// use ferroid::{
+    ///     generator::{BasicMonoUlidGenerator, IdGenStatus},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
+    ///
+    /// let generator =
+    ///     BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = match generator.try_next_id(|_| std::thread::yield_now()) {
+    ///     Ok(id) => id,
+    ///     Err(_) => unreachable!(),
+    /// };
+    /// ```
+    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
+    pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
+        loop {
+            match self.try_gen_id()? {
+                IdGenStatus::Ready { id } => break Ok(id),
+                IdGenStatus::Pending { yield_for } => f(yield_for),
+            }
+        }
+    }
+
+    /// Generates a new ULID.
+    ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
     /// generator is temporarily exhausted (e.g., the sequence is full and the
     /// time has not advanced), it returns [`IdGenStatus::Pending`].
@@ -132,14 +187,14 @@ where
     /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = loop {
-    ///     match generator.next_id() {
+    ///     match generator.gen_id() {
     ///         IdGenStatus::Ready { id } => break id,
     ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
     ///     }
     /// };
     /// ```
-    pub fn next_id(&self) -> IdGenStatus<ID> {
-        match self.try_next_id() {
+    pub fn gen_id(&self) -> IdGenStatus<ID> {
+        match self.try_gen_id() {
             Ok(id) => id,
             Err(e) =>
             {
@@ -177,7 +232,7 @@ where
     ///
     /// // Attempt to generate a new ID
     /// let id: ULID = loop {
-    ///     match generator.try_next_id() {
+    ///     match generator.try_gen_id() {
     ///         Ok(IdGenStatus::Ready { id }) => break id,
     ///         Ok(IdGenStatus::Pending { yield_for }) => {
     ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
@@ -187,7 +242,7 @@ where
     /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    pub fn try_gen_id(&self) -> Result<IdGenStatus<ID>> {
         let now = self.time.current_millis();
         let state = self.state.get();
         let current_ts = state.timestamp();
@@ -234,11 +289,19 @@ where
         Self::new(time, rng)
     }
 
-    fn next_id(&self) -> IdGenStatus<ID> {
-        self.next_id()
+    fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
+        self.next_id(f)
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
-        self.try_next_id()
+    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
+        self.try_next_id(f)
+    }
+
+    fn gen_id(&self) -> IdGenStatus<ID> {
+        self.gen_id()
+    }
+
+    fn try_gen_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
+        self.try_gen_id()
     }
 }

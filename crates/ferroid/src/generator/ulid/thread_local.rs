@@ -81,12 +81,7 @@ impl Ulid {
     /// ```
     #[must_use]
     pub fn new_ulid() -> ULID {
-        BASIC_ULID.with(|g| match g.next_id() {
-            IdGenStatus::Ready { id } => id,
-            IdGenStatus::Pending { .. } => {
-                unreachable!("A non-monotonic generator should never yield!")
-            }
-        })
+        BASIC_ULID.with(|g| g.next_id(|_| ()))
     }
 
     /// Generates a monotonic ULID using [`Backoff::Yield`] as the overflow
@@ -140,7 +135,7 @@ impl Ulid {
     fn ulid_mono_with_backoff(f: impl Fn(<ULID as Id>::Ty)) -> ULID {
         BASIC_MONO_ULID.with(|g| {
             loop {
-                match g.next_id() {
+                match g.gen_id() {
                     IdGenStatus::Ready { id } => break id,
                     IdGenStatus::Pending { yield_for } => f(yield_for),
                 }

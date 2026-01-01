@@ -86,9 +86,9 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    let id1 = generator.try_next_id().unwrap().unwrap_ready();
-    let id2 = generator.try_next_id().unwrap().unwrap_ready();
-    let id3 = generator.try_next_id().unwrap().unwrap_ready();
+    let id1 = generator.try_gen_id().unwrap().unwrap_ready();
+    let id2 = generator.try_gen_id().unwrap().unwrap_ready();
+    let id3 = generator.try_gen_id().unwrap().unwrap_ready();
 
     assert_eq!(id1.timestamp().to_u64(), 42);
     assert_eq!(id2.timestamp().to_u64(), 42);
@@ -105,7 +105,7 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    let yield_for = generator.try_next_id().unwrap().unwrap_pending();
+    let yield_for = generator.try_gen_id().unwrap().unwrap_pending();
     assert_eq!(yield_for, ID::ONE);
 }
 
@@ -116,17 +116,17 @@ where
     T: TimeSource<ID::Ty>,
 {
     for i in 0..=ID::max_sequence().to_u64() {
-        let id = generator.try_next_id().unwrap().unwrap_ready();
+        let id = generator.try_gen_id().unwrap().unwrap_ready();
         assert_eq!(id.sequence().to_u64(), i);
         assert_eq!(id.timestamp().to_u64(), 42);
     }
 
-    let yield_for = generator.try_next_id().unwrap().unwrap_pending();
+    let yield_for = generator.try_gen_id().unwrap().unwrap_pending();
     assert_eq!(yield_for, ID::ONE);
 
     shared_time.clock.index.set(1);
 
-    let id = generator.try_next_id().unwrap().unwrap_ready();
+    let id = generator.try_gen_id().unwrap().unwrap_ready();
     assert_eq!(id.timestamp().to_u64(), 43);
     assert_eq!(id.sequence().to_u64(), 0);
 }
@@ -144,7 +144,7 @@ where
 
     for _ in 0..TOTAL_IDS {
         loop {
-            match generator.try_next_id().unwrap() {
+            match generator.try_gen_id().unwrap() {
                 IdGenStatus::Ready { id } => {
                     let ts = id.timestamp();
                     if ts > last_timestamp {
@@ -188,7 +188,7 @@ where
             s.spawn(move || {
                 for _ in 0..IDS_PER_THREAD {
                     loop {
-                        match generator.try_next_id().unwrap() {
+                        match generator.try_gen_id().unwrap() {
                             IdGenStatus::Ready { id } => {
                                 assert!(seen_ids.lock().unwrap().insert(id));
                                 break;
@@ -376,7 +376,7 @@ fn lock_is_poisoned_on_panic_std_mutex() {
     }
 
     let err = generator
-        .try_next_id()
+        .try_gen_id()
         .expect_err("expected an error after poison");
     assert!(matches!(err, crate::generator::Error::LockPoisoned));
 }
@@ -398,18 +398,16 @@ fn lock_is_poisoned_on_panic_parking_lot_mutex() {
     }
 
     generator
-        .try_next_id()
+        .try_gen_id()
         .expect("parking_lot::Mutex cannot be poisoned");
 }
 
 #[test]
 fn basic_can_call_next_id() {
     let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::default());
-    let status: IdGenStatus<SnowflakeTwitterId> = generator.next_id();
-    assert!(matches!(status, IdGenStatus::Ready { .. }));
-
-    let status: IdGenStatus<SnowflakeTwitterId> = SnowflakeGenerator::next_id(&generator);
-    assert!(matches!(status, IdGenStatus::Ready { .. }));
+    let backoff = |_| core::hint::spin_loop();
+    let _id: SnowflakeTwitterId = generator.next_id(backoff);
+    let _id: SnowflakeTwitterId = SnowflakeGenerator::next_id(&generator, backoff);
 }
 
 #[cfg(target_has_atomic = "64")]
@@ -418,20 +416,16 @@ fn atomic_can_call_next_id() {
     use crate::generator::AtomicSnowflakeGenerator;
 
     let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
-    let status: IdGenStatus<SnowflakeTwitterId> = generator.next_id();
-    assert!(matches!(status, IdGenStatus::Ready { .. }));
-
-    let status: IdGenStatus<SnowflakeTwitterId> = SnowflakeGenerator::next_id(&generator);
-    assert!(matches!(status, IdGenStatus::Ready { .. }));
+    let backoff = |_| core::hint::spin_loop();
+    let _id: SnowflakeTwitterId = generator.next_id(backoff);
+    let _id: SnowflakeTwitterId = SnowflakeGenerator::next_id(&generator, backoff);
 }
 
 #[cfg(feature = "parking-lot")]
 #[test]
 fn lock_can_call_next_id() {
     let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
-    let status: IdGenStatus<SnowflakeTwitterId> = generator.next_id();
-    assert!(matches!(status, IdGenStatus::Ready { .. }));
-
-    let status: IdGenStatus<SnowflakeTwitterId> = SnowflakeGenerator::next_id(&generator);
-    assert!(matches!(status, IdGenStatus::Ready { .. }));
+    let backoff = |_| core::hint::spin_loop();
+    let _id: SnowflakeTwitterId = generator.next_id(backoff);
+    let _id: SnowflakeTwitterId = SnowflakeGenerator::next_id(&generator, backoff);
 }
