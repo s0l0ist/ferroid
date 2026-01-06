@@ -27,7 +27,7 @@ where
     /// infallible error types.
     ///
     /// For fallible generators, use
-    /// [`UlidGeneratorAsyncExt::try_next_id_async`]
+    /// [`Self::try_next_id_async`]
     fn next_id_async<S>(&self) -> impl Future<Output = ID>
     where
         S: SleepProvider,
