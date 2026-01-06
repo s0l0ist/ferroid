@@ -127,14 +127,13 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{LockMonoUlidGenerator, IdGenStatus},
+    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
     /// };
     ///
-    /// let generator =
-    ///     LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
     /// ```
@@ -157,14 +156,13 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{LockMonoUlidGenerator, IdGenStatus},
+    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
     /// };
     ///
-    /// let generator =
-    ///     LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = match generator.try_next_id(|_| std::thread::yield_now()) {
     ///     Ok(id) => id,

@@ -147,13 +147,21 @@ use `TWITTER_EPOCH`, which begins at **Thursday, November 4, 2010, 01:42:54.657
 UTC** (millisecond zero).
 
 ```rust
-use ferroid::time::{MonotonicClock, UNIX_EPOCH};
+use ferroid::{
+      generator::BasicSnowflakeGenerator,
+      id::{SnowflakeTwitterId, SnowflakeMastodonId},
+      time::{MonotonicClock, TWITTER_EPOCH, MASTODON_EPOCH, UNIX_EPOCH}
+};
 
 // Same as MonotonicClock::default();
-let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
+let unix_clock = MonotonicClock::with_epoch(UNIX_EPOCH);
+// Also the same as MonotonicClock::default();
+let unix_clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
 
-// let generator0 = BasicSnowflakeGenerator::new(0, clock.clone());
-// let generator1 = BasicSnowflakeGenerator::new(1, clock.clone());
+let twitter_clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
+
+let mastodon_gen: BasicSnowflakeGenerator<SnowflakeMastodonId, _> = BasicSnowflakeGenerator::new(0, unix_clock);
+let twitter_gen: BasicSnowflakeGenerator<SnowflakeTwitterId, _> = BasicSnowflakeGenerator::new(0, twitter_clock);
 ```
 
 #### Generating IDs

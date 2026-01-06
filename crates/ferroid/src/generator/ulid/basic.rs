@@ -98,8 +98,7 @@ where
     ///     time::MonotonicClock,
     /// };
     ///
-    /// let generator =
-    ///     BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
     /// ```
@@ -127,8 +126,7 @@ where
     ///     time::MonotonicClock,
     /// };
     ///
-    /// let generator =
-    ///     BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = match generator.try_next_id(|_| std::thread::yield_now()) {
     ///     Ok(id) => id,

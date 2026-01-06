@@ -131,7 +131,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{LockSnowflakeGenerator, IdGenStatus},
+    ///     generator::{IdGenStatus, LockSnowflakeGenerator},
     ///     id::SnowflakeTwitterId,
     ///     time::MonotonicClock,
     /// };
@@ -159,7 +159,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{LockSnowflakeGenerator, IdGenStatus},
+    ///     generator::{IdGenStatus, LockSnowflakeGenerator},
     ///     id::SnowflakeTwitterId,
     ///     time::MonotonicClock,
     /// };
