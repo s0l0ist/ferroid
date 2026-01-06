@@ -54,7 +54,7 @@ where
 
     /// Attempts to generate the next available ID.
     ///
-    /// This is the infallible counterpart to [`UlidGenerator::try_next_id`].
+    /// This is the infallible counterpart to [`UlidGenerator::try_gen_id`].
     /// The returned [`IdGenStatus`] contains either:
     /// - the newly generated ID, or
     /// - a duration to yield/sleep if the timestamp sequence is exhausted.

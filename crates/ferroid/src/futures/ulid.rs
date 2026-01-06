@@ -20,19 +20,20 @@ where
 {
     type Err;
 
-    /// Returns a future that resolves to the next available ULID.
+    /// Returns a future that resolves to the next available ID.
     ///
     /// This infallible method automatically retries when the generator is
     /// temporarily unable to produce an ID. Only available for generators with
     /// infallible error types.
     ///
-    /// For fallible generators, use [`Self::try_next_id_async`]
+    /// For fallible generators, use
+    /// [`UlidGeneratorAsyncExt::try_next_id_async`]
     fn next_id_async<S>(&self) -> impl Future<Output = ID>
     where
         S: SleepProvider,
         Self::Err: Into<Infallible>;
 
-    /// Returns a future that resolves to the next available ULID.
+    /// Returns a future that resolves to the next available ID.
     ///
     /// Automatically retries when the generator is temporarily unable to
     /// produce an ID.
@@ -75,7 +76,7 @@ where
     {
         loop {
             let dur = match self.try_gen_id()? {
-                IdGenStatus::Ready { id } => return Ok(id),
+                IdGenStatus::Ready { id } => break Ok(id),
                 IdGenStatus::Pending { yield_for } => Duration::from_millis(yield_for.to_u64()),
             };
             S::sleep_for(dur).await;
