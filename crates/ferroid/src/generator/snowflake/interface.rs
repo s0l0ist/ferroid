@@ -52,15 +52,15 @@ where
 
     /// Attempts to generate the next available ID.
     ///
-    /// This is the infallible counterpart to [`SnowflakeGenerator::try_gen_id`].
+    /// This is the infallible counterpart to [`SnowflakeGenerator::try_poll_id`].
     /// The returned [`IdGenStatus`] contains either:
     /// - the newly generated ID, or
     /// - a duration to yield/sleep if the timestamp sequence is exhausted.
-    fn gen_id(&self) -> IdGenStatus<ID>
+    fn poll_id(&self) -> IdGenStatus<ID>
     where
         Self::Err: Into<core::convert::Infallible>,
     {
-        match self.try_gen_id() {
+        match self.try_poll_id() {
             Ok(status) => status,
             Err(e) => {
                 #[allow(unreachable_code)]
@@ -80,5 +80,5 @@ where
     ///
     /// May return an error if the underlying implementation uses a lock and it
     /// is poisoned.
-    fn try_gen_id(&self) -> Result<IdGenStatus<ID>, Self::Err>;
+    fn try_poll_id(&self) -> Result<IdGenStatus<ID>, Self::Err>;
 }

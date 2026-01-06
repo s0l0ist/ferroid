@@ -75,7 +75,7 @@ where
         S: SleepProvider,
     {
         loop {
-            let dur = match self.try_gen_id()? {
+            let dur = match self.try_poll_id()? {
                 IdGenStatus::Ready { id } => break Ok(id),
                 IdGenStatus::Pending { yield_for } => Duration::from_millis(yield_for.to_u64()),
             };

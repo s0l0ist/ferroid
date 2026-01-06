@@ -135,7 +135,7 @@ impl Ulid {
     fn ulid_mono_with_backoff(f: impl Fn(<ULID as Id>::Ty)) -> ULID {
         BASIC_MONO_ULID.with(|g| {
             loop {
-                match g.gen_id() {
+                match g.poll_id() {
                     IdGenStatus::Ready { id } => break id,
                     IdGenStatus::Pending { yield_for } => f(yield_for),
                 }

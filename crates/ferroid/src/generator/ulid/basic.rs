@@ -141,7 +141,7 @@ where
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
     pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
         loop {
-            match self.try_gen_id()? {
+            match self.try_poll_id()? {
                 IdGenStatus::Ready { id } => break Ok(id),
                 IdGenStatus::Pending { yield_for } => f(yield_for),
             }
@@ -166,14 +166,14 @@ where
     /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = loop {
-    ///     match generator.gen_id() {
+    ///     match generator.poll_id() {
     ///         IdGenStatus::Ready { id } => break id,
     ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
     ///     }
     /// };
     /// ```
-    pub fn gen_id(&self) -> IdGenStatus<ID> {
-        match self.try_gen_id() {
+    pub fn poll_id(&self) -> IdGenStatus<ID> {
+        match self.try_poll_id() {
             Ok(id) => id,
             Err(e) =>
             {
@@ -207,7 +207,7 @@ where
     ///
     /// // Attempt to generate a new ID
     /// let id: ULID = loop {
-    ///     match generator.try_gen_id() {
+    ///     match generator.try_poll_id() {
     ///         Ok(IdGenStatus::Ready { id }) => break id,
     ///         Ok(IdGenStatus::Pending { yield_for }) => {
     ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
@@ -219,10 +219,10 @@ where
     ///
     /// # Errors
     ///
-    /// This method is infallible for this generator. Use the [`Self::gen_id`]
+    /// This method is infallible for this generator. Use the [`Self::poll_id`]
     /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_gen_id(&self) -> Result<IdGenStatus<ID>> {
+    pub fn try_poll_id(&self) -> Result<IdGenStatus<ID>> {
         Ok(IdGenStatus::Ready {
             id: ID::from_components(self.time.current_millis(), self.rng.rand()),
         })
@@ -249,11 +249,11 @@ where
         self.try_next_id(f)
     }
 
-    fn gen_id(&self) -> IdGenStatus<ID> {
-        self.gen_id()
+    fn poll_id(&self) -> IdGenStatus<ID> {
+        self.poll_id()
     }
 
-    fn try_gen_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
-        self.try_gen_id()
+    fn try_poll_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
+        self.try_poll_id()
     }
 }

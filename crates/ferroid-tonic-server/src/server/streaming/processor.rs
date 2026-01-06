@@ -48,7 +48,7 @@ pub async fn handle_stream_request(
     let mut generated = 0;
 
     while generated < chunk_size {
-        match generator.try_gen_id() {
+        match generator.try_poll_id() {
             Ok(IdGenStatus::Ready { id }) => {
                 generated += 1;
 
