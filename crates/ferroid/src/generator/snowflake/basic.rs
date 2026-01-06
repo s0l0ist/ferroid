@@ -128,46 +128,11 @@ where
     ///
     /// let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
     /// ```
-    pub fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
-        match self.try_next_id(f) {
-            Ok(id) => id,
-            Err(e) =>
-            {
-                #[allow(unreachable_code)]
-                match e {}
-            }
-        }
-    }
-
-    /// Generates a new ID.
-    ///
-    /// Returns a new, time-ordered, unique ID with fallible error handling.
-    ///
-    /// # Example
-    /// ```
-    /// use ferroid::{
-    ///     generator::{BasicSnowflakeGenerator, Poll},
-    ///     id::SnowflakeTwitterId,
-    ///     time::MonotonicClock,
-    /// };
-    ///
-    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::default());
-    ///
-    /// let id: SnowflakeTwitterId = match generator.try_next_id(|_| std::thread::yield_now()) {
-    ///     Ok(id) => id,
-    ///     Err(_) => unreachable!(),
-    /// };
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// This method is infallible for this generator. Use the [`Self::next_id`]
-    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
-    pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
+    pub fn next_id(&self, mut f: impl FnMut(ID::Ty)) -> ID {
         loop {
-            match self.try_poll_id()? {
-                Poll::Ready { id } => break Ok(id),
+            match self.poll_id() {
+                Poll::Ready { id } => break id,
                 Poll::Pending { yield_for } => f(yield_for),
             }
         }
@@ -196,59 +161,8 @@ where
     ///     }
     /// };
     /// ```
-    pub fn poll_id(&self) -> Poll<ID> {
-        match self.try_poll_id() {
-            Ok(id) => id,
-            Err(e) =>
-            {
-                #[allow(unreachable_code)]
-                match e {}
-            }
-        }
-    }
-
-    /// A fallible version of [`Self::poll_id`] that returns a [`Result`].
-    ///
-    /// This method attempts to generate the next ID based on the current time
-    /// and internal state. If successful, it returns [`Poll::Ready`] with a
-    /// newly generated ID. If the generator is temporarily exhausted, it
-    /// returns [`Poll::Pending`]. If an internal failure occurs (e.g., a time
-    /// source or lock error), it returns an error.
-    ///
-    /// # Returns
-    /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
-    ///   before trying again
-    /// - `Err(_)`: infallible for this generator
-    ///
-    /// # Example
-    /// ```
-    /// use ferroid::{
-    ///     generator::{BasicSnowflakeGenerator, Poll},
-    ///     id::{SnowflakeTwitterId, ToU64},
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
-    /// };
-    ///
-    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
-    ///
-    /// // Attempt to generate a new ID
-    /// let id: SnowflakeTwitterId = loop {
-    ///     match generator.try_poll_id() {
-    ///         Ok(Poll::Ready { id }) => break id,
-    ///         Ok(Poll::Pending { yield_for }) => {
-    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///         }
-    ///         Err(_) => unreachable!(),
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// This method is infallible for this generator. Use the [`Self::poll_id`]
-    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_poll_id(&self) -> Result<Poll<ID>> {
+    pub fn poll_id(&self) -> Poll<ID> {
         let now = self.time.current_millis();
         let state = self.state.get();
         let current_ts = state.timestamp();
@@ -258,17 +172,17 @@ where
                 if state.has_sequence_room() {
                     let updated = state.increment_sequence();
                     self.state.set(updated);
-                    Ok(Poll::Ready { id: updated })
+                    Poll::Ready { id: updated }
                 } else {
-                    Ok(Poll::Pending { yield_for: ID::ONE })
+                    Poll::Pending { yield_for: ID::ONE }
                 }
             }
             Ordering::Greater => {
                 let updated = state.rollover_to_timestamp(now);
                 self.state.set(updated);
-                Ok(Poll::Ready { id: updated })
+                Poll::Ready { id: updated }
             }
-            Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
+            Ordering::Less => Self::cold_clock_behind(now, current_ts),
         }
     }
 
@@ -297,7 +211,7 @@ where
     }
 
     fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
-        self.try_next_id(f)
+        Ok(self.next_id(f))
     }
 
     fn poll_id(&self) -> Poll<ID> {
@@ -305,6 +219,6 @@ where
     }
 
     fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {
-        self.try_poll_id()
+        Ok(self.poll_id())
     }
 }

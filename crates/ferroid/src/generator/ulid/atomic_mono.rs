@@ -142,48 +142,11 @@ where
     ///
     /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
     /// ```
-    pub fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
-        match self.try_next_id(f) {
-            Ok(id) => id,
-            Err(e) =>
-            {
-                #[allow(unreachable_code)]
-                match e {}
-            }
-        }
-    }
-
-    /// Generates a new ULID.
-    ///
-    /// Returns a new, time-ordered, unique ID with fallible error handling.
-    ///
-    /// # Example
-    /// ```
-    /// use ferroid::{
-    ///     generator::{AtomicMonoUlidGenerator, Poll},
-    ///     id::ULID,
-    ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
-    /// };
-    ///
-    /// let generator =
-    ///     AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-    ///
-    /// let id: ULID = match generator.try_next_id(|_| std::thread::yield_now()) {
-    ///     Ok(id) => id,
-    ///     Err(_) => unreachable!(),
-    /// };
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// This method is infallible for this generator. Use the [`Self::next_id`]
-    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
-    pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
+    pub fn next_id(&self, mut f: impl FnMut(ID::Ty)) -> ID {
         loop {
-            match self.try_poll_id()? {
-                Poll::Ready { id } => break Ok(id),
+            match self.poll_id() {
+                Poll::Ready { id } => break id,
                 Poll::Pending { yield_for } => f(yield_for),
             }
         }
@@ -214,62 +177,8 @@ where
     ///     }
     /// };
     /// ```
-    pub fn poll_id(&self) -> Poll<ID> {
-        match self.try_poll_id() {
-            Ok(id) => id,
-            Err(e) =>
-            {
-                #[allow(unreachable_code)]
-                match e {}
-            }
-        }
-    }
-
-    /// Attempts to generate a new ULID with fallible error handling.
-    ///
-    /// Combines the current timestamp with a freshly generated random value to
-    /// produce a unique identifier. Returns [`Poll::Ready`] on success.
-    ///
-    /// # Returns
-    /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
-    ///   before trying again
-    /// - `Err(_)`: infallible for this generator
-    ///
-    /// # Errors
-    /// - This method currently does not return any errors and always returns
-    ///   `Ok`. It is marked as fallible to allow for future extensibility
-    ///
-    /// # Example
-    /// ```
-    /// use ferroid::{
-    ///     generator::{AtomicMonoUlidGenerator, Poll},
-    ///     id::{ToU64, ULID},
-    ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
-    /// };
-    ///
-    /// let generator =
-    ///     AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-    ///
-    /// // Attempt to generate a new ID
-    /// let id: ULID = loop {
-    ///     match generator.try_poll_id() {
-    ///         Ok(Poll::Ready { id }) => break id,
-    ///         Ok(Poll::Pending { yield_for }) => {
-    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///         }
-    ///         Err(_) => unreachable!(),
-    ///     }
-    /// };
-    /// ```
-    ///
-    /// # Errors
-    ///
-    /// This method is infallible for this generator. Use the [`Self::poll_id`]
-    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_poll_id(&self) -> Result<Poll<ID>> {
+    pub fn poll_id(&self) -> Poll<ID> {
         let now = self.time.current_millis();
 
         let current_raw = self.state.load(Ordering::Relaxed);
@@ -281,12 +190,12 @@ where
                 if current_id.has_random_room() {
                     current_id.increment_random()
                 } else {
-                    return Ok(Poll::Pending { yield_for: ID::ONE });
+                    return Poll::Pending { yield_for: ID::ONE };
                 }
             }
             cmp::Ordering::Greater => current_id.rollover_to_timestamp(now, self.rng.rand()),
             cmp::Ordering::Less => {
-                return Ok(Self::cold_clock_behind(now, current_ts));
+                return Self::cold_clock_behind(now, current_ts);
             }
         };
 
@@ -297,13 +206,13 @@ where
             .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
             .is_ok()
         {
-            Ok(Poll::Ready { id: next_id })
+            Poll::Ready { id: next_id }
         } else {
             // CAS failed - another thread won the race. Yield 0 to retry
             // immediately.
-            Ok(Poll::Pending {
+            Poll::Pending {
                 yield_for: ID::ZERO,
-            })
+            }
         }
     }
 
@@ -333,7 +242,7 @@ where
     }
 
     fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
-        self.try_next_id(f)
+        Ok(self.next_id(f))
     }
 
     fn poll_id(&self) -> Poll<ID> {
@@ -341,6 +250,6 @@ where
     }
 
     fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {
-        self.try_poll_id()
+        Ok(self.poll_id())
     }
 }
