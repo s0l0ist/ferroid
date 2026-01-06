@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    generator::{BasicSnowflakeGenerator, Poll, LockSnowflakeGenerator, SnowflakeGenerator},
+    generator::{BasicSnowflakeGenerator, LockSnowflakeGenerator, Poll, SnowflakeGenerator},
     id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
     time::{MonotonicClock, TimeSource},
 };

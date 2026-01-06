@@ -8,8 +8,7 @@ use std::{
 
 use crate::{
     generator::{
-        BasicMonoUlidGenerator, BasicUlidGenerator, Poll, LockMonoUlidGenerator,
-        UlidGenerator,
+        BasicMonoUlidGenerator, BasicUlidGenerator, LockMonoUlidGenerator, Poll, UlidGenerator,
     },
     id::{Id, ToU64, ULID, UlidId},
     rand::{RandSource, ThreadRandom},

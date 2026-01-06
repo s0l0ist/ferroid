@@ -5,7 +5,7 @@ use core::cmp::Ordering;
 use tracing::instrument;
 
 use crate::{
-    generator::{Error, Poll, Mutex, Result, UlidGenerator},
+    generator::{Error, Mutex, Poll, Result, UlidGenerator},
     id::UlidId,
     rand::RandSource,
     time::TimeSource,
@@ -127,7 +127,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockMonoUlidGenerator},
+    ///     generator::{LockMonoUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -156,7 +156,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockMonoUlidGenerator},
+    ///     generator::{LockMonoUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -192,7 +192,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockMonoUlidGenerator},
+    ///     generator::{LockMonoUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -236,7 +236,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockMonoUlidGenerator},
+    ///     generator::{LockMonoUlidGenerator, Poll},
     ///     id::{ToU64, ULID},
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,

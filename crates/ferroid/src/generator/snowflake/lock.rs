@@ -130,7 +130,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockSnowflakeGenerator},
+    ///     generator::{LockSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
     ///     time::MonotonicClock,
     /// };
@@ -158,7 +158,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockSnowflakeGenerator},
+    ///     generator::{LockSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
     ///     time::MonotonicClock,
     /// };
@@ -193,7 +193,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockSnowflakeGenerator},
+    ///     generator::{LockSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
     ///     time::{MonotonicClock, TWITTER_EPOCH},
     /// };
@@ -239,7 +239,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{Poll, LockSnowflakeGenerator},
+    ///     generator::{LockSnowflakeGenerator, Poll},
     ///     id::{SnowflakeTwitterId, ToU64},
     ///     time::{MonotonicClock, TWITTER_EPOCH},
     /// };
