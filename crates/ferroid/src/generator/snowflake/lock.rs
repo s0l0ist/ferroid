@@ -225,15 +225,15 @@ where
     /// Attempts to generate a new ULID with fallible error handling.
     ///
     /// This method attempts to generate the next ID based on the current time
-    /// and internal state. If successful, it returns [`Poll::Ready`]
-    /// with a newly generated ID. If the generator is temporarily exhausted, it
-    /// returns [`Poll::Pending`]. If an internal failure occurs (e.g., a
-    /// time source or lock error), it returns an error.
+    /// and internal state. If successful, it returns [`Poll::Ready`] with a
+    /// newly generated ID. If the generator is temporarily exhausted, it
+    /// returns [`Poll::Pending`]. If an internal failure occurs (e.g., a time
+    /// source or lock error), it returns an error.
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in
-    ///   milliseconds) before trying again
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
+    ///   before trying again
     /// - `Err(e)`: the lock was poisoned
     ///
     /// # Example

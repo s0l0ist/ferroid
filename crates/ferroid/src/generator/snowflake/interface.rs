@@ -20,8 +20,9 @@ where
 
     /// Generates the next available ID.
     ///
-    /// This is the infallible counterpart to [`SnowflakeGenerator::try_next_id`].
-    /// The returned [`Poll`] contains either:
+    /// This is the infallible counterpart to
+    /// [`SnowflakeGenerator::try_next_id`]. The returned [`Poll`] contains
+    /// either:
     /// - the newly generated ID, or
     /// - a duration to yield/sleep if the timestamp sequence is exhausted.
     fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID
@@ -52,8 +53,9 @@ where
 
     /// Attempts to generate the next available ID.
     ///
-    /// This is the infallible counterpart to [`SnowflakeGenerator::try_poll_id`].
-    /// The returned [`Poll`] contains either:
+    /// This is the infallible counterpart to
+    /// [`SnowflakeGenerator::try_poll_id`]. The returned [`Poll`] contains
+    /// either:
     /// - the newly generated ID, or
     /// - a duration to yield/sleep if the timestamp sequence is exhausted.
     fn poll_id(&self) -> Poll<ID>

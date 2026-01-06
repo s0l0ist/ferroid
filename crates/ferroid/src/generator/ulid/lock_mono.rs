@@ -56,8 +56,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source and
-    /// RNG.
+    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source
+    /// and RNG.
     ///
     /// # Parameters
     /// - `time`: A [`TimeSource`] used to retrieve the current timestamp
@@ -99,8 +99,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `time`: A [`TimeSource`] implementation used to fetch the current
-    ///   time
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current time
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -229,8 +228,8 @@ where
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in
-    ///   milliseconds) before trying again
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
+    ///   before trying again
     /// - `Err(e)`: the lock was poisoned
     ///
     /// # Example

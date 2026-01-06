@@ -46,9 +46,9 @@ where
     /// time and a given machine ID.
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
-    /// uses the provided `time` to fetch the current time during ID
-    /// generation. It is the recommended way to create a new atomic generator
-    /// for typical use cases.
+    /// uses the provided `time` to fetch the current time during ID generation.
+    /// It is the recommended way to create a new atomic generator for typical
+    /// use cases.
     ///
     /// # Parameters
     ///
@@ -91,8 +91,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `time`: A [`TimeSource`] implementation used to fetch the current
-    ///   time
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current time
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -211,15 +210,15 @@ where
     /// A fallible version of [`Self::poll_id`] that returns a [`Result`].
     ///
     /// This method attempts to generate the next ID based on the current time
-    /// and internal state. If successful, it returns [`Poll::Ready`]
-    /// with a newly generated ID. If the generator is temporarily exhausted, it
-    /// returns [`Poll::Pending`]. If an internal failure occurs (e.g., a
-    /// time source or lock error), it returns an error.
+    /// and internal state. If successful, it returns [`Poll::Ready`] with a
+    /// newly generated ID. If the generator is temporarily exhausted, it
+    /// returns [`Poll::Pending`]. If an internal failure occurs (e.g., a time
+    /// source or lock error), it returns an error.
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in
-    ///   milliseconds) before trying again
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
+    ///   before trying again
     /// - `Err(_)`: infallible for this generator
     ///
     /// # Example

@@ -5,8 +5,8 @@ use crate::id::Id;
 /// This type models the outcome of `SnowflakeGenerator::try_next_id()`:
 ///
 /// - [`Poll::Ready`] indicates a new ID was successfully generated.
-/// - [`Poll::Pending`] means the generator is throttled and cannot
-///   produce a new ID until the clock advances past `yield_for`.
+/// - [`Poll::Pending`] means the generator is throttled and cannot produce a
+///   new ID until the clock advances past `yield_for`.
 ///
 /// This allows non-blocking generation loops and clean backoff strategies.
 ///

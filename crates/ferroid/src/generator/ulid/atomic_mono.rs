@@ -193,8 +193,7 @@ where
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
     /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// time has not advanced, or CAS fails), it returns
-    /// [`Poll::Pending`].
+    /// time has not advanced, or CAS fails), it returns [`Poll::Pending`].
     ///
     /// # Example
     /// ```
@@ -233,8 +232,8 @@ where
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in
-    ///   milliseconds) before trying again
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
+    ///   before trying again
     /// - `Err(_)`: infallible for this generator
     ///
     /// # Errors
