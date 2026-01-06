@@ -2,7 +2,7 @@ use core::{convert::Infallible, future::Future, time::Duration};
 
 use super::SleepProvider;
 use crate::{
-    generator::{IdGenStatus, Result, UlidGenerator},
+    generator::{Poll, Result, UlidGenerator},
     id::{ToU64, UlidId},
     rand::RandSource,
     time::TimeSource,
@@ -76,8 +76,8 @@ where
     {
         loop {
             let dur = match self.try_poll_id()? {
-                IdGenStatus::Ready { id } => break Ok(id),
-                IdGenStatus::Pending { yield_for } => Duration::from_millis(yield_for.to_u64()),
+                Poll::Ready { id } => break Ok(id),
+                Poll::Pending { yield_for } => Duration::from_millis(yield_for.to_u64()),
             };
             S::sleep_for(dur).await;
         }

@@ -143,9 +143,10 @@ fn bench_ulid_thread_local(c: &mut Criterion, group_name: &str) {
             black_box(Ulid::new_ulid());
         });
     });
+    let backoff = |_| std::thread::yield_now();
     group.bench_function("new_ulid_mono", |b| {
         b.iter(|| {
-            black_box(Ulid::new_ulid_mono());
+            black_box(Ulid::new_ulid_mono(backoff));
         });
     });
     group.bench_function("from_timestamp", |b| {

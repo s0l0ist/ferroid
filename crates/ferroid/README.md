@@ -174,7 +174,7 @@ on your environment:
 
 ```rust
 use ferroid::{
-    generator::{BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus},
+    generator::{BasicSnowflakeGenerator, BasicUlidGenerator, Poll},
     id::{Id, SnowflakeTwitterId, ToU64, ULID},
     rand::ThreadRandom,
     time::{MonotonicClock, TWITTER_EPOCH},
@@ -464,10 +464,10 @@ in `no_std`.
 
 ### Snowflake
 
-- If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
-- If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
-- If the clock **goes backward**: return `IdGenStatus::Pending`
-- If the sequence increment **overflows**: return `IdGenStatus::Pending`
+- If the clock **advances**: reset sequence to 0 → `Poll::Ready`
+- If the clock is **unchanged**: increment sequence → `Poll::Ready`
+- If the clock **goes backward**: return `Poll::Pending`
+- If the sequence increment **overflows**: return `Poll::Pending`
 
 ### ULID
 
@@ -475,10 +475,10 @@ This implementation respects monotonicity within the same millisecond in a
 single generator by incrementing the random portion of the ID and guarding
 against overflow.
 
-- If the clock **advances**: generate new random → `IdGenStatus::Ready`
-- If the clock is **unchanged**: increment random → `IdGenStatus::Ready`
-- If the clock **goes backward**: return `IdGenStatus::Pending`
-- If the random increment **overflows**: return `IdGenStatus::Pending`
+- If the clock **advances**: generate new random → `Poll::Ready`
+- If the clock is **unchanged**: increment random → `Poll::Ready`
+- If the clock **goes backward**: return `Poll::Pending`
+- If the random increment **overflows**: return `Poll::Pending`
 
 ## Advanced Topics
 
@@ -487,6 +487,31 @@ against overflow.
 When generating time-sortable IDs that use random bits, it's important to
 estimate the probability of collisions (i.e., two IDs being the same within the
 same millisecond), given your ID layout and system throughput.
+
+#### Non-monotonic (always-random) collision probability
+
+If $n$ IDs are generated within the same millisecond, and the ID has $r$ random
+bits, the probability of **at least one collision** in that millisecond is
+approximately:
+
+$$P_\text{collision} \approx \frac{n(n-1)}{2 \cdot 2^r} $$
+
+For $g$ generators each producing $k$ IDs per millisecond (so $n = g \cdot k$):
+
+$$P_\text{collision} \approx \frac{(gk)(gk-1)}{2 \cdot 2^r} $$
+
+Where:
+
+- $g$ = number of generators
+- $k$ = number of non-monotonic IDs per generator per millisecond
+- $r$ = number of random bits per ID
+- $n$ = total IDs generated per millisecond across all generators ($n = g \cdot k$)
+- $P_{\text{collision}}$ = probability of at least one collision (within the
+  same millisecond)
+
+Compared to monotonic generation (which increments from a random starting
+point), always-random generation typically has higher collision probability when
+multiple generators produce multiple IDs per millisecond.
 
 #### Monotonic IDs with Multiple ULID Generators
 
@@ -541,16 +566,27 @@ $$\Rightarrow T \approx \frac{\ln 2}{P_\text{collision}}$$
 The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$
 milliseconds, there's a 50% chance that at least one collision has occurred.
 
-#### Example Collision Probabilities
+#### Example Collision Probabilities (Monotonic)
 
 | Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{\text{50\%}}$)         |
 | ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | 1                | 1                              | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
 | 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
 | 2                | 1                              | $\displaystyle \frac{2 \times 1 \times 1}{2 \cdot 2^{80}} \approx 8.27 \times 10^{-25}$                 | $\approx 8.38 \times 10^{23} \text{ ms}$                    |
-| 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         | $\approx 6.41 \times 10^{18} \text{ ms}$                    |
+| 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         | $\approx 6.39 \times 10^{18} \text{ ms}$                    |
 | 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999 \times 1}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$         | $\approx 1.68 \times 10^{18} \text{ ms}$                    |
 | 1,000            | 65,536                         | $\displaystyle \frac{1{,}000 \times 999 \times 131{,}071}{2 \cdot 2^{80}} \approx 5.42 \times 10^{-14}$ | $\approx 1.28 \times 10^{13} \text{ ms} \approx 406\ years$ |
+
+#### Example Collision Probabilities (Non-Monotonic)
+
+| Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{\text{50\%}}$)          |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1                | 1                              | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                    |
+| 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                    |
+| 2                | 1                              | $\displaystyle \frac{2 \times 1}{2 \cdot 2^{80}} \approx 8.27 \times 10^{-25}$                          | $\approx 8.38 \times 10^{23} \text{ ms}$ (same as monotonic) |
+| 2                | 65,536                         | $\displaystyle \frac{131{,}072 \times 131{,}071}{2 \cdot 2^{80}} \approx 7.11 \times 10^{-15}$          | $\approx 9.75 \times 10^{13} \text{ ms}$                     |
+| 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$                  | $\approx 1.68 \times 10^{18} \text{ ms}$ (same as monotonic) |
+| 1,000            | 65,536                         | $\displaystyle \frac{65{,}536{,}000 \times 65{,}535{,}999}{2 \cdot 2^{80}} \approx 1.78 \times 10^{-9}$ | $\approx 3.90 \times 10^{8} \text{ ms} \approx 4.5\ days$    |
 
 ### Base32 Overflow Details
 

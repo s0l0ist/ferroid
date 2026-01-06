@@ -8,7 +8,7 @@ use std::{
 
 use crate::{
     generator::{
-        BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator,
+        BasicMonoUlidGenerator, BasicUlidGenerator, Poll, LockMonoUlidGenerator,
         UlidGenerator,
     },
     id::{Id, ToU64, ULID, UlidId},
@@ -90,7 +90,7 @@ where
     fn unwrap_pending(self) -> T::Ty;
 }
 
-impl<T> IdGenStatusExt<T> for IdGenStatus<T>
+impl<T> IdGenStatusExt<T> for Poll<T>
 where
     T: Id,
 {
@@ -176,7 +176,7 @@ where
     for _ in 0..TOTAL_IDS {
         loop {
             match generator.try_poll_id().unwrap() {
-                IdGenStatus::Ready { id } => {
+                Poll::Ready { id } => {
                     let ts = id.timestamp();
                     if ts > last_timestamp {
                         random = Some(id.random());
@@ -189,7 +189,7 @@ where
                     random = random.map(|r| r + ID::ONE);
                     break;
                 }
-                IdGenStatus::Pending { .. } => {
+                Poll::Pending { .. } => {
                     core::hint::spin_loop();
                 }
             }
@@ -220,11 +220,11 @@ where
                 for _ in 0..IDS_PER_THREAD {
                     loop {
                         match generator.try_poll_id().unwrap() {
-                            IdGenStatus::Ready { id } => {
+                            Poll::Ready { id } => {
                                 assert!(seen_ids.lock().unwrap().insert(id));
                                 break;
                             }
-                            IdGenStatus::Pending { .. } => std::thread::yield_now(),
+                            Poll::Pending { .. } => std::thread::yield_now(),
                         }
                     }
                 }

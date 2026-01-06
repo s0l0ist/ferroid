@@ -4,7 +4,7 @@ use core::marker::PhantomData;
 use tracing::instrument;
 
 use crate::{
-    generator::{IdGenStatus, Result, UlidGenerator},
+    generator::{Poll, Result, UlidGenerator},
     id::UlidId,
     rand::RandSource,
     time::TimeSource,
@@ -64,7 +64,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     generator::{BasicUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -92,7 +92,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     generator::{BasicUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -120,7 +120,7 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     generator::{BasicUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -142,22 +142,22 @@ where
     pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
         loop {
             match self.try_poll_id()? {
-                IdGenStatus::Ready { id } => break Ok(id),
-                IdGenStatus::Pending { yield_for } => f(yield_for),
+                Poll::Ready { id } => break Ok(id),
+                Poll::Pending { yield_for } => f(yield_for),
             }
         }
     }
 
     /// Generates a new ULID.
     ///
-    /// Returns a new, time-ordered, unique ID if generation succeeds. If the
-    /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// time has not advanced), it returns [`IdGenStatus::Pending`].
+    /// Returns a new, time-ordered, unique ID if generation succeeds. A basic
+    /// generator always generates new random bytes and doesn't need to yield.
+    /// Therefore, we can safely assume it will always return `Poll::Ready`.
     ///
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     generator::{BasicUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -167,12 +167,12 @@ where
     ///
     /// let id: ULID = loop {
     ///     match generator.poll_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
+    ///         Poll::Ready { id } => break id,
+    ///         Poll::Pending { .. } => unreachable!(),
     ///     }
     /// };
     /// ```
-    pub fn poll_id(&self) -> IdGenStatus<ID> {
+    pub fn poll_id(&self) -> Poll<ID> {
         match self.try_poll_id() {
             Ok(id) => id,
             Err(e) =>
@@ -186,18 +186,18 @@ where
     /// Attempts to generate a new ULID with fallible error handling.
     ///
     /// Combines the current timestamp with a freshly generated random value to
-    /// produce a unique identifier. Returns [`IdGenStatus::Ready`] on success.
+    /// produce a unique identifier. Returns [`Poll::Ready`] on success.
     ///
     /// # Returns
-    /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
-    ///   milliseconds) before trying again
+    /// - `Ok(Poll::Ready { id })`: A new ID is available
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
+    ///   before trying again
     /// - `Err(_)`: infallible for this generator
     ///
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{BasicUlidGenerator, IdGenStatus},
+    ///     generator::{BasicUlidGenerator, Poll},
     ///     id::{ToU64, ULID},
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -208,8 +208,8 @@ where
     /// // Attempt to generate a new ID
     /// let id: ULID = loop {
     ///     match generator.try_poll_id() {
-    ///         Ok(IdGenStatus::Ready { id }) => break id,
-    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///         Ok(Poll::Ready { id }) => break id,
+    ///         Ok(Poll::Pending { yield_for }) => {
     ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///         }
     ///         Err(_) => unreachable!(),
@@ -222,8 +222,8 @@ where
     /// This method is infallible for this generator. Use the [`Self::poll_id`]
     /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_poll_id(&self) -> Result<IdGenStatus<ID>> {
-        Ok(IdGenStatus::Ready {
+    pub fn try_poll_id(&self) -> Result<Poll<ID>> {
+        Ok(Poll::Ready {
             id: ID::from_components(self.time.current_millis(), self.rng.rand()),
         })
     }
@@ -249,11 +249,11 @@ where
         self.try_next_id(f)
     }
 
-    fn poll_id(&self) -> IdGenStatus<ID> {
+    fn poll_id(&self) -> Poll<ID> {
         self.poll_id()
     }
 
-    fn try_poll_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
+    fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {
         self.try_poll_id()
     }
 }

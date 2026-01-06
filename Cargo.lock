@@ -797,7 +797,7 @@ checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
 name = "ferroid"
-version = "0.8.9"
+version = "1.0.0"
 dependencies = [
  "criterion",
  "crossbeam-utils",
@@ -815,7 +815,7 @@ dependencies = [
 
 [[package]]
 name = "ferroid-tonic-core"
-version = "0.8.9"
+version = "1.0.0"
 dependencies = [
  "ferroid",
  "prost",
@@ -827,7 +827,7 @@ dependencies = [
 
 [[package]]
 name = "ferroid-tonic-server"
-version = "0.8.9"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1792,7 +1792,7 @@ dependencies = [
 
 [[package]]
 name = "pg-ferroid"
-version = "0.8.9"
+version = "1.0.0"
 dependencies = [
  "ferroid",
  "pgrx",

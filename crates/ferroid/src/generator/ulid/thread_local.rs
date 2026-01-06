@@ -9,8 +9,8 @@
 use std::{sync::LazyLock, thread_local};
 
 use crate::{
-    generator::{BasicMonoUlidGenerator, BasicUlidGenerator, IdGenStatus},
-    id::{Id, ToU64, ULID},
+    generator::{BasicMonoUlidGenerator, BasicUlidGenerator, Poll},
+    id::{Id, ULID},
     rand::{RandSource, ThreadRandom},
     time::{MonotonicClock, UNIX_EPOCH},
 };
@@ -38,31 +38,6 @@ thread_local! {
         );
 }
 
-/// Backoff strategies for handling monotonic ULID overflow.
-///
-/// If multiple ULIDs are generated in the same millisecond and the random
-/// component is exhausted, the generator invokes one of these strategies to
-/// wait before retrying.
-#[derive(Debug, Clone, Copy)]
-pub enum Backoff {
-    /// Busy-waits in a tight loop.
-    ///
-    /// Offers maximum throughput at the cost of high CPU usage.
-    Spin,
-
-    /// Yields to the OS scheduler to allow other threads to run.
-    ///
-    /// More CPU-friendly than spinning, but may still busy-wait if no other
-    /// threads are ready.
-    Yield,
-
-    /// Sleeps for the requested retry delay in milliseconds.
-    ///
-    /// Lowest CPU usage, but may oversleep depending on platform-specific
-    /// scheduler resolution.
-    Sleep,
-}
-
 /// A thread-local ULID generator with monotonic and non-monotonic modes.
 ///
 /// Provides fast, per-thread ULID generation using a shared monotonic clock and
@@ -71,76 +46,58 @@ pub enum Backoff {
 pub struct Ulid;
 
 impl Ulid {
-    /// Generates a non-monotonic ULID that is always random, even when
-    /// generated within the same millisecond.
+    /// Generates a new **non-monotonic** ULID using the thread-local generator.
+    ///
+    /// Always samples fresh randomness (even within the same millisecond), so
+    /// IDs are not strictly increasing when timestamps are equal.
+    ///
+    /// **Collision note:** with multiple independent generators (e.g. `N > 1`
+    /// threads), purely-random generation has a higher collision probability
+    /// than monotonic generation. If monotonic IDs are acceptable for your use
+    /// case, prefer [`Self::new_ulid_mono`] to further reduce collision risk.
+    ///
+    /// See: [Collision Probability Analysis] (README).
     ///
     /// # Example
     /// ```
     /// use ferroid::generator::thread_local::Ulid;
     /// let id = Ulid::new_ulid();
     /// ```
+    ///
+    /// [Collision Probability Analysis]:
+    ///     https://github.com/s0l0ist/ferroid/tree/main/crates/ferroid#collision-probability-analysis
     #[must_use]
     pub fn new_ulid() -> ULID {
-        BASIC_ULID.with(|g| g.next_id(|_| ()))
+        BASIC_ULID.with(|g| match g.poll_id() {
+            Poll::Ready { id } => id,
+            Poll::Pending { .. } => unreachable!("basic ULID generator should never need to yield"),
+        })
     }
 
-    /// Generates a monotonic ULID using [`Backoff::Yield`] as the overflow
-    /// strategy.
+    /// Generates a new **monotonic** ULID using the thread-local generator.
+    ///
+    /// Within a given millisecond, IDs are strictly increasing **per thread**
+    /// by incrementing the random component. Across threads, sequences are
+    /// independent (no global ordering).
+    ///
+    /// Compared to [`Self::new_ulid`], this typically reduces collision
+    /// probability when multiple generators are active (e.g. `N > 1` threads).
+    /// See: [Collision Probability Analysis] (README).
+    ///
+    /// If the random space saturates for the current millisecond, the generator
+    /// retries using the provided callback.
     ///
     /// # Example
     /// ```
     /// use ferroid::generator::thread_local::Ulid;
-    /// let id = Ulid::new_ulid_mono();
+    /// let id = Ulid::new_ulid_mono(|_| std::thread::yield_now());
     /// ```
+    ///
+    /// [Collision Probability Analysis]:
+    ///     https://github.com/s0l0ist/ferroid/tree/main/crates/ferroid#collision-probability-analysis
     #[must_use]
-    pub fn new_ulid_mono() -> ULID {
-        Self::with_mono_backoff(Backoff::Yield)
-    }
-
-    /// Generates a monotonic ULID using the given [`Backoff`] strategy to
-    /// handle overflow.
-    ///
-    /// If the generator exhausts available entropy within the same millisecond,
-    /// the backoff strategy determines how it waits before retrying.
-    ///
-    /// # Example
-    /// ```
-    /// use ferroid::generator::thread_local::{Backoff, Ulid};
-    /// let id = Ulid::with_mono_backoff(Backoff::Spin);
-    /// ```
-    #[must_use]
-    pub fn with_mono_backoff(strategy: Backoff) -> ULID {
-        Self::ulid_mono(strategy)
-    }
-
-    /// Generates a ULID using the specified [`Backoff`] strategy.
-    ///
-    /// This is a convenient wrapper around [`ulid_mono_with_backoff`] with
-    /// built-in strategies.
-    fn ulid_mono(strategy: Backoff) -> ULID {
-        Self::ulid_mono_with_backoff(|yield_for| match strategy {
-            Backoff::Spin => core::hint::spin_loop(),
-            Backoff::Yield => std::thread::yield_now(),
-            Backoff::Sleep => {
-                std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-            }
-        })
-    }
-
-    /// Generates a monotonic ULID using a custom backoff strategy.
-    ///
-    /// The provided function is called when the generator must wait before
-    /// retrying due to ULID monotonic overflow. The `yield_for` argument
-    /// indicates the recommended wait time in milliseconds.
-    fn ulid_mono_with_backoff(f: impl Fn(<ULID as Id>::Ty)) -> ULID {
-        BASIC_MONO_ULID.with(|g| {
-            loop {
-                match g.poll_id() {
-                    IdGenStatus::Ready { id } => break id,
-                    IdGenStatus::Pending { yield_for } => f(yield_for),
-                }
-            }
-        })
+    pub fn new_ulid_mono(f: impl FnMut(<ULID as Id>::Ty)) -> ULID {
+        BASIC_MONO_ULID.with(|g| g.next_id(f))
     }
 
     /// Creates a ULID from a given millisecond timestamp.

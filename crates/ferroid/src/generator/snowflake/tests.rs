@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    generator::{BasicSnowflakeGenerator, IdGenStatus, LockSnowflakeGenerator, SnowflakeGenerator},
+    generator::{BasicSnowflakeGenerator, Poll, LockSnowflakeGenerator, SnowflakeGenerator},
     id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
     time::{MonotonicClock, TimeSource},
 };
@@ -59,7 +59,7 @@ where
     fn unwrap_pending(self) -> T::Ty;
 }
 
-impl<T> IdGenStatusExt<T> for IdGenStatus<T>
+impl<T> IdGenStatusExt<T> for Poll<T>
 where
     T: Id,
 {
@@ -145,7 +145,7 @@ where
     for _ in 0..TOTAL_IDS {
         loop {
             match generator.try_poll_id().unwrap() {
-                IdGenStatus::Ready { id } => {
+                Poll::Ready { id } => {
                     let ts = id.timestamp();
                     if ts > last_timestamp {
                         sequence = ID::ZERO;
@@ -159,7 +159,7 @@ where
                     sequence += ID::ONE;
                     break;
                 }
-                IdGenStatus::Pending { .. } => {
+                Poll::Pending { .. } => {
                     core::hint::spin_loop();
                 }
             }
@@ -189,11 +189,11 @@ where
                 for _ in 0..IDS_PER_THREAD {
                     loop {
                         match generator.try_poll_id().unwrap() {
-                            IdGenStatus::Ready { id } => {
+                            Poll::Ready { id } => {
                                 assert!(seen_ids.lock().unwrap().insert(id));
                                 break;
                             }
-                            IdGenStatus::Pending { .. } => std::thread::yield_now(),
+                            Poll::Pending { .. } => std::thread::yield_now(),
                         }
                     }
                 }

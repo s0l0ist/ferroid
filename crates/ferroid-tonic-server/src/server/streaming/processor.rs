@@ -1,6 +1,6 @@
 use ferroid_tonic_core::{
     Error,
-    ferroid::generator::IdGenStatus,
+    ferroid::generator::Poll,
     proto::IdChunk,
     types::{Generator, SNOWFLAKE_ID_SIZE},
 };
@@ -49,7 +49,7 @@ pub async fn handle_stream_request(
 
     while generated < chunk_size {
         match generator.try_poll_id() {
-            Ok(IdGenStatus::Ready { id }) => {
+            Ok(Poll::Ready { id }) => {
                 generated += 1;
 
                 // Write the ID as little-endian bytes into the buffer.
@@ -75,7 +75,7 @@ pub async fn handle_stream_request(
                     *buff_pos = 0;
                 }
             }
-            Ok(IdGenStatus::Pending { .. }) => {
+            Ok(Poll::Pending { .. }) => {
                 // Yield to the scheduler to avoid busy looping.
                 tokio::task::yield_now().await;
             }
