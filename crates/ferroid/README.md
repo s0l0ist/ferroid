@@ -222,22 +222,20 @@ use ferroid::{
     time::{MASTODON_EPOCH, MonotonicClock, UNIX_EPOCH},
 };
 
-async fn run() -> Result<(), Error> {
+async fn run() {
     let snow_gen = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
-    let id: SnowflakeMastodonId = snow_gen.try_next_id_async().await?;
+    let id: SnowflakeMastodonId = snow_gen.next_id_async().await;
     println!("Generated ID: {}", id);
 
     let ulid_gen = LockMonoUlidGenerator::new(
         MonotonicClock::with_epoch(UNIX_EPOCH),
         ThreadRandom::default(),
     );
-    let id: ULID = ulid_gen.try_next_id_async().await?;
+    let id: ULID = ulid_gen.next_id_async().await;
     println!("Generated ID: {}", id);
-
-    Ok(())
 }
 
-fn async_tokio_main() -> Result<(), Error> {
+fn async_tokio_main() {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -245,16 +243,15 @@ fn async_tokio_main() -> Result<(), Error> {
         .block_on(run())
 }
 
-fn async_smol_main() -> Result<(), Error> {
+fn async_smol_main() {
     smol::block_on(run())
 }
 
-fn main() -> Result<(), Error> {
+fn main() {
     let t1 = std::thread::spawn(async_tokio_main);
     let t2 = std::thread::spawn(async_smol_main);
-    t1.join().expect("tokio thread panicked")?;
-    t2.join().expect("smol thread panicked")?;
-    Ok(())
+    t1.join().expect("tokio thread panicked");
+    t2.join().expect("smol thread panicked");
 }
 ```
 
