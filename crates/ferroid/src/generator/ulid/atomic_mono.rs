@@ -103,8 +103,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `time`: A [`TimeSource`] implementation used to fetch the current
-    ///   time
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current time
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -175,6 +174,11 @@ where
     ///     Err(_) => unreachable!(),
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method is infallible for this generator. Use the [`Self::next_id`]
+    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
     pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
         loop {
@@ -260,6 +264,11 @@ where
     ///     }
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method is infallible for this generator. Use the [`Self::gen_id`]
+    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_gen_id(&self) -> Result<IdGenStatus<ID>> {
         let now = self.time.current_millis();

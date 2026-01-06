@@ -169,8 +169,8 @@ let twitter_gen: BasicSnowflakeGenerator<SnowflakeTwitterId, _> = BasicSnowflake
 Calling `next_id()` will call the passed in backoff strategy closure if the
 underlying generator needs to yield. Please note that while this behavior is
 exposed to provide maximum flexibility, you must be generating enough IDs **per
-millisecond** to draw out the path. You may spin, yield, or sleep depending on
-your environment:
+millisecond** to invoke this callback. You may spin, yield, or sleep depending
+on your environment:
 
 ```rust
 use ferroid::{
@@ -182,16 +182,16 @@ use ferroid::{
 
 let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
 let id: SnowflakeTwitterId = snow_gen.next_id(|yield_for: <SnowflakeTwitterId as Id>::Ty| {
-    // Spin: lowest latency, but generally avoid.
+    // Spin: lowest latency, but generally avoid. Or ...
     core::hint::spin_loop();
 
-    // Yield to the scheduler: lets another thread run; still may busy-wait.
+    // Yield to the scheduler: lets another thread run; still may busy-wait. Or ...
     std::thread::yield_now();
 
     // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
     std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
 
-    // For use in runtimes such as `tokio` or `smol`, use the async API (see below).
+    // For use in runtimes such as `tokio` or `smol`, use the non-blocking async API (see below).
 });
 
 let ulid_gen = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
@@ -320,8 +320,7 @@ Users must explicitly choose a serialization strategy using `#[serde(with =
 
 There are two serialization strategies:
 
-- `snow_as_int`/`ulid_as_int`: Serialize as native integer types
-  (u64/u128)
+- `snow_as_int`/`ulid_as_int`: Serialize as native integer types (u64/u128)
 - `snow_as_base32`/`ulid_as_base32`: Serialize as Crockford base32 encoded
   strings
 
@@ -583,8 +582,7 @@ Ferroid takes a more flexible stance:
 - Strings like `"ZZZZZZZZZZZZZZZZZZZZZZZZZZ"` (which technically overflow) are
   accepted and decoded without error
 - However, if any of the overflowed bits fall into reserved regions (which must
-  remain zero), decoding will fail with
-  `ferroid::base32::Error::DecodeOverflow`
+  remain zero), decoding will fail with `ferroid::base32::Error::DecodeOverflow`
 
 This allows any 13-character Base32 string to decode into a `u64`, or any
 26-character string into a `u128`, **as long as reserved layout constraints

@@ -56,9 +56,9 @@ where
     /// time and a given machine ID.
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
-    /// uses the provided `time` to fetch the current time during ID
-    /// generation. It is the recommended way to create a new atomic generator
-    /// for typical use cases.
+    /// uses the provided `time` to fetch the current time during ID generation.
+    /// It is the recommended way to create a new atomic generator for typical
+    /// use cases.
     ///
     /// # Parameters
     ///
@@ -101,8 +101,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `time`: A [`TimeSource`] implementation used to fetch the current
-    ///   time
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current time
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -173,6 +172,11 @@ where
     ///     Err(_) => unreachable!(),
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method is infallible for this generator. Use the [`Self::next_id`]
+    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
     pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
         loop {
@@ -232,10 +236,6 @@ where
     ///   milliseconds) before trying again
     /// - `Err(_)`: infallible for this generator
     ///
-    /// # Errors
-    /// - This method currently does not return any errors and always returns
-    ///   `Ok`. It is marked as fallible to allow for future extensibility
-    ///
     /// # Example
     /// ```
     /// use ferroid::{
@@ -257,6 +257,11 @@ where
     ///     }
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method is infallible for this generator. Use the [`Self::gen_id`]
+    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_gen_id(&self) -> Result<IdGenStatus<ID>> {
         let now = self.time.current_millis();

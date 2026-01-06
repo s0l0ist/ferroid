@@ -169,6 +169,10 @@ where
     ///     Err(_) => unreachable!(),
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the generator fails, such as from lock poisoning.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
     pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID, Error> {
         loop {
@@ -229,9 +233,6 @@ where
     ///   milliseconds) before trying again
     /// - `Err(e)`: the lock was poisoned
     ///
-    /// # Errors
-    /// - Returns an error if the underlying lock has been poisoned.
-    ///
     /// # Example
     /// ```
     /// use ferroid::{
@@ -254,6 +255,10 @@ where
     ///     }
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the generator fails, such as from lock poisoning.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_gen_id(&self) -> Result<IdGenStatus<ID>, Error> {
         let now = self.time.current_millis();

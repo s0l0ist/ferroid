@@ -133,6 +133,11 @@ where
     ///     Err(_) => unreachable!(),
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method is infallible for this generator. Use the [`Self::next_id`]
+    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
     pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID> {
         loop {
@@ -189,10 +194,6 @@ where
     ///   milliseconds) before trying again
     /// - `Err(_)`: infallible for this generator
     ///
-    /// # Errors
-    /// - This method currently does not return any errors and always returns
-    ///   `Ok`. It is marked as fallible to allow for future extensibility
-    ///
     /// # Example
     /// ```
     /// use ferroid::{
@@ -215,6 +216,11 @@ where
     ///     }
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This method is infallible for this generator. Use the [`Self::gen_id`]
+    /// method instead.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn try_gen_id(&self) -> Result<IdGenStatus<ID>> {
         Ok(IdGenStatus::Ready {
