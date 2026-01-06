@@ -4,16 +4,16 @@ use crate::id::Id;
 ///
 /// This type models the outcome of `SnowflakeGenerator::try_next_id()`:
 ///
-/// - [`IdGenStatus::Ready`] indicates a new ID was successfully generated.
-/// - [`IdGenStatus::Pending`] means the generator is throttled and cannot
-///   produce a new ID until the clock advances past `yield_for`.
+/// - [`Poll::Ready`] indicates a new ID was successfully generated.
+/// - [`Poll::Pending`] means the generator is throttled and cannot produce a
+///   new ID until the clock advances past `yield_for`.
 ///
 /// This allows non-blocking generation loops and clean backoff strategies.
 ///
 /// # Example
 /// ```
 /// use ferroid::{
-///     generator::{BasicSnowflakeGenerator, IdGenStatus},
+///     generator::{BasicSnowflakeGenerator, Poll},
 ///     id::{SnowflakeId, SnowflakeTwitterId},
 /// };
 ///
@@ -30,13 +30,13 @@ use crate::id::Id;
 ///     SnowflakeTwitterId::max_sequence(),
 ///     FixedTime,
 /// );
-/// match generator.next_id() {
-///     IdGenStatus::Ready { id } => println!("ID: {}", id.timestamp()),
-///     IdGenStatus::Pending { yield_for } => println!("Back off for: {yield_for}"),
+/// match generator.poll_id() {
+///     Poll::Ready { id } => println!("ID: {}", id.timestamp()),
+///     Poll::Pending { yield_for } => println!("Back off for: {yield_for}"),
 /// }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IdGenStatus<T: Id> {
+pub enum Poll<T: Id> {
     /// A new Snowflake ID was successfully generated.
     Ready {
         /// The generated Snowflake ID.

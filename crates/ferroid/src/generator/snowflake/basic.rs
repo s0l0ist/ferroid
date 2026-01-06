@@ -4,7 +4,7 @@ use core::{cell::Cell, cmp::Ordering};
 use tracing::instrument;
 
 use crate::{
-    generator::{IdGenStatus, Result, SnowflakeGenerator},
+    generator::{Poll, Result, SnowflakeGenerator},
     id::SnowflakeId,
     time::TimeSource,
 };
@@ -46,9 +46,9 @@ where
     /// time and a given machine ID.
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
-    /// uses the provided `time` to fetch the current time during ID
-    /// generation. It is the recommended way to create a new atomic generator
-    /// for typical use cases.
+    /// uses the provided `time` to fetch the current time during ID generation.
+    /// It is the recommended way to create a new atomic generator for typical
+    /// use cases.
     ///
     /// # Parameters
     ///
@@ -65,19 +65,14 @@ where
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{BasicSnowflakeGenerator, IdGenStatus},
+    ///     generator::{BasicSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
     ///     time::{MonotonicClock, TWITTER_EPOCH},
     /// };
     ///
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
-    /// let id: SnowflakeTwitterId = loop {
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///     }
-    /// };
+    /// let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
@@ -96,8 +91,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `time`: A [`TimeSource`] implementation used to fetch the current
-    ///   time
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current time
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -118,16 +112,42 @@ where
         }
     }
 
-    /// Attempts to generate the next available ID.
+    /// Generates a new ID.
     ///
-    /// Returns a new, time-ordered, unique ID if generation succeeds. If the
-    /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// time has not advanced), it returns [`IdGenStatus::Pending`].
+    /// Returns a new, time-ordered, unique ID.
     ///
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{BasicSnowflakeGenerator, IdGenStatus},
+    ///     generator::{BasicSnowflakeGenerator, Poll},
+    ///     id::SnowflakeTwitterId,
+    ///     time::MonotonicClock,
+    /// };
+    ///
+    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::default());
+    ///
+    /// let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
+    /// ```
+    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
+    pub fn next_id(&self, mut f: impl FnMut(ID::Ty)) -> ID {
+        loop {
+            match self.poll_id() {
+                Poll::Ready { id } => break id,
+                Poll::Pending { yield_for } => f(yield_for),
+            }
+        }
+    }
+
+    /// Attempts to generate the next available ID.
+    ///
+    /// Returns a new, time-ordered, unique ID if generation succeeds. If the
+    /// generator is temporarily exhausted (e.g., the sequence is full and the
+    /// time has not advanced), it returns [`Poll::Pending`].
+    ///
+    /// # Example
+    /// ```
+    /// use ferroid::{
+    ///     generator::{BasicSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
     ///     time::{MonotonicClock, TWITTER_EPOCH},
     /// };
@@ -135,64 +155,14 @@ where
     /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
     ///
     /// let id: SnowflakeTwitterId = loop {
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
-    ///     }
-    /// };
-    /// ```
-    pub fn next_id(&self) -> IdGenStatus<ID> {
-        match self.try_next_id() {
-            Ok(id) => id,
-            Err(e) =>
-            {
-                #[allow(unreachable_code)]
-                match e {}
-            }
-        }
-    }
-
-    /// A fallible version of [`Self::next_id`] that returns a [`Result`].
-    ///
-    /// This method attempts to generate the next ID based on the current time
-    /// and internal state. If successful, it returns [`IdGenStatus::Ready`]
-    /// with a newly generated ID. If the generator is temporarily exhausted, it
-    /// returns [`IdGenStatus::Pending`]. If an internal failure occurs (e.g., a
-    /// time source or lock error), it returns an error.
-    ///
-    /// # Returns
-    /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
-    ///   milliseconds) before trying again
-    /// - `Err(_)`: infallible for this generator
-    ///
-    /// # Errors
-    /// - This method currently does not return any errors and always returns
-    ///   `Ok`. It is marked as fallible to allow for future extensibility
-    ///
-    /// # Example
-    /// ```
-    /// use ferroid::{
-    ///     generator::{BasicSnowflakeGenerator, IdGenStatus},
-    ///     id::{SnowflakeTwitterId, ToU64},
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
-    /// };
-    ///
-    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
-    ///
-    /// // Attempt to generate a new ID
-    /// let id: SnowflakeTwitterId = loop {
-    ///     match generator.try_next_id() {
-    ///         Ok(IdGenStatus::Ready { id }) => break id,
-    ///         Ok(IdGenStatus::Pending { yield_for }) => {
-    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
-    ///         }
-    ///         Err(_) => unreachable!(),
+    ///     match generator.poll_id() {
+    ///         Poll::Ready { id } => break id,
+    ///         Poll::Pending { .. } => std::thread::yield_now(),
     ///     }
     /// };
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>> {
+    pub fn poll_id(&self) -> Poll<ID> {
         let now = self.time.current_millis();
         let state = self.state.get();
         let current_ts = state.timestamp();
@@ -202,26 +172,26 @@ where
                 if state.has_sequence_room() {
                     let updated = state.increment_sequence();
                     self.state.set(updated);
-                    Ok(IdGenStatus::Ready { id: updated })
+                    Poll::Ready { id: updated }
                 } else {
-                    Ok(IdGenStatus::Pending { yield_for: ID::ONE })
+                    Poll::Pending { yield_for: ID::ONE }
                 }
             }
             Ordering::Greater => {
                 let updated = state.rollover_to_timestamp(now);
                 self.state.set(updated);
-                Ok(IdGenStatus::Ready { id: updated })
+                Poll::Ready { id: updated }
             }
-            Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
+            Ordering::Less => Self::cold_clock_behind(now, current_ts),
         }
     }
 
     #[cold]
     #[inline(never)]
-    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> IdGenStatus<ID> {
+    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> Poll<ID> {
         let yield_for = current_ts - now;
         debug_assert!(yield_for >= ID::ZERO);
-        IdGenStatus::Pending { yield_for }
+        Poll::Pending { yield_for }
     }
 }
 
@@ -236,11 +206,19 @@ where
         Self::new(machine_id, time)
     }
 
-    fn next_id(&self) -> IdGenStatus<ID> {
-        self.next_id()
+    fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
+        self.next_id(f)
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
-        self.try_next_id()
+    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
+        Ok(self.next_id(f))
+    }
+
+    fn poll_id(&self) -> Poll<ID> {
+        self.poll_id()
+    }
+
+    fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {
+        Ok(self.poll_id())
     }
 }

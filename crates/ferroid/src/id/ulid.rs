@@ -195,20 +195,20 @@ macro_rules! define_ulid {
             }
 
             $crate::cfg_std! {
-                /// Generates a non-monotonic ULID using the current system time in
-                /// milliseconds since the Unix epoch and the built-in
+                /// Generates a non-monotonic ULID using the current system time
+                /// in milliseconds since the Unix epoch and the built-in
                 /// [`ThreadRandom`] random generator.
                 ///
-                /// This convenience constructor does **not** maintain any internal
-                /// state and therefore does *not* guarantee monotonicity when
-                /// multiple IDs are created within the same millisecond. If you
-                /// have a bursty load or need strictly monotonic ULIDs, prefer a
-                /// stateful generator such as [`BasicUlidGenerator`] or
-                /// [`BasicMonoUlidGenerator`].
+                /// This convenience constructor does **not** maintain any
+                /// internal state and therefore does *not* guarantee
+                /// monotonicity when multiple IDs are created within the same
+                /// millisecond. If you have a bursty load or need strictly
+                /// monotonic ULIDs, prefer a stateful generator such as
+                /// [`BasicUlidGenerator`] or [`BasicMonoUlidGenerator`].
                 ///
                 /// Internally, this performs a system time query on every call,
-                /// making it the slowest way to generate a ULID, but it is suitable
-                /// for low-volume or one-off ID generation.
+                /// making it the slowest way to generate a ULID, but it is
+                /// suitable for low-volume or one-off ID generation.
                 ///
                 /// [`ThreadRandom`]: crate::rand::ThreadRandom
                 /// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
@@ -229,15 +229,16 @@ macro_rules! define_ulid {
             }
 
             $crate::cfg_std! {
-                /// Returns this ULID's timestamp as a [`std::time::SystemTime`].
+                /// Returns this ULID's timestamp as a
+                /// [`std::time::SystemTime`].
                 ///
                 /// The ULID timestamp encodes the number of milliseconds since
                 /// [`std::time::UNIX_EPOCH`].
                 ///
                 /// # ⚠️ Note
                 /// The precision is limited to whole milliseconds, matching the
-                /// ULID specification. Timestamp values exceeding `u64::MAX` will
-                /// be truncated.
+                /// ULID specification. Timestamp values exceeding `u64::MAX`
+                /// will be truncated.
                 #[must_use]
                 #[allow(clippy::cast_possible_truncation)]
                 pub fn datetime(&self) -> std::time::SystemTime {
@@ -247,8 +248,8 @@ macro_rules! define_ulid {
             }
 
             $crate::cfg_std! {
-                /// Generates a ULID from the given timestamp in milliseconds since
-                /// UNIX epoch, using the built-in [`ThreadRandom`] random
+                /// Generates a ULID from the given timestamp in milliseconds
+                /// since UNIX epoch, using the built-in [`ThreadRandom`] random
                 /// generator.
                 ///
                 /// [`ThreadRandom`]: crate::rand::ThreadRandom
@@ -273,8 +274,8 @@ macro_rules! define_ulid {
             }
 
             $crate::cfg_std! {
-                /// Generates a ULID from the given `SystemTime`, using the built-in
-                /// [`ThreadRandom`] random generator.
+                /// Generates a ULID from the given `SystemTime`, using the
+                /// built-in [`ThreadRandom`] random generator.
                 ///
                 /// [`ThreadRandom`]: crate::rand::ThreadRandom
                 #[must_use]
@@ -284,8 +285,8 @@ macro_rules! define_ulid {
             }
 
             $crate::cfg_std! {
-                /// Generates a ULID from the given `SystemTime` and a custom random
-                /// number generator implementing [`RandSource`]
+                /// Generates a ULID from the given `SystemTime` and a custom
+                /// random number generator implementing [`RandSource`]
                 ///
                 /// [`RandSource`]: crate::rand::RandSource
                 ///

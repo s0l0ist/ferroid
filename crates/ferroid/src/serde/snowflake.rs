@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-pub mod as_native_snow {
+pub mod snow_as_int {
     use super::{Deserialize, Deserializer, Serialize, Serializer};
     use crate::{id::SnowflakeId, serde::Error};
 
@@ -42,7 +42,7 @@ pub mod as_native_snow {
 }
 
 #[cfg(feature = "base32")]
-pub mod as_base32_snow {
+pub mod snow_as_base32 {
     use super::{Deserializer, Serializer};
     use crate::{base32::Base32SnowExt, id::BeBytes, serde::Error};
 
@@ -115,7 +115,7 @@ mod tests {
     fn native_snow_roundtrip() {
         #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
         struct Row {
-            #[serde(with = "as_native_snow")]
+            #[serde(with = "snow_as_int")]
             event_id: SnowflakeTwitterId,
         }
         let row = Row {
@@ -132,7 +132,7 @@ mod tests {
     fn native_snow_roundtrip_decode_overflow() {
         #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
         struct Row {
-            #[serde(with = "as_native_snow")]
+            #[serde(with = "snow_as_int")]
             event_id: SnowflakeTwitterId,
         }
         let json = json!({"event_id": u64::MAX});
@@ -151,7 +151,7 @@ mod tests {
     fn base32_snow_roundtrip() {
         #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
         struct Row {
-            #[serde(with = "as_base32_snow")]
+            #[serde(with = "snow_as_base32")]
             event_id: SnowflakeTwitterId,
         }
         let row = Row {
@@ -171,7 +171,7 @@ mod tests {
 
         #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
         struct Row {
-            #[serde(with = "as_base32_snow")]
+            #[serde(with = "snow_as_base32")]
             event_id: SnowflakeTwitterId,
         }
         let json = json!({"event_id":"FZZZZZZZZZZZZ"});

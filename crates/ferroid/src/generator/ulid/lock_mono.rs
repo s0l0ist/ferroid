@@ -5,7 +5,7 @@ use core::cmp::Ordering;
 use tracing::instrument;
 
 use crate::{
-    generator::{Error, IdGenStatus, Mutex, Result, UlidGenerator},
+    generator::{Error, Mutex, Poll, Result, UlidGenerator},
     id::UlidId,
     rand::RandSource,
     time::TimeSource,
@@ -56,8 +56,8 @@ where
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source and
-    /// RNG.
+    /// Creates a new [`LockMonoUlidGenerator`] with the provided time source
+    /// and RNG.
     ///
     /// # Parameters
     /// - `time`: A [`TimeSource`] used to retrieve the current timestamp
@@ -71,7 +71,7 @@ where
     /// ```
     /// # #[cfg(feature = "parking-lot")] {
     ///     use ferroid::{
-    ///         generator::{IdGenStatus, LockMonoUlidGenerator},
+    ///         generator::{Poll, LockMonoUlidGenerator},
     ///         id::ULID,
     ///         rand::ThreadRandom,
     ///         time::MonotonicClock,
@@ -79,12 +79,7 @@ where
     ///
     ///     let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
-    ///     let id: ULID = loop {
-    ///         match generator.next_id() {
-    ///             IdGenStatus::Ready { id } => break id,
-    ///             IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-    ///         }
-    ///     };
+    ///     let id: ULID = generator.next_id(|_| std::thread::yield_now());
     /// }
     /// ```
     ///
@@ -104,8 +99,7 @@ where
     /// - `timestamp`: The initial timestamp component (usually in milliseconds)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
-    /// - `time`: A [`TimeSource`] implementation used to fetch the current
-    ///   time
+    /// - `time`: A [`TimeSource`] implementation used to fetch the current time
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -127,14 +121,77 @@ where
 
     /// Generates a new ULID.
     ///
-    /// Returns a new, time-ordered, unique ID if generation succeeds. If the
-    /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// time has not advanced), it returns [`IdGenStatus::Pending`].
+    /// Returns a new, time-ordered, unique ID.
     ///
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
+    ///     generator::{LockMonoUlidGenerator, Poll},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
+    ///
+    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
+    /// ```
+    #[cfg(feature = "parking-lot")]
+    pub fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
+        match self.try_next_id(f) {
+            Ok(id) => id,
+            Err(e) =>
+            {
+                #[allow(unreachable_code)]
+                match e {}
+            }
+        }
+    }
+
+    /// Generates a new ULID.
+    ///
+    /// Returns a new, time-ordered, unique ID with fallible error handling.
+    ///
+    /// # Example
+    /// ```
+    /// use ferroid::{
+    ///     generator::{LockMonoUlidGenerator, Poll},
+    ///     id::ULID,
+    ///     rand::ThreadRandom,
+    ///     time::MonotonicClock,
+    /// };
+    ///
+    /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    ///
+    /// let id: ULID = match generator.try_next_id(|_| std::thread::yield_now()) {
+    ///     Ok(id) => id,
+    ///     Err(_) => unreachable!(),
+    /// };
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the generator fails, such as from lock poisoning.
+    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
+    pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID, Error> {
+        loop {
+            match self.try_poll_id()? {
+                Poll::Ready { id } => break Ok(id),
+                Poll::Pending { yield_for } => f(yield_for),
+            }
+        }
+    }
+
+    /// Generates a new ULID.
+    ///
+    /// Returns a new, time-ordered, unique ID if generation succeeds. If the
+    /// generator is temporarily exhausted (e.g., the sequence is full and the
+    /// time has not advanced), it returns [`Poll::Pending`].
+    ///
+    /// # Example
+    /// ```
+    /// use ferroid::{
+    ///     generator::{LockMonoUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -143,18 +200,18 @@ where
     /// let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = loop {
-    ///     match generator.next_id() {
-    ///         IdGenStatus::Ready { id } => break id,
-    ///         IdGenStatus::Pending { .. } => std::thread::yield_now(),
+    ///     match generator.poll_id() {
+    ///         Poll::Ready { id } => break id,
+    ///         Poll::Pending { .. } => std::thread::yield_now(),
     ///     }
     /// };
     /// ```
     #[cfg(feature = "parking-lot")]
-    pub fn next_id(&self) -> IdGenStatus<ID>
+    pub fn poll_id(&self) -> Poll<ID>
     where
         Error: Into<core::convert::Infallible>,
     {
-        match self.try_next_id() {
+        match self.try_poll_id() {
             Ok(id) => id,
             Err(e) => {
                 #[allow(unreachable_code)]
@@ -167,21 +224,18 @@ where
     /// Attempts to generate a new ULID with fallible error handling.
     ///
     /// Combines the current timestamp with a freshly generated random value to
-    /// produce a unique identifier. Returns [`IdGenStatus::Ready`] on success.
+    /// produce a unique identifier. Returns [`Poll::Ready`] on success.
     ///
     /// # Returns
-    /// - `Ok(IdGenStatus::Ready { id })`: A new ID is available
-    /// - `Ok(IdGenStatus::Pending { yield_for })`: The time to wait (in
-    ///   milliseconds) before trying again
+    /// - `Ok(Poll::Ready { id })`: A new ID is available
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
+    ///   before trying again
     /// - `Err(e)`: the lock was poisoned
-    ///
-    /// # Errors
-    /// - Returns an error if the underlying lock has been poisoned.
     ///
     /// # Example
     /// ```
     /// use ferroid::{
-    ///     generator::{IdGenStatus, LockMonoUlidGenerator},
+    ///     generator::{LockMonoUlidGenerator, Poll},
     ///     id::{ToU64, ULID},
     ///     rand::ThreadRandom,
     ///     time::MonotonicClock,
@@ -191,17 +245,21 @@ where
     ///
     /// // Attempt to generate a new ID
     /// let id: ULID = loop {
-    ///     match generator.try_next_id() {
-    ///         Ok(IdGenStatus::Ready { id }) => break id,
-    ///         Ok(IdGenStatus::Pending { yield_for }) => {
+    ///     match generator.try_poll_id() {
+    ///         Ok(Poll::Ready { id }) => break id,
+    ///         Ok(Poll::Pending { yield_for }) => {
     ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
     ///         }
     ///         Err(e) => panic!("Generator error: {}", e),
     ///     }
     /// };
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the generator fails, such as from lock poisoning.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_next_id(&self) -> Result<IdGenStatus<ID>, Error> {
+    pub fn try_poll_id(&self) -> Result<Poll<ID>, Error> {
         let now = self.time.current_millis();
 
         let mut id = {
@@ -221,15 +279,15 @@ where
             Ordering::Equal => {
                 if id.has_random_room() {
                     *id = id.increment_random();
-                    Ok(IdGenStatus::Ready { id: *id })
+                    Ok(Poll::Ready { id: *id })
                 } else {
-                    Ok(IdGenStatus::Pending { yield_for: ID::ONE })
+                    Ok(Poll::Pending { yield_for: ID::ONE })
                 }
             }
             Ordering::Greater => {
                 let rand = self.rng.rand();
                 *id = id.rollover_to_timestamp(now, rand);
-                Ok(IdGenStatus::Ready { id: *id })
+                Ok(Poll::Ready { id: *id })
             }
             Ordering::Less => Ok(Self::cold_clock_behind(now, current_ts)),
         }
@@ -237,10 +295,10 @@ where
 
     #[cold]
     #[inline(never)]
-    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> IdGenStatus<ID> {
+    fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> Poll<ID> {
         let yield_for = current_ts - now;
         debug_assert!(yield_for >= ID::ZERO);
-        IdGenStatus::Pending { yield_for }
+        Poll::Pending { yield_for }
     }
 }
 
@@ -256,7 +314,11 @@ where
         Self::new(time, rng)
     }
 
-    fn try_next_id(&self) -> Result<IdGenStatus<ID>, Self::Err> {
-        self.try_next_id()
+    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
+        self.try_next_id(f)
+    }
+
+    fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {
+        self.try_poll_id()
     }
 }

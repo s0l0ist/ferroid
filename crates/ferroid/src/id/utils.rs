@@ -1,4 +1,5 @@
-/// Internal helper to implement `fmt::Display` when the `base32` feature is enabled.
+/// Internal helper to implement `fmt::Display` when the `base32` feature is
+/// enabled.
 #[doc(hidden)]
 #[cfg(feature = "base32")]
 #[macro_export]

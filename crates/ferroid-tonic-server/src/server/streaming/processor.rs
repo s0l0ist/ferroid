@@ -1,6 +1,5 @@
 use ferroid_tonic_core::{
-    Error,
-    ferroid::generator::IdGenStatus,
+    ferroid::generator::Poll,
     proto::IdChunk,
     types::{Generator, SNOWFLAKE_ID_SIZE},
 };
@@ -48,8 +47,8 @@ pub async fn handle_stream_request(
     let mut generated = 0;
 
     while generated < chunk_size {
-        match generator.try_next_id() {
-            Ok(IdGenStatus::Ready { id }) => {
+        match generator.poll_id() {
+            Poll::Ready { id } => {
                 generated += 1;
 
                 // Write the ID as little-endian bytes into the buffer.
@@ -75,23 +74,9 @@ pub async fn handle_stream_request(
                     *buff_pos = 0;
                 }
             }
-            Ok(IdGenStatus::Pending { .. }) => {
+            Poll::Pending { .. } => {
                 // Yield to the scheduler to avoid busy looping.
                 tokio::task::yield_now().await;
-            }
-            Err(e) => {
-                if chunk_tx.is_closed() {
-                    #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {_worker_id} exiting after generation error");
-                    return;
-                }
-
-                if let Err(_e) = chunk_tx.send(Err(Error::IdGeneration(e).into())).await {
-                    #[cfg(feature = "tracing")]
-                    tracing::debug!("Worker {_worker_id} failed to send error: {_e}");
-                }
-
-                return;
             }
         }
     }

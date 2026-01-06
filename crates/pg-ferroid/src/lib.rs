@@ -214,18 +214,18 @@ fn ulid_out(ulid: ULID) -> &'static core::ffi::CStr {
 // ULID GENERATION
 // ============================================================================
 
+/// Generate a new random ULID (non-monotonic)
+#[pg_extern(strict, parallel_safe)]
+fn gen_ulid() -> ULID {
+    Ulid::new_ulid().into()
+}
+
 /// Generate a new monotonic ULID
 ///
 /// Monotonic ULIDs guarantee ordering within the same millisecond
 #[pg_extern(strict, parallel_safe)]
 fn gen_ulid_mono() -> ULID {
-    Ulid::new_ulid_mono().into()
-}
-
-/// Generate a new random ULID (non-monotonic)
-#[pg_extern(strict, parallel_safe)]
-fn gen_ulid() -> ULID {
-    Ulid::new_ulid().into()
+    Ulid::new_ulid_mono(|_| std::thread::yield_now()).into()
 }
 
 // ============================================================================

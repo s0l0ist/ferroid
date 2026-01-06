@@ -9,8 +9,8 @@ use ferroid::{
     futures::{SmolSleep, SnowflakeGeneratorAsyncExt, TokioSleep, UlidGeneratorAsyncExt},
     generator::{
         AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, BasicMonoUlidGenerator,
-        BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus, LockMonoUlidGenerator,
-        LockSnowflakeGenerator, SnowflakeGenerator, UlidGenerator, thread_local::Ulid,
+        BasicSnowflakeGenerator, BasicUlidGenerator, LockMonoUlidGenerator, LockSnowflakeGenerator,
+        SnowflakeGenerator, UlidGenerator, thread_local::Ulid,
     },
     id::{BeBytes, SnowflakeId, SnowflakeTwitterId, ULID, UlidId},
     rand::{RandSource, ThreadRandom},
@@ -143,9 +143,10 @@ fn bench_ulid_thread_local(c: &mut Criterion, group_name: &str) {
             black_box(Ulid::new_ulid());
         });
     });
+    let backoff = |_| std::thread::yield_now();
     group.bench_function("new_ulid_mono", |b| {
         b.iter(|| {
-            black_box(Ulid::new_ulid_mono());
+            black_box(Ulid::new_ulid_mono(backoff));
         });
     });
     group.bench_function("from_timestamp", |b| {
@@ -176,16 +177,10 @@ fn bench_generator_snow<ID, G, T>(
     group.bench_function("next_id", |b| {
         let clock = clock_fn();
         let g = generator_fn(0, clock);
+        let backoff = |_| core::hint::spin_loop();
         b.iter(|| {
-            loop {
-                match g.try_next_id().unwrap() {
-                    IdGenStatus::Ready { id } => {
-                        black_box(id);
-                        break;
-                    }
-                    IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-                }
-            }
+            let id = g.try_next_id(backoff).unwrap();
+            black_box(id);
         });
     });
     group.finish();
@@ -208,16 +203,10 @@ fn bench_generator_ulid<ID, G, T, R>(
         let clock = clock_fn();
         let rand = rand_fn();
         let g = generator_fn(clock, rand);
+        let backoff = |_| core::hint::spin_loop();
         b.iter(|| {
-            loop {
-                match g.try_next_id().unwrap() {
-                    IdGenStatus::Ready { id } => {
-                        black_box(id);
-                        break;
-                    }
-                    IdGenStatus::Pending { .. } => core::hint::spin_loop(),
-                }
-            }
+            let id = g.try_next_id(backoff).unwrap();
+            black_box(id);
         });
     });
     group.finish();

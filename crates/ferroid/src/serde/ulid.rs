@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-pub mod as_native_ulid {
+pub mod ulid_as_int {
     use super::{Deserialize, Deserializer, Serialize, Serializer};
     use crate::{id::UlidId, serde::Error};
 
@@ -42,7 +42,7 @@ pub mod as_native_ulid {
 }
 
 #[cfg(feature = "base32")]
-pub mod as_base32_ulid {
+pub mod ulid_as_base32 {
     use super::{Deserializer, Serializer};
     use crate::{base32::Base32UlidExt, id::BeBytes, serde::Error};
 
@@ -113,7 +113,7 @@ mod tests {
     fn native_ulid_roundtrip() {
         #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
         struct Row {
-            #[serde(with = "as_native_ulid")]
+            #[serde(with = "ulid_as_int")]
             event_id: ULID,
         }
         let row = Row {
@@ -131,7 +131,7 @@ mod tests {
     fn base32_ulid_roundtrip() {
         #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
         struct Row {
-            #[serde(with = "as_base32_ulid")]
+            #[serde(with = "ulid_as_base32")]
             event_id: ULID,
         }
         let row = Row {

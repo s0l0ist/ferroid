@@ -124,7 +124,7 @@ use ferroid::{generator::thread_local::Ulid, id::ULID};
 let id: ULID = Ulid::new_ulid();
 
 // A monotonic ULID (faster, increments within the same millisecond)
-let id: ULID = Ulid::new_ulid_mono();
+let id: ULID = Ulid::new_ulid_mono(|_| std::thread::yield_now());
 ```
 
 **Note**: Thread-local generators are not currently available for
@@ -147,58 +147,55 @@ use `TWITTER_EPOCH`, which begins at **Thursday, November 4, 2010, 01:42:54.657
 UTC** (millisecond zero).
 
 ```rust
-use ferroid::time::{MonotonicClock, UNIX_EPOCH};
+use ferroid::{
+      generator::BasicSnowflakeGenerator,
+      id::{SnowflakeTwitterId, SnowflakeMastodonId},
+      time::{MonotonicClock, TWITTER_EPOCH, MASTODON_EPOCH, UNIX_EPOCH}
+};
 
 // Same as MonotonicClock::default();
-let clock = MonotonicClock::with_epoch(UNIX_EPOCH);
+let unix_clock = MonotonicClock::with_epoch(UNIX_EPOCH);
+// Also the same as MonotonicClock::default();
+let unix_clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
 
-// let generator0 = BasicSnowflakeGenerator::new(0, clock.clone());
-// let generator1 = BasicSnowflakeGenerator::new(1, clock.clone());
+let twitter_clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
+
+let mastodon_gen: BasicSnowflakeGenerator<SnowflakeMastodonId, _> = BasicSnowflakeGenerator::new(0, unix_clock);
+let twitter_gen: BasicSnowflakeGenerator<SnowflakeTwitterId, _> = BasicSnowflakeGenerator::new(0, twitter_clock);
 ```
 
 #### Generating IDs
 
-Calling `next_id()` may yield `Pending` if the current sequence is exhausted.
-Please note that while this behavior is exposed to provide maximum flexibility,
-you must be generating enough IDs **per millisecond** to draw out the `Pending`
-path. You may spin, yield, or sleep depending on your environment:
+Calling `next_id()` will call the passed in backoff strategy closure if the
+underlying generator needs to yield. Please note that while this behavior is
+exposed to provide maximum flexibility, you must be generating enough IDs **per
+millisecond** to invoke this callback. You may spin, yield, or sleep depending
+on your environment:
 
 ```rust
 use ferroid::{
-    generator::{BasicSnowflakeGenerator, BasicUlidGenerator, IdGenStatus},
-    id::{SnowflakeTwitterId, ToU64, ULID},
+    generator::{BasicSnowflakeGenerator, BasicUlidGenerator, Poll},
+    id::{Id, SnowflakeTwitterId, ToU64, ULID},
     rand::ThreadRandom,
     time::{MonotonicClock, TWITTER_EPOCH},
 };
 
 let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
-let id: SnowflakeTwitterId = loop {
-    match snow_gen.next_id() {
-        IdGenStatus::Ready { id } => break id,
-        IdGenStatus::Pending { yield_for } => {
-            // Spin: lowest latency, but generally avoid.
-            core::hint::spin_loop();
+let id: SnowflakeTwitterId = snow_gen.next_id(|yield_for: <SnowflakeTwitterId as Id>::Ty| {
+    // Spin: lowest latency, but generally avoid. Or ...
+    core::hint::spin_loop();
 
-            // Yield to the scheduler: lets another thread run; still may busy-wait.
-            std::thread::yield_now();
+    // Yield to the scheduler: lets another thread run; still may busy-wait. Or ...
+    std::thread::yield_now();
 
-            // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
-            std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
+    // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
+    std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
 
-            // For use in runtimes such as `tokio` or `smol`, use the async API (see below).
-        }
-    }
-};
+    // For use in runtimes such as `tokio` or `smol`, use the non-blocking async API (see below).
+});
 
 let ulid_gen = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-let id: ULID = loop {
-    match ulid_gen.next_id() {
-        IdGenStatus::Ready { id } => break id,
-        IdGenStatus::Pending { yield_for } => {
-            std::thread::yield_now();
-        }
-    }
-};
+let id: ULID = ulid_gen.next_id(|_| std::thread::yield_now());
 ```
 
 ### Asynchronous Generators
@@ -323,9 +320,8 @@ Users must explicitly choose a serialization strategy using `#[serde(with =
 
 There are two serialization strategies:
 
-- `as_native_snow`/`as_native_ulid`: Serialize as native integer types
-  (u64/u128)
-- `as_base32_snow`/`as_base32_ulid`: Serialize as Crockford base32 encoded
+- `snow_as_int`/`ulid_as_int`: Serialize as native integer types (u64/u128)
+- `snow_as_base32`/`ulid_as_base32`: Serialize as Crockford base32 encoded
   strings
 
 Both strategies validate during deserialization and return errors for invalid
@@ -338,16 +334,16 @@ Base32 section).
 ```rust
 use ferroid::{
     id::SnowflakeTwitterId,
-    serde::{as_base32_snow, as_native_snow},
+    serde::{snow_as_base32, snow_as_int},
 };
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct Event {
-    #[serde(with = "as_native_snow")]
+    #[serde(with = "snow_as_int")]
     id_snow_int: SnowflakeTwitterId, // Serializes as an int: 123456789
 
-    #[serde(with = "as_base32_snow")]
+    #[serde(with = "snow_as_base32")]
     id_snow_base32: SnowflakeTwitterId, // Serializes as a base32 string: "000000000001A"
 }
 ```
@@ -468,10 +464,10 @@ in `no_std`.
 
 ### Snowflake
 
-- If the clock **advances**: reset sequence to 0 → `IdGenStatus::Ready`
-- If the clock is **unchanged**: increment sequence → `IdGenStatus::Ready`
-- If the clock **goes backward**: return `IdGenStatus::Pending`
-- If the sequence increment **overflows**: return `IdGenStatus::Pending`
+- If the clock **advances**: reset sequence to 0 → `Poll::Ready`
+- If the clock is **unchanged**: increment sequence → `Poll::Ready`
+- If the clock **goes backward**: return `Poll::Pending`
+- If the sequence increment **overflows**: return `Poll::Pending`
 
 ### ULID
 
@@ -479,10 +475,10 @@ This implementation respects monotonicity within the same millisecond in a
 single generator by incrementing the random portion of the ID and guarding
 against overflow.
 
-- If the clock **advances**: generate new random → `IdGenStatus::Ready`
-- If the clock is **unchanged**: increment random → `IdGenStatus::Ready`
-- If the clock **goes backward**: return `IdGenStatus::Pending`
-- If the random increment **overflows**: return `IdGenStatus::Pending`
+- If the clock **advances**: generate new random → `Poll::Ready`
+- If the clock is **unchanged**: increment random → `Poll::Ready`
+- If the clock **goes backward**: return `Poll::Pending`
+- If the random increment **overflows**: return `Poll::Pending`
 
 ## Advanced Topics
 
@@ -491,6 +487,31 @@ against overflow.
 When generating time-sortable IDs that use random bits, it's important to
 estimate the probability of collisions (i.e., two IDs being the same within the
 same millisecond), given your ID layout and system throughput.
+
+#### Non-monotonic (always-random) collision probability
+
+If $n$ IDs are generated within the same millisecond, and the ID has $r$ random
+bits, the probability of **at least one collision** in that millisecond is
+approximately:
+
+$$P_\text{collision} \approx \frac{n(n-1)}{2 \cdot 2^r} $$
+
+For $g$ generators each producing $k$ IDs per millisecond (so $n = g \cdot k$):
+
+$$P_\text{collision} \approx \frac{(gk)(gk-1)}{2 \cdot 2^r} $$
+
+Where:
+
+- $g$ = number of generators
+- $k$ = number of non-monotonic IDs per generator per millisecond
+- $r$ = number of random bits per ID
+- $n$ = total IDs generated per millisecond across all generators ($n = g \cdot k$)
+- $P_{\text{collision}}$ = probability of at least one collision (within the
+  same millisecond)
+
+Compared to monotonic generation (which increments from a random starting
+point), always-random generation typically has higher collision probability when
+multiple generators produce multiple IDs per millisecond.
 
 #### Monotonic IDs with Multiple ULID Generators
 
@@ -545,16 +566,27 @@ $$\Rightarrow T \approx \frac{\ln 2}{P_\text{collision}}$$
 The $\ln 2$ term arises because $\ln(0.5) = -\ln 2$. After $T_\text{50\%}$
 milliseconds, there's a 50% chance that at least one collision has occurred.
 
-#### Example Collision Probabilities
+#### Example Collision Probabilities (Monotonic)
 
 | Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{\text{50\%}}$)         |
 | ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | 1                | 1                              | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
 | 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                   |
 | 2                | 1                              | $\displaystyle \frac{2 \times 1 \times 1}{2 \cdot 2^{80}} \approx 8.27 \times 10^{-25}$                 | $\approx 8.38 \times 10^{23} \text{ ms}$                    |
-| 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         | $\approx 6.41 \times 10^{18} \text{ ms}$                    |
+| 2                | 65,536                         | $\displaystyle \frac{2 \times 1 \times 131{,}071}{2 \cdot 2^{80}} \approx 1.08 \times 10^{-19}$         | $\approx 6.39 \times 10^{18} \text{ ms}$                    |
 | 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999 \times 1}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$         | $\approx 1.68 \times 10^{18} \text{ ms}$                    |
 | 1,000            | 65,536                         | $\displaystyle \frac{1{,}000 \times 999 \times 131{,}071}{2 \cdot 2^{80}} \approx 5.42 \times 10^{-14}$ | $\approx 1.28 \times 10^{13} \text{ ms} \approx 406\ years$ |
+
+#### Example Collision Probabilities (Non-Monotonic)
+
+| Generators ($g$) | IDs per generator per ms ($k$) | $P_\text{collision}$                                                                                    | Estimated Time to 50% Collision ($T_{\text{50\%}}$)          |
+| ---------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| 1                | 1                              | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                    |
+| 1                | 65,536                         | $0$ (single generator; no collision possible)                                                           | ∞ (no collision possible)                                    |
+| 2                | 1                              | $\displaystyle \frac{2 \times 1}{2 \cdot 2^{80}} \approx 8.27 \times 10^{-25}$                          | $\approx 8.38 \times 10^{23} \text{ ms}$ (same as monotonic) |
+| 2                | 65,536                         | $\displaystyle \frac{131{,}072 \times 131{,}071}{2 \cdot 2^{80}} \approx 7.11 \times 10^{-15}$          | $\approx 9.75 \times 10^{13} \text{ ms}$                     |
+| 1,000            | 1                              | $\displaystyle \frac{1{,}000 \times 999}{2 \cdot 2^{80}} \approx 4.13 \times 10^{-19}$                  | $\approx 1.68 \times 10^{18} \text{ ms}$ (same as monotonic) |
+| 1,000            | 65,536                         | $\displaystyle \frac{65{,}536{,}000 \times 65{,}535{,}999}{2 \cdot 2^{80}} \approx 1.78 \times 10^{-9}$ | $\approx 3.90 \times 10^{8} \text{ ms} \approx 4.5\ days$    |
 
 ### Base32 Overflow Details
 
@@ -586,8 +618,7 @@ Ferroid takes a more flexible stance:
 - Strings like `"ZZZZZZZZZZZZZZZZZZZZZZZZZZ"` (which technically overflow) are
   accepted and decoded without error
 - However, if any of the overflowed bits fall into reserved regions (which must
-  remain zero), decoding will fail with
-  `ferroid::base32::Error::DecodeOverflow`
+  remain zero), decoding will fail with `ferroid::base32::Error::DecodeOverflow`
 
 This allows any 13-character Base32 string to decode into a `u64`, or any
 26-character string into a `u128`, **as long as reserved layout constraints

@@ -1,6 +1,6 @@
 use core::fmt;
 
-/// Errors that can occur while decoding native integers.
+/// Errors that can occur while decoding IDs.
 ///
 /// This error type is generic over the decoded ID type `E`, which allows
 /// including the decoded ID in case of overflow. This can help callers inspect
