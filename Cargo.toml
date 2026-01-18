@@ -50,7 +50,7 @@ serde = { version = "1.0", default-features = false }
 serde_json = { version = "1.0", default-features = false }
 smol = { version = "2.0", default-features = false }
 thiserror = { version = "2.0", default-features = false }
-tokio = { version = "1.48", default-features = false }
+tokio = { version = "1.49", default-features = false }
 tokio-stream = { version = "0.1", default-features = false }
 tokio-util = { version = "0.7", default-features = false }
 tonic = { version = "0.14", default-features = false }
