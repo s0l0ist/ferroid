@@ -41,8 +41,7 @@ thread_local! {
 /// A thread-local ULID generator with monotonic and non-monotonic modes.
 ///
 /// Provides fast, per-thread ULID generation using a shared monotonic clock and
-/// thread-local RNG. Monotonic overflows are handled with configurable
-/// [`Backoff`] strategies.
+/// thread-local RNG.
 pub struct Ulid;
 
 impl Ulid {
