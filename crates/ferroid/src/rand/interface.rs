@@ -1,4 +1,4 @@
-/// A trait for random sources that return a random byte integers.
+/// A trait for random sources that return random integers.
 ///
 /// This abstraction allows you to plug in a real random source or a mocked
 /// random source in tests.
@@ -20,6 +20,6 @@
 /// assert_eq!(rng.rand(), 1234);
 /// ```
 pub trait RandSource<T> {
-    /// Returns random bytes.
+    /// Returns a random integer.
     fn rand(&self) -> T;
 }

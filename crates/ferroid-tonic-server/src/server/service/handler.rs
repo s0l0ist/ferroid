@@ -153,7 +153,7 @@ impl IdGenerator for IdService {
     /// streams binary-packed responses (`IdChunk`) back to the client. Chunks
     /// are processed sequentially across worker threads.
     ///
-    /// If `tracing`` is enabled, spans are instrumented per request for
+    /// If `tracing` is enabled, spans are instrumented per request for
     /// observability.
     ///
     /// If `metrics` is enabled, emits telemetry for:

@@ -30,7 +30,7 @@ use tonic::Status;
 ///
 /// - Generates exactly `chunk_size` IDs unless cancelled early.
 /// - Batches IDs into fixed-size chunks and sends them through `chunk_tx`.
-/// - On error, sends a single [`Error::IdGeneration`] response and exits.
+/// - Exits early if the output channel is closed.
 /// - Uses cooperative yielding (`yield_now`) when generation is pending.
 #[allow(clippy::needless_pass_by_ref_mut)]
 #[allow(clippy::used_underscore_binding)]

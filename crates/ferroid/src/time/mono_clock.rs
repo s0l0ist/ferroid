@@ -1,7 +1,7 @@
 use alloc::sync::Arc;
 use core::time::Duration;
 use std::{
-    sync::OnceLock,
+    sync::{LazyLock, OnceLock},
     thread::{self, JoinHandle},
     time::{Instant, SystemTime},
 };
@@ -10,11 +10,61 @@ use portable_atomic::{AtomicU64, Ordering};
 
 use crate::time::{TimeSource, UNIX_EPOCH};
 
+/// Lazily initialized, process-global ticker.
+///
+/// The background thread is started on first use of [`MonotonicClock`], and
+/// it runs for the lifetime of the process.
+static GLOBAL_TICKER: LazyLock<Arc<SharedTickerInner>> = LazyLock::new(|| {
+    let start = Instant::now();
+    let system_now = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or(Duration::ZERO);
+    #[allow(clippy::cast_possible_truncation)]
+    let base_system_now = system_now.as_millis() as u64;
+
+    let inner = Arc::new(SharedTickerInner {
+        current: AtomicU64::new(0),
+        handle: OnceLock::new(),
+        base_system_now,
+    });
+
+    let inner_ref = Arc::clone(&inner);
+    let handle = thread::spawn(move || {
+        let mut tick = 0;
+
+        loop {
+            // Compute the absolute target time of the next tick
+            let target = start + Duration::from_millis(tick);
+
+            // Sleep if we are early
+            let now = Instant::now();
+            if now < target {
+                thread::sleep(target - now);
+            }
+
+            // After waking, recompute how far we actually are from the
+            // start
+            #[allow(clippy::cast_possible_truncation)]
+            let now_ms = start.elapsed().as_millis() as u64;
+
+            // Monotonic store, aligned to elapsed milliseconds since start
+            inner_ref.current.store(now_ms, Ordering::Relaxed);
+
+            // Align to next tick after the current actual time
+            tick = now_ms + 1;
+        }
+    });
+
+    let _ = inner.handle.set(handle);
+    inner
+});
+
 /// Shared ticker thread that updates every millisecond.
 #[derive(Debug)]
 struct SharedTickerInner {
     current: AtomicU64,
     handle: OnceLock<JoinHandle<()>>,
+    base_system_now: u64,
 }
 
 /// A monotonic time source that returns elapsed time since process start,
@@ -34,8 +84,6 @@ pub struct MonotonicClock {
 
 impl Default for MonotonicClock {
     /// Constructs a monotonic clock aligned to the default [`UNIX_EPOCH`].
-    ///
-    /// Panics if system time is earlier than the custom epoch.
     fn default() -> Self {
         Self::with_epoch(UNIX_EPOCH)
     }
@@ -46,9 +94,12 @@ impl MonotonicClock {
     /// specified in milliseconds since the Unix epoch.
     ///
     /// The provided epoch defines the zero-point for all future timestamps
-    /// returned by this clock. Internally, the clock spawns a background thread
-    /// that updates a shared atomic counter once per millisecond, using a
-    /// monotonic timer (`Instant`) to measure elapsed time since startup.
+    /// returned by this clock. Internally, the clock uses a shared background
+    /// thread that updates a global atomic counter once per millisecond, using
+    /// a monotonic timer (`Instant`) to measure elapsed time since startup.
+    ///
+    /// Different epochs are supported by applying a per-instance offset to the
+    /// shared ticker value.
     ///
     /// On each call to [`current_millis`], the clock returns the current tick
     /// value plus a fixed offset - the precomputed difference between the
@@ -88,58 +139,15 @@ impl MonotonicClock {
     /// This allows you to control the timestamp layout by anchoring all
     /// generated times to a custom epoch of your choosing.
     ///
-    /// # Panics
-    /// - Panics if the background thread handle has already been set on the
-    ///   internal ticker. This happens if `with_epoch` is called more than once
-    ///   on the same `MonotonicClock` instance.
-    ///
     /// [`current_millis`]: TimeSource::current_millis
     #[must_use]
     pub fn with_epoch(epoch: Duration) -> Self {
-        let start = Instant::now();
-        let system_now = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO);
+        let inner = Arc::clone(&GLOBAL_TICKER);
+
         #[allow(clippy::cast_possible_truncation)]
-        let offset = system_now.saturating_sub(epoch).as_millis() as u64;
-
-        let inner = Arc::new(SharedTickerInner {
-            current: AtomicU64::new(0),
-            handle: OnceLock::new(),
-        });
-
-        let weak_inner = Arc::downgrade(&inner);
-        let handle = thread::spawn(move || {
-            let mut tick = 0;
-
-            loop {
-                let Some(inner_ref) = weak_inner.upgrade() else {
-                    break;
-                };
-
-                // Compute the absolute target time of the next tick
-                let target = start + Duration::from_millis(tick);
-
-                // Sleep if we are early
-                let now = Instant::now();
-                if now < target {
-                    thread::sleep(target - now);
-                }
-
-                // After waking, recompute how far we actually are from the
-                // start
-                #[allow(clippy::cast_possible_truncation)]
-                let now_ms = start.elapsed().as_millis() as u64;
-
-                // Monotonic store, aligned to elapsed milliseconds since start
-                inner_ref.current.store(now_ms, Ordering::Relaxed);
-
-                // Align to next tick after the current actual time
-                tick = now_ms + 1;
-            }
-        });
-
-        let _ = inner.handle.set(handle);
+        let offset = inner
+            .base_system_now
+            .saturating_sub(epoch.as_millis() as u64);
 
         Self {
             inner,

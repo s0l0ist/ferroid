@@ -41,7 +41,7 @@
 //! Enable metrics and export to Honeycomb:
 //!
 //! ```bash
-//! cargo run--features metrics,honeycomb
+//! cargo run --features metrics,honeycomb
 //! ```
 //!
 //! Enable tracing and metrics, exported to both Honeycomb and stdout:
