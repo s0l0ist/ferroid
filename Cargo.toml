@@ -40,12 +40,12 @@ opentelemetry-semantic-conventions = { version = "0.31", default-features = fals
 opentelemetry-stdout = { version = "0.31", default-features = false }
 opentelemetry_sdk = { version = "0.31", default-features = false }
 parking_lot = { version = "0.12", default-features = false }
-pgrx = { version = "0.16", default-features = false }
-pgrx-tests = { version = "0.16", default-features = false }
+pgrx = { version = "0.17", default-features = false }
+pgrx-tests = { version = "0.17", default-features = false }
 portable-atomic = { version = "1.13", default-features = false }
 prost = { version = "0.14", default-features = false }
 prost-types = { version = "0.14", default-features = false }
-rand = { version = "0.9", default-features = false }
+rand = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false }
 serde_json = { version = "1.0", default-features = false }
 smol = { version = "2.0", default-features = false }
