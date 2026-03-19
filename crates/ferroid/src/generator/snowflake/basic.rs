@@ -70,7 +70,8 @@ where
     ///     time::{MonotonicClock, TWITTER_EPOCH},
     /// };
     ///
-    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// let generator =
+    ///     BasicSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
     ///
     /// let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
     /// ```
@@ -88,7 +89,7 @@ where
     /// point of the generator manually.
     ///
     /// # Parameters
-    /// - `timestamp`: The initial timestamp component (usually in milliseconds)
+    /// - `timestamp`: The initial timestamp component (usually in time-source units)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
     /// - `time`: A [`TimeSource`] implementation used to fetch the current time
@@ -152,7 +153,8 @@ where
     ///     time::{MonotonicClock, TWITTER_EPOCH},
     /// };
     ///
-    /// let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+    /// let generator =
+    ///     BasicSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
     ///
     /// let id: SnowflakeTwitterId = loop {
     ///     match generator.poll_id() {

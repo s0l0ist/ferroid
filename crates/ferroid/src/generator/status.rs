@@ -44,10 +44,10 @@ pub enum Poll<T: Id> {
     },
     /// The generator is not ready to produce a new ID yet.
     ///
-    /// Wait for the specified number of milliseconds (`yield_for`) before
+    /// Wait for the specified number of time-source units (`yield_for`) before
     /// trying again.
     Pending {
-        /// Milliseconds to wait before the next attempt.
+        /// Time-source units to wait before the next attempt.
         yield_for: T::Ty,
     },
 }

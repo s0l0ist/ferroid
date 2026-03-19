@@ -76,20 +76,36 @@ struct SharedTickerInner {
 /// Internally, the clock measures time by capturing `Instant::now()` at
 /// construction and adding to it the duration elapsed since a given epoch
 /// (computed from `SystemTime::now()` at startup).
+///
+/// `N` controls the number of real milliseconds represented by one returned
+/// time unit. `MonotonicClock` and `MonotonicClock<1>` return literal
+/// milliseconds, while `MonotonicClock<8>` returns 8-millisecond ticks.
+///
+/// ```compile_fail
+/// use ferroid::time::{MonotonicClock, UNIX_EPOCH};
+///
+/// let _ = MonotonicClock::<0>::with_epoch(UNIX_EPOCH);
+/// ```
 #[derive(Clone, Debug)]
-pub struct MonotonicClock {
+pub struct MonotonicClock<const N: u64 = 1> {
     inner: Arc<SharedTickerInner>,
     epoch_offset: u64, // in milliseconds
 }
 
-impl Default for MonotonicClock {
+impl Default for MonotonicClock<1> {
     /// Constructs a monotonic clock aligned to the default [`UNIX_EPOCH`].
     fn default() -> Self {
         Self::with_epoch(UNIX_EPOCH)
     }
 }
 
-impl MonotonicClock {
+impl<const N: u64> MonotonicClock<N> {
+    const ASSERT_VALID_GRANULARITY: () = assert!(
+        N > 0,
+        "MonotonicClock granularity must be greater than zero"
+    );
+    pub const GRANULARITY_MILLIS: u64 = N;
+
     /// Constructs a monotonic clock using a custom epoch as the origin (t = 0),
     /// specified in milliseconds since the Unix epoch.
     ///
@@ -103,7 +119,8 @@ impl MonotonicClock {
     ///
     /// On each call to [`current_millis`], the clock returns the current tick
     /// value plus a fixed offset - the precomputed difference between the
-    /// current wall-clock time (`SystemTime::now()`) and the given epoch.
+    /// current wall-clock time (`SystemTime::now()`) and the given epoch. The
+    /// final value is quantized into `N`-millisecond units.
     ///
     /// This design avoids syscalls on the hot path and ensures that time never
     /// goes backward, even if the system clock is adjusted externally.
@@ -122,7 +139,7 @@ impl MonotonicClock {
     /// // use ferroid::TWITTER_EPOCH,
     /// // let now = TWITTER_EPOCH;
     ///
-    /// let clock = MonotonicClock::with_epoch(now);
+    /// let clock = MonotonicClock::<1>::with_epoch(now);
     ///
     /// std::thread::sleep(Duration::from_millis(5));
     ///
@@ -142,6 +159,7 @@ impl MonotonicClock {
     /// [`current_millis`]: TimeSource::current_millis
     #[must_use]
     pub fn with_epoch(epoch: Duration) -> Self {
+        let () = Self::ASSERT_VALID_GRANULARITY;
         let inner = Arc::clone(&GLOBAL_TICKER);
 
         #[allow(clippy::cast_possible_truncation)]
@@ -156,18 +174,54 @@ impl MonotonicClock {
     }
 }
 
-impl TimeSource<u64> for MonotonicClock {
-    /// Returns the number of milliseconds since the configured epoch, based on
-    /// the elapsed monotonic time since construction.
+impl<const N: u64> TimeSource<u64> for MonotonicClock<N> {
+    const GRANULARITY_MILLIS: u64 = Self::GRANULARITY_MILLIS;
+
+    /// Returns the number of `N`-millisecond units since the configured epoch,
+    /// based on the elapsed monotonic time since construction.
     fn current_millis(&self) -> u64 {
-        self.epoch_offset + self.inner.current.load(Ordering::Relaxed)
+        let () = Self::ASSERT_VALID_GRANULARITY;
+        (self.epoch_offset + self.inner.current.load(Ordering::Relaxed)) / N
     }
 }
 
-impl TimeSource<u128> for MonotonicClock {
-    /// Returns the number of milliseconds since the configured epoch, based on
-    /// the elapsed monotonic time since construction.
+impl<const N: u64> TimeSource<u128> for MonotonicClock<N> {
+    const GRANULARITY_MILLIS: u64 = Self::GRANULARITY_MILLIS;
+
+    /// Returns the number of `N`-millisecond units since the configured epoch,
+    /// based on the elapsed monotonic time since construction.
     fn current_millis(&self) -> u128 {
         u128::from(<Self as TimeSource<u64>>::current_millis(self))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_granularity_stays_in_milliseconds() {
+        let clock = MonotonicClock::default();
+        let _ts: u64 = <MonotonicClock as TimeSource<u64>>::current_millis(&clock);
+        assert_eq!(MonotonicClock::<1>::GRANULARITY_MILLIS, 1);
+        assert_eq!(<MonotonicClock as TimeSource<u64>>::GRANULARITY_MILLIS, 1);
+    }
+
+    #[test]
+    fn quantized_granularity_scales_current_millis() {
+        let millis_clock = MonotonicClock::<1>::with_epoch(UNIX_EPOCH);
+        let quantized_clock = MonotonicClock::<8>::with_epoch(UNIX_EPOCH);
+
+        let lower = <MonotonicClock<1> as TimeSource<u64>>::current_millis(&millis_clock);
+        let quantized = <MonotonicClock<8> as TimeSource<u64>>::current_millis(&quantized_clock);
+        let upper = <MonotonicClock<1> as TimeSource<u64>>::current_millis(&millis_clock);
+
+        assert_eq!(MonotonicClock::<8>::GRANULARITY_MILLIS, 8);
+        assert_eq!(
+            <MonotonicClock<8> as TimeSource<u64>>::GRANULARITY_MILLIS,
+            8
+        );
+        assert!(lower / 8 <= quantized);
+        assert!(quantized <= upper / 8);
     }
 }

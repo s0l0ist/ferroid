@@ -146,6 +146,10 @@ should override this depending on the ID specification. For example, Twitter IDs
 use `TWITTER_EPOCH`, which begins at **Thursday, November 4, 2010, 01:42:54.657
 UTC** (millisecond zero).
 
+`MonotonicClock<const N: u64 = 1>` returns timestamps in `N`-millisecond units.
+For example, `MonotonicClock<8>` advances in 8 ms quanta and generator
+timestamps/backoff values will use those units instead of literal milliseconds.
+
 ```rust
 use ferroid::{
       generator::BasicSnowflakeGenerator,
@@ -154,11 +158,11 @@ use ferroid::{
 };
 
 // Same as MonotonicClock::default();
-let unix_clock = MonotonicClock::with_epoch(UNIX_EPOCH);
+let unix_clock = MonotonicClock::<1>::with_epoch(UNIX_EPOCH);
 // Also the same as MonotonicClock::default();
-let unix_clock = MonotonicClock::with_epoch(MASTODON_EPOCH);
+let unix_clock = MonotonicClock::<1>::with_epoch(MASTODON_EPOCH);
 
-let twitter_clock = MonotonicClock::with_epoch(TWITTER_EPOCH);
+let twitter_clock = MonotonicClock::<1>::with_epoch(TWITTER_EPOCH);
 
 let mastodon_gen: BasicSnowflakeGenerator<SnowflakeMastodonId, _> = BasicSnowflakeGenerator::new(0, unix_clock);
 let twitter_gen: BasicSnowflakeGenerator<SnowflakeTwitterId, _> = BasicSnowflakeGenerator::new(0, twitter_clock);
@@ -169,8 +173,8 @@ let twitter_gen: BasicSnowflakeGenerator<SnowflakeTwitterId, _> = BasicSnowflake
 Calling `next_id()` will call the passed in backoff strategy closure if the
 underlying generator needs to yield. Please note that while this behavior is
 exposed to provide maximum flexibility, you must be generating enough IDs **per
-millisecond** to invoke this callback. You may spin, yield, or sleep depending
-on your environment:
+time-source tick** to invoke this callback. With `MonotonicClock<1>` that means
+per millisecond. You may spin, yield, or sleep depending on your environment:
 
 ```rust
 use ferroid::{
@@ -180,7 +184,7 @@ use ferroid::{
     time::{MonotonicClock, TWITTER_EPOCH},
 };
 
-let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::with_epoch(TWITTER_EPOCH));
+let snow_gen = BasicSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
 let id: SnowflakeTwitterId = snow_gen.next_id(|yield_for: <SnowflakeTwitterId as Id>::Ty| {
     // Spin: lowest latency, but generally avoid. Or ...
     core::hint::spin_loop();
@@ -189,6 +193,7 @@ let id: SnowflakeTwitterId = snow_gen.next_id(|yield_for: <SnowflakeTwitterId as
     std::thread::yield_now();
 
     // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
+    // For coarser clocks, multiply by the clock's `GRANULARITY_MILLIS`.
     std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
 
     // For use in runtimes such as `tokio` or `smol`, use the non-blocking async API (see below).
@@ -209,7 +214,8 @@ to avoid blocking behavior:
 
 These features extend the generator to yield cooperatively when it returns
 `Pending`, causing the current task to sleep for the specified `yield_for`
-duration (typically ~1ms). While this is fully non-blocking, it may oversleep
+duration scaled by the clock granularity (typically ~1ms with
+`MonotonicClock<1>`). While this is fully non-blocking, it may oversleep
 slightly due to OS or executor timing precision, potentially reducing peak
 throughput.
 
@@ -223,12 +229,12 @@ use ferroid::{
 };
 
 async fn run() -> Result<(), Error> {
-    let snow_gen = LockSnowflakeGenerator::new(0, MonotonicClock::with_epoch(MASTODON_EPOCH));
+    let snow_gen = LockSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(MASTODON_EPOCH));
     let id: SnowflakeMastodonId = snow_gen.try_next_id_async().await?;
     println!("Generated ID: {}", id);
 
     let ulid_gen = LockMonoUlidGenerator::new(
-        MonotonicClock::with_epoch(UNIX_EPOCH),
+        MonotonicClock::<1>::with_epoch(UNIX_EPOCH),
         ThreadRandom::default(),
     );
     let id: ULID = ulid_gen.try_next_id_async().await?;

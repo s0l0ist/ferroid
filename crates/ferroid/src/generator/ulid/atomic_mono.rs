@@ -20,7 +20,7 @@ use crate::{
 /// ## Features
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
-/// - ✅ Time-ordered (monotonically increasing per millisecond)
+/// - ✅ Time-ordered (monotonically increasing per time-source tick)
 ///
 /// ## Caveats
 /// This implementation uses an [`AtomicU128`] internally, so it only supports
@@ -30,7 +30,7 @@ use crate::{
 /// ## Recommended When
 /// - You're in a multi-threaded environment
 /// - You need require monotonically increasing IDs (ID generated within the
-///   same millisecond increment a sequence counter)
+///   same time-source tick increment a sequence counter)
 ///
 /// ## See Also
 /// - [`BasicUlidGenerator`]
@@ -100,7 +100,7 @@ where
     /// point of the generator manually.
     ///
     /// # Parameters
-    /// - `timestamp`: The initial timestamp component (usually in milliseconds)
+    /// - `timestamp`: The initial timestamp component (usually in time-source units)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
     /// - `time`: A [`TimeSource`] implementation used to fetch the current time

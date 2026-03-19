@@ -20,12 +20,12 @@ use crate::{
 /// ## Features
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
-/// - ✅ Time-ordered (monotonically increasing per millisecond)
+/// - ✅ Time-ordered (monotonically increasing per time-source tick)
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
 /// - You need require monotonically increasing IDs (ID generated within the
-///   same millisecond increment a sequence counter)
+///   same time-source tick increment a sequence counter)
 /// - Your target doesn't support atomics.
 ///
 /// ## See Also
@@ -96,7 +96,7 @@ where
     /// point of the generator manually.
     ///
     /// # Parameters
-    /// - `timestamp`: The initial timestamp component (usually in milliseconds)
+    /// - `timestamp`: The initial timestamp component (usually in time-source units)
     /// - `machine_id`: The machine or worker identifier
     /// - `sequence`: The initial sequence number
     /// - `time`: A [`TimeSource`] implementation used to fetch the current time
@@ -228,7 +228,7 @@ where
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait in time-source units
     ///   before trying again
     /// - `Err(e)`: the lock was poisoned
     ///
