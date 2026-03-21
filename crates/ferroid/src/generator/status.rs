@@ -1,12 +1,14 @@
 use crate::id::Id;
 
-/// Represents the result of attempting to generate a new Snowflake ID.
+/// Represents the result of attempting to generate a new ID.
 ///
-/// This type models the outcome of `SnowflakeGenerator::try_next_id()`:
+/// This type models the outcome of generator polling APIs such as
+/// [`crate::generator::SnowflakeGenerator::try_poll_id`] and
+/// [`crate::generator::UlidGenerator::try_poll_id`]:
 ///
 /// - [`Poll::Ready`] indicates a new ID was successfully generated.
 /// - [`Poll::Pending`] means the generator is throttled and cannot produce a
-///   new ID until the clock advances past `yield_for`.
+///   new ID until the time source advances past `yield_for`.
 ///
 /// This allows non-blocking generation loops and clean backoff strategies.
 ///
@@ -37,17 +39,17 @@ use crate::id::Id;
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Poll<T: Id> {
-    /// A new Snowflake ID was successfully generated.
+    /// A new ID was successfully generated.
     Ready {
-        /// The generated Snowflake ID.
+        /// The generated ID.
         id: T,
     },
     /// The generator is not ready to produce a new ID yet.
     ///
-    /// Wait for the specified number of milliseconds (`yield_for`) before
+    /// Wait for the specified number of time-source units (`yield_for`) before
     /// trying again.
     Pending {
-        /// Milliseconds to wait before the next attempt.
+        /// Time-source units to wait before the next attempt.
         yield_for: T::Ty,
     },
 }

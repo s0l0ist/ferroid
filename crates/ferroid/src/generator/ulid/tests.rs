@@ -12,7 +12,7 @@ use crate::{
     },
     id::{Id, ToU64, ULID, UlidId},
     rand::{RandSource, ThreadRandom},
-    time::{MonotonicClock, TimeSource},
+    time::{MonotonicClock, TimeSource, UNIX_EPOCH},
 };
 
 struct MockTime {
@@ -331,6 +331,14 @@ fn atomic_generator_mono_rollover_test() {
 #[test]
 fn basic_generator_monotonic_clock_random_increments() {
     let clock = MonotonicClock::default();
+    let rand = ThreadRandom;
+    let generator: BasicMonoUlidGenerator<ULID, _, _> = BasicMonoUlidGenerator::new(clock, rand);
+    run_generator_monotonic(&generator);
+}
+
+#[test]
+fn basic_generator_quantized_monotonic_clock_random_increments() {
+    let clock = MonotonicClock::<8>::with_epoch(UNIX_EPOCH);
     let rand = ThreadRandom;
     let generator: BasicMonoUlidGenerator<ULID, _, _> = BasicMonoUlidGenerator::new(clock, rand);
     run_generator_monotonic(&generator);

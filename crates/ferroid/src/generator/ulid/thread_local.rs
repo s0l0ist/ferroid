@@ -55,7 +55,7 @@ impl Ulid {
     /// than monotonic generation. If monotonic IDs are acceptable for your use
     /// case, prefer [`Self::new_ulid_mono`] to further reduce collision risk.
     ///
-    /// See: [Collision Probability Analysis] (README).
+    /// See [Collision Probability Analysis] in the README.
     ///
     /// # Example
     /// ```
@@ -76,12 +76,12 @@ impl Ulid {
     /// Generates a new **monotonic** ULID using the thread-local generator.
     ///
     /// Within a given millisecond, IDs are strictly increasing **per thread**
-    /// by incrementing the random component. Across threads, sequences are
-    /// independent (no global ordering).
+    /// by incrementing the random component. Across threads, monotonic streams
+    /// are independent (no global ordering).
     ///
     /// Compared to [`Self::new_ulid`], this typically reduces collision
     /// probability when multiple generators are active (e.g. `N > 1` threads).
-    /// See: [Collision Probability Analysis] (README).
+    /// See [Collision Probability Analysis] in the README.
     ///
     /// If the random space saturates for the current millisecond, the generator
     /// retries using the provided callback.

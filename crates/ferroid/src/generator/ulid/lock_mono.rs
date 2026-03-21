@@ -14,18 +14,18 @@ use crate::{
 /// A lock-based *monotonic* ULID-style ID generator suitable for multi-threaded
 /// environments.
 ///
-/// This generator wraps the Ulid state in an [`Arc<Mutex<_>>`], allowing safe
+/// This generator wraps the ULID state in an [`Arc<Mutex<_>>`], allowing safe
 /// shared use across threads.
 ///
 /// ## Features
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
-/// - ✅ Time-ordered (monotonically increasing per millisecond)
+/// - ✅ Time-ordered (monotonically increasing per time-source tick)
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
-/// - You need require monotonically increasing IDs (ID generated within the
-///   same millisecond increment a sequence counter)
+/// - You need monotonically increasing IDs (IDs generated within the same
+///   time-source tick increment the random component)
 /// - Your target doesn't support atomics.
 ///
 /// ## See Also
@@ -96,10 +96,11 @@ where
     /// point of the generator manually.
     ///
     /// # Parameters
-    /// - `timestamp`: The initial timestamp component (usually in milliseconds)
-    /// - `machine_id`: The machine or worker identifier
-    /// - `sequence`: The initial sequence number
+    /// - `timestamp`: The initial timestamp component (usually in
+    ///   time-source units)
+    /// - `random`: The initial random component
     /// - `time`: A [`TimeSource`] implementation used to fetch the current time
+    /// - `rng`: A [`RandSource`] used to generate future random bits
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -185,8 +186,8 @@ where
     /// Generates a new ULID.
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
-    /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// time has not advanced), it returns [`Poll::Pending`].
+    /// generator is temporarily exhausted (e.g., the random component is
+    /// exhausted and the time has not advanced), it returns [`Poll::Pending`].
     ///
     /// # Example
     /// ```
@@ -223,13 +224,16 @@ where
 
     /// Attempts to generate a new ULID with fallible error handling.
     ///
-    /// Combines the current timestamp with a freshly generated random value to
-    /// produce a unique identifier. Returns [`Poll::Ready`] on success.
+    /// This method attempts to generate the next ID based on the current time
+    /// and internal state. If successful, it returns [`Poll::Ready`] with a
+    /// newly generated ID. If the generator is temporarily exhausted, it
+    /// returns [`Poll::Pending`]. If an internal failure occurs (e.g., a lock
+    /// error), it returns an error.
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait (in milliseconds)
-    ///   before trying again
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait in time-source
+    ///   units before trying again
     /// - `Err(e)`: the lock was poisoned
     ///
     /// # Example
@@ -248,7 +252,11 @@ where
     ///     match generator.try_poll_id() {
     ///         Ok(Poll::Ready { id }) => break id,
     ///         Ok(Poll::Pending { yield_for }) => {
-    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
+    ///             std::thread::sleep(core::time::Duration::from_millis(
+    ///                 yield_for
+    ///                     .to_u64()
+    ///                     .saturating_mul(MonotonicClock::<1>::GRANULARITY_MILLIS),
+    ///             ));
     ///         }
     ///         Err(e) => panic!("Generator error: {}", e),
     ///     }

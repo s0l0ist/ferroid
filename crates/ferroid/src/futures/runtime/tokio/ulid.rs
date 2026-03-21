@@ -145,7 +145,7 @@ mod tests {
         Ok(())
     }
     #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
-    async fn generates_many_unique_ids_basic_convience() -> Result<()> {
+    async fn generates_many_unique_ids_basic_convenience() -> Result<()> {
         test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
             LockMonoUlidGenerator::new,
             MonotonicClock::default,

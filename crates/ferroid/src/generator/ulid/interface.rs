@@ -25,7 +25,8 @@ where
     /// This is the infallible counterpart to [`UlidGenerator::try_next_id`].
     /// The returned [`Poll`] contains either:
     /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the timestamp sequence is exhausted.
+    /// - a duration to yield/sleep if the generator must wait for the time
+    ///   source to advance.
     fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID
     where
         Self::Err: Into<core::convert::Infallible>,
@@ -44,7 +45,8 @@ where
     ///
     /// The returned [`Poll`] contains either:
     /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the timestamp sequence is exhausted.
+    /// - a duration to yield/sleep if the generator must wait for the time
+    ///   source to advance.
     ///
     /// # Errors
     ///
@@ -57,7 +59,8 @@ where
     /// This is the infallible counterpart to [`UlidGenerator::try_poll_id`].
     /// The returned [`Poll`] contains either:
     /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the timestamp sequence is exhausted.
+    /// - a duration to yield/sleep if the generator must wait for the time
+    ///   source to advance.
     fn poll_id(&self) -> Poll<ID>
     where
         Self::Err: Into<core::convert::Infallible>,
@@ -76,7 +79,8 @@ where
     ///
     /// The returned [`Poll`] contains either:
     /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the timestamp sequence is exhausted.
+    /// - a duration to yield/sleep if the generator must wait for the time
+    ///   source to advance.
     ///
     /// # Errors
     ///

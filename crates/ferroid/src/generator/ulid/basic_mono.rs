@@ -18,12 +18,12 @@ use crate::{
 /// ## Features
 /// - ❌ Not thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
-/// - ✅ Time-ordered (monotonically increasing per millisecond)
+/// - ✅ Time-ordered (monotonically increasing per time-source tick)
 ///
 /// ## Recommended When
 /// - You're in a single-threaded environment (no shared access)
-/// - You need require monotonically increasing IDs (ID generated within the
-///   same millisecond increment a sequence counter)
+/// - You need monotonically increasing IDs (IDs generated within the same
+///   time-source tick increment the random component)
 ///
 /// ## See Also
 /// - [`BasicUlidGenerator`]
@@ -88,10 +88,11 @@ where
     /// point of the generator manually.
     ///
     /// # Parameters
-    /// - `timestamp`: The initial timestamp component (usually in milliseconds)
-    /// - `machine_id`: The machine or worker identifier
-    /// - `sequence`: The initial sequence number
+    /// - `timestamp`: The initial timestamp component (usually in
+    ///   time-source units)
+    /// - `random`: The initial random component
     /// - `time`: A [`TimeSource`] implementation used to fetch the current time
+    /// - `rng`: A [`RandSource`] used to generate future random bits
     ///
     /// # Returns
     /// A new generator instance preloaded with the given state.
@@ -138,8 +139,8 @@ where
     /// Generates a new ULID.
     ///
     /// Returns a new, time-ordered, unique ID if generation succeeds. If the
-    /// generator is temporarily exhausted (e.g., the sequence is full and the
-    /// time has not advanced), it returns [`Poll::Pending`].
+    /// generator is temporarily exhausted (e.g., the random component is
+    /// exhausted and the time has not advanced), it returns [`Poll::Pending`].
     ///
     /// # Example
     /// ```

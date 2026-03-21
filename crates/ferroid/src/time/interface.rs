@@ -20,8 +20,12 @@ pub const MASTODON_EPOCH: Duration = UNIX_EPOCH;
 /// This abstraction allows you to plug in a real system clock, a monotonic
 /// timer, or a mocked time source in tests.
 ///
-/// The timestamp type `T` is generic (typically `u64` or `u128`), and the unit
-/// is expected to be **milliseconds** relative to a configurable origin.
+/// The timestamp type `T` is generic (typically `u64` or `u128`).
+///
+/// By default, one returned time unit corresponds to one real millisecond.
+/// Time sources may override [`GRANULARITY_MILLIS`] to expose coarser clock
+/// quanta while still allowing generic code to recover the real duration of a
+/// single returned unit.
 ///
 /// # Example
 /// ```
@@ -38,6 +42,10 @@ pub const MASTODON_EPOCH: Duration = UNIX_EPOCH;
 /// assert_eq!(time.current_millis(), 1234);
 /// ```
 pub trait TimeSource<T> {
-    /// Returns the current time in milliseconds since the configured epoch.
+    /// The number of real milliseconds represented by one returned time unit.
+    const GRANULARITY_MILLIS: u64 = 1;
+
+    /// Returns the current time since the configured epoch in this source's
+    /// native units.
     fn current_millis(&self) -> T;
 }

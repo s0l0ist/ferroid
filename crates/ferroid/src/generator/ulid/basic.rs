@@ -14,16 +14,16 @@ use crate::{
 /// environments.
 ///
 /// This generator is lightweight and fast, but has a higher collision
-/// probabiliy than it's monotonic counterpart.
+/// probability than the monotonic variants.
 ///
 /// ## Features
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
-/// - ✅ Time-ordered (not monotonically increasing, random per millisecond)
+/// - ✅ Time-ordered (not monotonically increasing, random per time-source tick)
 ///
 /// ## Recommended When
 /// - You're in a single or multi-threaded environment
-/// - You require purely random IDs (even within the same millisecond)
+/// - You require purely random IDs (even within the same time-source tick)
 ///
 /// ## See Also
 /// - [`BasicMonoUlidGenerator`]
