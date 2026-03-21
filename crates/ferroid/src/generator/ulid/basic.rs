@@ -14,7 +14,7 @@ use crate::{
 /// environments.
 ///
 /// This generator is lightweight and fast, but has a higher collision
-/// probabiliy than it's monotonic counterpart.
+/// probability than the monotonic variants.
 ///
 /// ## Features
 /// - ✅ Thread-safe

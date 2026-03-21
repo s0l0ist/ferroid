@@ -157,7 +157,7 @@ mod tests {
         });
     }
     #[test]
-    fn generates_many_unique_ids_basic_smol_convience() {
+    fn generates_many_unique_ids_basic_smol_convenience() {
         smol::block_on(async {
             test_many_ulid_unique_ids_convenience::<ULID, _, _, _>(
                 LockMonoUlidGenerator::new,

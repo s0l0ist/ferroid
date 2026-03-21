@@ -152,29 +152,32 @@ timestamps/backoff values will use those units instead of literal milliseconds.
 
 ```rust
 use ferroid::{
-      generator::BasicSnowflakeGenerator,
-      id::{SnowflakeTwitterId, SnowflakeMastodonId},
-      time::{MonotonicClock, TWITTER_EPOCH, MASTODON_EPOCH, UNIX_EPOCH}
+    generator::BasicSnowflakeGenerator,
+    id::{SnowflakeMastodonId, SnowflakeTwitterId},
+    time::{MASTODON_EPOCH, MonotonicClock, TWITTER_EPOCH, UNIX_EPOCH},
 };
 
 // Same as MonotonicClock::default();
 let unix_clock = MonotonicClock::<1>::with_epoch(UNIX_EPOCH);
-// Also the same as MonotonicClock::default();
-let unix_clock = MonotonicClock::<1>::with_epoch(MASTODON_EPOCH);
+// Also the same as MonotonicClock::default(), since MASTODON_EPOCH == UNIX_EPOCH.
+let mastodon_clock = MonotonicClock::<1>::with_epoch(MASTODON_EPOCH);
 
 let twitter_clock = MonotonicClock::<1>::with_epoch(TWITTER_EPOCH);
 
-let mastodon_gen: BasicSnowflakeGenerator<SnowflakeMastodonId, _> = BasicSnowflakeGenerator::new(0, unix_clock);
-let twitter_gen: BasicSnowflakeGenerator<SnowflakeTwitterId, _> = BasicSnowflakeGenerator::new(0, twitter_clock);
+let mastodon_gen: BasicSnowflakeGenerator<SnowflakeMastodonId, _> =
+    BasicSnowflakeGenerator::new(0, mastodon_clock);
+let twitter_gen: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
+    BasicSnowflakeGenerator::new(0, twitter_clock);
 ```
 
 #### Generating IDs
 
 Calling `next_id()` will call the passed in backoff strategy closure if the
 underlying generator needs to yield. Please note that while this behavior is
-exposed to provide maximum flexibility, you must be generating enough IDs **per
-time-source tick** to invoke this callback. With `MonotonicClock<1>` that means
-per millisecond. You may spin, yield, or sleep depending on your environment:
+exposed to provide maximum flexibility, you must be generating enough IDs
+within a single **time-source tick** to invoke this callback. With
+`MonotonicClock<1>`, that means within a single millisecond. You may spin,
+yield, or sleep depending on your environment:
 
 ```rust
 use ferroid::{
@@ -193,8 +196,11 @@ let id: SnowflakeTwitterId = snow_gen.next_id(|yield_for: <SnowflakeTwitterId as
     std::thread::yield_now();
 
     // Sleep for the suggested backoff: frees the core, but wakeup is imprecise.
-    // For coarser clocks, multiply by the clock's `GRANULARITY_MILLIS`.
-    std::thread::sleep(std::time::Duration::from_millis(yield_for.to_u64()));
+    std::thread::sleep(std::time::Duration::from_millis(
+        yield_for
+            .to_u64()
+            .saturating_mul(MonotonicClock::<1>::GRANULARITY_MILLIS),
+    ));
 
     // For use in runtimes such as `tokio` or `smol`, use the non-blocking async API (see below).
 });
@@ -477,9 +483,9 @@ in `no_std`.
 
 ### ULID
 
-This implementation respects monotonicity within the same millisecond in a
-single generator by incrementing the random portion of the ID and guarding
-against overflow.
+This implementation respects monotonicity within the same time-source tick
+(the same millisecond with `MonotonicClock<1>`) in a single generator by
+incrementing the random portion of the ID and guarding against overflow.
 
 - If the clock **advances**: generate new random → `Poll::Ready`
 - If the clock is **unchanged**: increment random → `Poll::Ready`
@@ -493,6 +499,9 @@ against overflow.
 When generating time-sortable IDs that use random bits, it's important to
 estimate the probability of collisions (i.e., two IDs being the same within the
 same millisecond), given your ID layout and system throughput.
+
+The calculations below assume millisecond timestamps. If you use a coarser
+custom clock, substitute your time-source tick size accordingly.
 
 #### Non-monotonic (always-random) collision probability
 

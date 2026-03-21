@@ -47,8 +47,8 @@ where
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
     /// uses the provided `time` to fetch the current time during ID generation.
-    /// It is the recommended way to create a new atomic generator for typical
-    /// use cases.
+    /// It is the recommended way to create a new generator for typical use
+    /// cases.
     ///
     /// # Parameters
     ///

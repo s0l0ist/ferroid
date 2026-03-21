@@ -53,8 +53,8 @@ where
     ///
     /// This constructor sets the initial timestamp and sequence to zero, and
     /// uses the provided `time` to fetch the current time during ID generation.
-    /// It is the recommended way to create a new atomic generator for typical
-    /// use cases.
+    /// It is the recommended way to create a new lock-based generator for
+    /// typical use cases.
     ///
     /// # Parameters
     ///
@@ -224,7 +224,7 @@ where
         }
     }
 
-    /// Attempts to generate a new ULID with fallible error handling.
+    /// Attempts to generate a new Snowflake ID with fallible error handling.
     ///
     /// This method attempts to generate the next ID based on the current time
     /// and internal state. If successful, it returns [`Poll::Ready`] with a
@@ -234,8 +234,8 @@ where
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait in time-source units
-    ///   before trying again
+    /// - `Ok(Poll::Pending { yield_for })`: The time to wait in time-source
+    ///   units before trying again
     /// - `Err(e)`: the lock was poisoned
     ///
     /// # Example
@@ -254,7 +254,11 @@ where
     ///     match generator.try_poll_id() {
     ///         Ok(Poll::Ready { id }) => break id,
     ///         Ok(Poll::Pending { yield_for }) => {
-    ///             std::thread::sleep(core::time::Duration::from_millis(yield_for.to_u64()));
+    ///             std::thread::sleep(core::time::Duration::from_millis(
+    ///                 yield_for
+    ///                     .to_u64()
+    ///                     .saturating_mul(MonotonicClock::<1>::GRANULARITY_MILLIS),
+    ///             ));
     ///         }
     ///         Err(e) => panic!("Generator error: {}", e),
     ///     }
