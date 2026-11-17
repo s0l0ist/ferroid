@@ -1,17 +1,7 @@
-/// Trait for converting numeric-like values into a `u64`.
+/// Converts an unsigned numeric value to `u64`, saturating at [`u64::MAX`].
 ///
-/// This is typically used to normalize custom duration types into milliseconds
-/// for compatibility with APIs like [`core::time::Duration::from_millis`],
-/// which are commonly required in async sleep contexts.
-///
-/// # Safety and Behavior
-///
-/// For types that may exceed the `u64` range (e.g., `u128`), values that cannot
-/// be losslessly converted will saturate to `u64::MAX`. This avoids propagating
-/// errors in time-sensitive code like ID generation. In such systems, a
-/// fallback to `u64::MAX` is generally safe: it typically causes a retry
-/// without compromising correctness, since most sane ID formats reserve no more
-/// than 48 bits for timestamps - far below the 64-bit boundary.
+/// Backoff conversion uses this to cap suggested waits without narrowing the
+/// timestamp values stored in IDs.
 pub trait ToU64 {
     fn to_u64(self) -> u64;
 }

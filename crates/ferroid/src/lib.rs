@@ -2,24 +2,29 @@
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", test))]
 extern crate std;
 
-#[cfg(feature = "alloc")]
+#[cfg(any(feature = "alloc", test))]
 extern crate alloc;
 
-// Used for cfg_alloc! macro
-#[cfg(feature = "alloc")]
+// Implementation details used by exported macros.
+#[cfg(any(feature = "std", feature = "alloc"))]
 #[doc(hidden)]
 pub mod __internal {
-    #[cfg(not(feature = "std"))]
+    #[cfg(feature = "alloc")]
     pub use alloc::string::String;
+
     #[cfg(feature = "std")]
-    pub use std::string::String;
+    pub use std::time::SystemTime;
+
+    #[cfg(feature = "std")]
+    pub use crate::time::system_time::system_time_now;
 }
 
 #[cfg(feature = "base32")]
 pub mod base32;
+mod error;
 #[cfg(feature = "futures")]
 pub mod futures;
 pub mod generator;
@@ -28,3 +33,5 @@ pub mod rand;
 #[cfg(feature = "serde")]
 pub mod serde;
 pub mod time;
+
+pub use error::Error;

@@ -48,7 +48,7 @@ message StreamIdsRequest {
 //
 // Invariants:
 // - `packed_ids.length % ID_SIZE == 0`
-// - Each chunk represents exactly one unique ID
+// - Each chunk contains one or more complete IDs
 message IdChunk {
   // Packed unique IDs in binary form.
   //

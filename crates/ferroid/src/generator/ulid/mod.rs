@@ -7,14 +7,7 @@ mod basic_mono;
 mod interface;
 #[cfg(feature = "lock")]
 mod lock_mono;
-#[cfg(all(
-    test,
-    feature = "std",
-    feature = "alloc",
-    feature = "basic",
-    feature = "lock",
-    feature = "atomic"
-))]
+#[cfg(all(test, any(feature = "basic", feature = "lock", feature = "atomic")))]
 mod tests;
 
 #[cfg_attr(docsrs, doc(cfg(all(feature = "ulid", feature = "thread-local"))))]

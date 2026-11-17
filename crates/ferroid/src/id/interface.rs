@@ -15,7 +15,8 @@ use crate::id::ToU64;
 /// `u128`).
 ///
 /// Types implementing `Id` must define a scalar type `Ty` and provide
-/// conversion to/from this raw representation.
+/// conversion, layout validation, and normalization for this representation.
+/// [`Id::from_raw`] wraps raw bits without checking them.
 pub trait Id: Copy + Clone + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Debug {
     /// Zero value (used for resetting the sequence)
     const ZERO: Self::Ty;
@@ -72,6 +73,24 @@ pub trait Id: Copy + Clone + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Deb
     /// Converts this type into its raw type representation
     fn to_raw(&self) -> Self::Ty;
 
-    /// Converts a raw type into this type
+    /// Constructs an ID from its packed integer representation.
+    ///
+    /// Macro-generated IDs preserve all bits without validating the layout.
+    /// In particular, the backing integer's maximum is invalid for layouts
+    /// with reserved bits; this constructor does not clear them.
+    /// Use [`Self::is_valid`] to check the layout or [`Self::into_valid`] to
+    /// normalize the ID.
     fn from_raw(raw: Self::Ty) -> Self;
+
+    /// Returns `true` if the packed ID satisfies its layout's invariants.
+    ///
+    /// Macro-generated IDs check that reserved bits are zero. This cannot
+    /// detect component values truncated during construction.
+    fn is_valid(&self) -> bool;
+
+    /// Returns a normalized ID satisfying its layout's invariants.
+    ///
+    /// Macro-generated IDs clear reserved bits, which can change the raw value.
+    #[must_use]
+    fn into_valid(self) -> Self;
 }

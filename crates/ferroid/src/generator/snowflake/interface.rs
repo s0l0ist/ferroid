@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{convert::Infallible, fmt, time::Duration};
 
 use crate::{
     generator::{Poll, Result},
@@ -21,37 +21,40 @@ where
     /// Generates the next available ID.
     ///
     /// This is the infallible counterpart to
-    /// [`SnowflakeGenerator::try_next_id`]. The returned [`Poll`] contains
-    /// either:
-    /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the generator must wait for the time
-    ///   source to advance.
-    fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID
+    /// [`SnowflakeGenerator::try_next_id`]. Calls the backoff strategy `f`
+    /// whenever the generator is pending, until an ID is available.
+    fn next_id(&self, f: impl FnMut(Duration)) -> ID
     where
-        Self::Err: Into<core::convert::Infallible>,
+        Self::Err: Into<Infallible>,
     {
-        match self.try_next_id(f) {
-            Ok(id) => id,
-            Err(e) => {
-                #[allow(unreachable_code)]
-                // `into()` satisfies the trait bound at compile time.
-                match e.into() {}
-            }
-        }
+        let Ok(id) = self.try_next_id(f).map_err(Into::<Infallible>::into);
+        id
     }
 
     /// Generates the next available ID with fallible error handling.
     ///
-    /// The returned [`Poll`] contains either:
-    /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the generator must wait for the time
-    ///   source to advance.
+    /// The default implementation polls until an ID is available or an error
+    /// occurs. On each [`Poll::Pending`], it calls the backoff strategy `f`
+    /// with the suggested [`Duration`], including [`Duration::ZERO`], before
+    /// polling again. Clock granularity is already applied; waits saturate at
+    /// `u64::MAX` milliseconds. Ready results and errors do not invoke `f`.
     ///
     /// # Errors
     ///
     /// May return an error if the underlying implementation uses a lock and it
     /// is poisoned.
-    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err>;
+    #[cfg_attr(
+        feature = "tracing",
+        tracing::instrument(level = "trace", skip(self, f))
+    )]
+    fn try_next_id(&self, mut f: impl FnMut(Duration)) -> Result<ID, Self::Err> {
+        loop {
+            match self.try_poll_id()? {
+                Poll::Ready { id } => return Ok(id),
+                Poll::Pending { yield_for } => f(yield_for),
+            }
+        }
+    }
 
     /// Attempts to generate the next available ID.
     ///
@@ -59,28 +62,22 @@ where
     /// [`SnowflakeGenerator::try_poll_id`]. The returned [`Poll`] contains
     /// either:
     /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the generator must wait for the time
-    ///   source to advance.
+    /// - a suggested [`Duration`] before retrying, including
+    ///   [`Duration::ZERO`] when contention permits an immediate retry.
     fn poll_id(&self) -> Poll<ID>
     where
-        Self::Err: Into<core::convert::Infallible>,
+        Self::Err: Into<Infallible>,
     {
-        match self.try_poll_id() {
-            Ok(status) => status,
-            Err(e) => {
-                #[allow(unreachable_code)]
-                // `into()` satisfies the trait bound at compile time.
-                match e.into() {}
-            }
-        }
+        let Ok(status) = self.try_poll_id().map_err(Into::<Infallible>::into);
+        status
     }
 
     /// Attempts to generate the next available ID with fallible error handling.
     ///
     /// The returned [`Poll`] contains either:
     /// - the newly generated ID, or
-    /// - a duration to yield/sleep if the generator must wait for the time
-    ///   source to advance.
+    /// - a suggested [`Duration`] before retrying, including
+    ///   [`Duration::ZERO`] when contention permits an immediate retry.
     ///
     /// # Errors
     ///

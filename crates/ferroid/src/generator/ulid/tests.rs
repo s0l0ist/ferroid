@@ -1,18 +1,19 @@
-use alloc::{rc::Rc, sync::Arc, vec, vec::Vec};
-use core::cell::Cell;
-use std::{
-    collections::HashSet,
-    sync::Mutex,
-    thread::{self, scope},
-};
+use alloc::{rc::Rc, vec, vec::Vec};
+use core::{cell::Cell, num::NonZeroU64, time::Duration};
+#[cfg(feature = "lock")]
+use std::panic::{AssertUnwindSafe, catch_unwind};
+#[cfg(all(feature = "std", any(feature = "lock", feature = "atomic")))]
+use std::{sync::Barrier, thread};
 
+#[cfg(feature = "lock")]
+use crate::generator::LockMonoUlidGenerator;
+#[cfg(feature = "basic")]
+use crate::generator::{BasicMonoUlidGenerator, BasicUlidGenerator};
 use crate::{
-    generator::{
-        BasicMonoUlidGenerator, BasicUlidGenerator, LockMonoUlidGenerator, Poll, UlidGenerator,
-    },
+    generator::{Poll, UlidGenerator},
     id::{Id, ToU64, ULID, UlidId},
-    rand::{RandSource, ThreadRandom},
-    time::{MonotonicClock, TimeSource, UNIX_EPOCH},
+    rand::RandSource,
+    time::TimeSource,
 };
 
 struct MockTime {
@@ -51,6 +52,8 @@ impl SharedMockStepTime {
 }
 
 impl TimeSource<u128> for SharedMockStepTime {
+    const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(10).unwrap();
+
     fn current_millis(&self) -> u128 {
         u128::from(self.clock.values[self.clock.index.get()])
     }
@@ -74,6 +77,77 @@ impl RandSource<u128> for MinRand {
     }
 }
 
+struct CoarseTime;
+impl TimeSource<u128> for CoarseTime {
+    const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::MAX;
+
+    fn current_millis(&self) -> u128 {
+        0
+    }
+}
+
+#[test]
+fn pending_delays_saturate_at_u64_milliseconds() {
+    #[cfg(feature = "basic")]
+    let basic = BasicMonoUlidGenerator::<ULID, _, _>::from_components(2, 0, CoarseTime, MinRand);
+    #[cfg(feature = "basic")]
+    assert_eq!(
+        basic.poll_id().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+
+    #[cfg(feature = "lock")]
+    let lock = LockMonoUlidGenerator::<ULID, _, _>::from_components(2, 0, CoarseTime, MinRand);
+    #[cfg(feature = "lock")]
+    assert_eq!(
+        lock.try_poll_id().unwrap().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+
+    #[cfg(feature = "atomic")]
+    let atomic = crate::generator::AtomicMonoUlidGenerator::<ULID, _, _>::from_components(
+        2, 0, CoarseTime, MinRand,
+    );
+    #[cfg(feature = "atomic")]
+    assert_eq!(
+        atomic.poll_id().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+}
+
+#[cfg(feature = "basic")]
+#[test]
+#[allow(
+    dead_code,
+    clippy::wrong_self_convention,
+    reason = "Layout fixtures generate complete ID APIs; this test exercises wide pending delays."
+)]
+fn pending_delay_caps_wide_timestamps() {
+    crate::define_ulid!(WideTimestampId, u128, reserved: 0, timestamp: 128, random: 0);
+    let timestamp = u128::from(u64::MAX) + 1;
+    let generator = BasicMonoUlidGenerator::<WideTimestampId, _, _>::from_components(
+        timestamp,
+        0,
+        MockTime { millis: 0 },
+        MinRand,
+    );
+    assert_eq!(
+        generator.poll_id().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+
+    let overflowing = BasicMonoUlidGenerator::<WideTimestampId, _, _>::from_components(
+        u128::MAX,
+        0,
+        CoarseTime,
+        MinRand,
+    );
+    assert_eq!(
+        overflowing.poll_id().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+}
+
 struct MaxRand;
 impl RandSource<u128> for MaxRand {
     fn rand(&self) -> u128 {
@@ -81,28 +155,28 @@ impl RandSource<u128> for MaxRand {
     }
 }
 
-trait IdGenStatusExt<T>
+trait IdGenStatusExt<ID>
 where
-    T: Id,
+    ID: Id,
 {
-    fn unwrap_ready(self) -> T;
-    fn unwrap_pending(self) -> T::Ty;
+    fn unwrap_ready(self) -> ID;
+    fn unwrap_pending(self) -> Duration;
 }
 
-impl<T> IdGenStatusExt<T> for Poll<T>
+impl<ID> IdGenStatusExt<ID> for Poll<ID>
 where
-    T: Id,
+    ID: Id,
 {
-    fn unwrap_ready(self) -> T {
+    fn unwrap_ready(self) -> ID {
         match self {
             Self::Ready { id } => id,
             Self::Pending { yield_for } => {
-                panic!("unexpected pending (yield for: {yield_for})")
+                panic!("unexpected pending (yield for: {yield_for:?})")
             }
         }
     }
 
-    fn unwrap_pending(self) -> T::Ty {
+    fn unwrap_pending(self) -> Duration {
         match self {
             Self::Ready { id } => panic!("unexpected ready ({id:?})"),
             Self::Pending { yield_for } => yield_for,
@@ -138,7 +212,10 @@ where
     R: RandSource<ID::Ty>,
 {
     let yield_for = generator.try_poll_id().unwrap().unwrap_pending();
-    assert_eq!(yield_for, ID::ONE);
+    assert_eq!(
+        yield_for,
+        Duration::from_millis(T::GRANULARITY_MILLIS.get())
+    );
 }
 
 fn run_generator_handles_rollover<G, ID, T, R>(generator: &G, shared_time: &SharedMockStepTime)
@@ -152,51 +229,66 @@ where
     assert_eq!(id.timestamp().to_u64(), 42);
 
     let yield_for = generator.try_poll_id().unwrap().unwrap_pending();
-    assert_eq!(yield_for, ID::ONE);
+    assert_eq!(yield_for, Duration::from_millis(10));
 
+    // Rolling back the clock must leave the exhausted generator unchanged.
     shared_time.clock.index.set(1);
+    for _ in 0..2 {
+        assert_eq!(
+            generator.try_poll_id().unwrap().unwrap_pending(),
+            Duration::from_millis(30)
+        );
+    }
 
-    let id = generator.try_poll_id().unwrap().unwrap_ready();
+    shared_time.clock.index.set(2);
+    assert_eq!(
+        generator.try_poll_id().unwrap().unwrap_pending(),
+        Duration::from_millis(10),
+    );
+
+    // Callback durations include clock granularity exactly once.
+    let mut delays = Vec::new();
+    let id = generator
+        .try_next_id(|delay| {
+            delays.push(delay);
+            shared_time.clock.index.set(match delays.len() {
+                1 => 1, // Roll the clock back three ticks.
+                2 => 3, // Advance past the exhausted timestamp.
+                _ => panic!("unexpected retry"),
+            });
+        })
+        .unwrap();
+    assert_eq!(
+        delays,
+        [Duration::from_millis(10), Duration::from_millis(30)]
+    );
     assert_eq!(id.timestamp().to_u64(), 43);
 }
 
-fn run_generator_monotonic<G, ID, T, R>(generator: &G)
+fn run_generator_monotonic<G, ID, T, R>(generator: &G, shared_time: &SharedMockStepTime)
 where
     G: UlidGenerator<ID, T, R>,
     ID: UlidId,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    let mut last_timestamp = ID::ZERO;
-    let mut random = None;
-    #[allow(clippy::items_after_statements)]
-    const TOTAL_IDS: usize = 4096 * 256;
-
-    for _ in 0..TOTAL_IDS {
-        loop {
-            match generator.try_poll_id().unwrap() {
-                Poll::Ready { id } => {
-                    let ts = id.timestamp();
-                    if ts > last_timestamp {
-                        random = Some(id.random());
-                    }
-
-                    assert!(ts >= last_timestamp);
-                    assert_eq!(id.random(), random.unwrap());
-
-                    last_timestamp = ts;
-                    random = random.map(|r| r + ID::ONE);
-                    break;
-                }
-                Poll::Pending { .. } => {
-                    core::hint::spin_loop();
-                }
+    let mut previous = None;
+    for (index, &timestamp) in shared_time.clock.values.iter().enumerate() {
+        shared_time.clock.index.set(index);
+        for random in 42..45 {
+            let id = generator.try_poll_id().unwrap().unwrap_ready();
+            assert_eq!(id.timestamp().to_u64(), timestamp);
+            assert_eq!(id.random().to_u64(), random);
+            if let Some(previous) = previous {
+                assert!(id > previous);
             }
+            previous = Some(id);
         }
     }
 }
 
-fn run_generator_monotonic_threaded<G, ID, T, R>(make_generator: impl Fn() -> G)
+#[cfg(all(feature = "std", any(feature = "lock", feature = "atomic")))]
+fn run_generator_concurrent_uniqueness<G, ID, T, R>(make_generator: impl Fn() -> G)
 where
     G: UlidGenerator<ID, T, R> + Send + Sync,
     ID: UlidId + Send,
@@ -204,37 +296,48 @@ where
     R: RandSource<ID::Ty>,
 {
     const THREADS: usize = 8;
-    const TOTAL_IDS: usize = 4096 * 256;
-    const IDS_PER_THREAD: usize = TOTAL_IDS / THREADS;
+    const IDS_PER_THREAD: usize = 64;
 
-    let generator = Arc::new(make_generator());
-    let seen_ids = Arc::new(Mutex::new(HashSet::with_capacity(TOTAL_IDS)));
+    let generator = make_generator();
+    let barrier = Barrier::new(THREADS);
+    let mut ids = Vec::with_capacity(THREADS * IDS_PER_THREAD);
 
-    scope(|s| {
+    thread::scope(|s| {
+        let mut handles = Vec::with_capacity(THREADS);
         for _ in 0..THREADS {
-            let generator = Arc::clone(&generator);
-            let seen_ids = Arc::clone(&seen_ids);
-
-            s.spawn(move || {
+            handles.push(s.spawn(|| {
+                barrier.wait();
+                let mut ids = Vec::with_capacity(IDS_PER_THREAD);
+                let mut retries = 0;
                 for _ in 0..IDS_PER_THREAD {
-                    loop {
-                        match generator.try_poll_id().unwrap() {
-                            Poll::Ready { id } => {
-                                assert!(seen_ids.lock().unwrap().insert(id));
-                                break;
-                            }
-                            Poll::Pending { .. } => std::thread::yield_now(),
-                        }
-                    }
+                    let id = generator
+                        .try_next_id(|yield_for| {
+                            // Only a lost CAS may be pending at this fixed timestamp.
+                            assert_eq!(yield_for, Duration::ZERO);
+                            retries += 1;
+                            assert!(retries < THREADS * IDS_PER_THREAD, "generator stalled");
+                        })
+                        .unwrap();
+                    ids.push(id);
                 }
-            });
+                assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
+                ids
+            }));
+        }
+        for handle in handles {
+            ids.extend(handle.join().unwrap());
         }
     });
 
-    let final_count = seen_ids.lock().unwrap().len();
-    assert_eq!(final_count, TOTAL_IDS, "Expected {TOTAL_IDS} unique IDs");
+    ids.sort_unstable();
+    assert_eq!(ids.len(), THREADS * IDS_PER_THREAD);
+    for (random, id) in ids.iter().enumerate() {
+        assert_eq!(id.timestamp().to_u64(), 42);
+        assert_eq!(id.random().to_u64(), u64::try_from(random).unwrap());
+    }
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_generator() {
     let mock_time = MockTime { millis: 42 };
@@ -245,6 +348,7 @@ fn basic_generator() {
     assert_eq!(id.random(), 43);
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_generator_mono_sequence_test() {
     let mock_time = MockTime { millis: 42 };
@@ -254,6 +358,7 @@ fn basic_generator_mono_sequence_test() {
     run_id_sequence_increments_within_same_tick(&generator);
 }
 
+#[cfg(feature = "lock")]
 #[test]
 fn lock_generator_mono_sequence_test() {
     let mock_time = MockTime { millis: 42 };
@@ -264,8 +369,8 @@ fn lock_generator_mono_sequence_test() {
     run_id_sequence_increments_within_same_tick(&generator);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-#[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_sequence_test() {
     use crate::generator::AtomicMonoUlidGenerator;
 
@@ -277,6 +382,7 @@ fn atomic_generator_mono_sequence_test() {
     run_id_sequence_increments_within_same_tick(&generator);
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_generator_mono_pending_test() {
     let generator: BasicMonoUlidGenerator<ULID, _, _> =
@@ -284,6 +390,7 @@ fn basic_generator_mono_pending_test() {
     run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
+#[cfg(feature = "lock")]
 #[test]
 fn lock_generator_mono_pending_test() {
     let generator: LockMonoUlidGenerator<ULID, _, _> =
@@ -291,8 +398,8 @@ fn lock_generator_mono_pending_test() {
     run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-#[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_pending_test() {
     use crate::generator::AtomicMonoUlidGenerator;
 
@@ -301,157 +408,145 @@ fn atomic_generator_mono_pending_test() {
     run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_generator_mono_rollover_test() {
-    let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
+    let shared_time = SharedMockStepTime::new(vec![42, 39, 42, 43], 0);
     let generator: BasicMonoUlidGenerator<ULID, _, _> =
         BasicMonoUlidGenerator::new(shared_time.clone(), MaxRand);
     run_generator_handles_rollover(&generator, &shared_time);
 }
 
+#[cfg(feature = "lock")]
 #[test]
 fn lock_generator_mono_rollover_test() {
-    let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
+    let shared_time = SharedMockStepTime::new(vec![42, 39, 42, 43], 0);
     let generator: LockMonoUlidGenerator<ULID, _, _> =
         LockMonoUlidGenerator::new(shared_time.clone(), MaxRand);
     run_generator_handles_rollover(&generator, &shared_time);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-#[cfg(target_has_atomic = "128")]
 fn atomic_generator_mono_rollover_test() {
     use crate::generator::AtomicMonoUlidGenerator;
 
-    let shared_time = SharedMockStepTime::new(vec![42, 43], 0);
+    let shared_time = SharedMockStepTime::new(vec![42, 39, 42, 43], 0);
     let generator: AtomicMonoUlidGenerator<ULID, _, _> =
         AtomicMonoUlidGenerator::new(shared_time.clone(), MaxRand);
     run_generator_handles_rollover(&generator, &shared_time);
 }
 
+#[cfg(feature = "basic")]
 #[test]
-fn basic_generator_monotonic_clock_random_increments() {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    let generator: BasicMonoUlidGenerator<ULID, _, _> = BasicMonoUlidGenerator::new(clock, rand);
-    run_generator_monotonic(&generator);
+fn basic_generator_is_monotonic_across_ticks() {
+    let shared_time = SharedMockStepTime::new(vec![42, 43, 44], 0);
+    let generator: BasicMonoUlidGenerator<ULID, _, _> =
+        BasicMonoUlidGenerator::new(shared_time.clone(), MockRand { rand: 42 });
+    run_generator_monotonic(&generator, &shared_time);
 }
 
+#[cfg(feature = "lock")]
 #[test]
-fn basic_generator_quantized_monotonic_clock_random_increments() {
-    let clock = MonotonicClock::<8>::with_epoch(UNIX_EPOCH);
-    let rand = ThreadRandom;
-    let generator: BasicMonoUlidGenerator<ULID, _, _> = BasicMonoUlidGenerator::new(clock, rand);
-    run_generator_monotonic(&generator);
+fn lock_generator_is_monotonic_across_ticks() {
+    let shared_time = SharedMockStepTime::new(vec![42, 43, 44], 0);
+    let generator: LockMonoUlidGenerator<ULID, _, _> =
+        LockMonoUlidGenerator::new(shared_time.clone(), MockRand { rand: 42 });
+    run_generator_monotonic(&generator, &shared_time);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-fn lock_generator_monotonic_clock_random_increments() {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
-    run_generator_monotonic(&generator);
-}
-
-#[test]
-#[cfg(target_has_atomic = "128")]
-fn atomic_generator_monotonic_clock_random_increments() {
+fn atomic_generator_is_monotonic_across_ticks() {
     use crate::generator::AtomicMonoUlidGenerator;
 
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    let generator: AtomicMonoUlidGenerator<ULID, _, _> = AtomicMonoUlidGenerator::new(clock, rand);
-    run_generator_monotonic(&generator);
+    let shared_time = SharedMockStepTime::new(vec![42, 43, 44], 0);
+    let generator: AtomicMonoUlidGenerator<ULID, _, _> =
+        AtomicMonoUlidGenerator::new(shared_time.clone(), MockRand { rand: 42 });
+    run_generator_monotonic(&generator, &shared_time);
 }
 
+#[cfg(feature = "lock")]
 #[test]
-fn lock_generator_threaded_monotonic() {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    run_generator_monotonic_threaded(move || {
-        LockMonoUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
+fn lock_generator_concurrent_uniqueness() {
+    run_generator_concurrent_uniqueness(|| {
+        LockMonoUlidGenerator::<ULID, _, _>::new(MockTime { millis: 42 }, MinRand)
     });
 }
 
+#[cfg(all(feature = "atomic", feature = "std"))]
 #[test]
-#[cfg(target_has_atomic = "128")]
-fn atomic_generator_threaded_monotonic() {
+fn atomic_generator_concurrent_uniqueness() {
     use crate::generator::AtomicMonoUlidGenerator;
 
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
-    run_generator_monotonic_threaded(move || {
-        AtomicMonoUlidGenerator::<ULID, _, _>::new(clock.clone(), rand.clone())
+    run_generator_concurrent_uniqueness(|| {
+        AtomicMonoUlidGenerator::<ULID, _, _>::new(MockTime { millis: 42 }, MinRand)
     });
 }
 
-#[cfg(not(feature = "parking-lot"))]
+#[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 #[test]
 fn lock_is_poisoned_on_panic_std_mutex() {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
+    let generator: LockMonoUlidGenerator<ULID, _, _> =
+        LockMonoUlidGenerator::new(MockTime { millis: 42 }, MinRand);
 
-    let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
-
-    {
-        let state = Arc::clone(&generator.state);
-        let _ = thread::spawn(move || {
-            let _g = state.lock();
-            panic!("boom: poison the mutex");
-        })
-        .join();
-    }
+    let panic = catch_unwind(AssertUnwindSafe(|| {
+        let _guard = generator.state.lock();
+        panic!("boom: poison the mutex");
+    }));
+    assert!(panic.is_err());
 
     let err = generator
         .try_poll_id()
+        .expect_err("expected an error after poison");
+    assert!(matches!(err, crate::generator::Error::LockPoisoned));
+    let err = generator
+        .try_next_id(|_| panic!("poisoned generator invoked backoff"))
         .expect_err("expected an error after poison");
     assert!(matches!(err, crate::generator::Error::LockPoisoned));
 }
 
 #[cfg(feature = "parking-lot")]
 #[test]
-fn lock_is_poisoned_on_panic_parking_lot_mutex() {
-    let clock = MonotonicClock::default();
-    let rand = ThreadRandom;
+fn lock_is_not_poisoned_on_panic_parking_lot_mutex() {
+    let generator: LockMonoUlidGenerator<ULID, _, _> =
+        LockMonoUlidGenerator::new(MockTime { millis: 42 }, MinRand);
 
-    let generator: LockMonoUlidGenerator<ULID, _, _> = LockMonoUlidGenerator::new(clock, rand);
-
-    {
-        let state = Arc::clone(&generator.state);
-        let _ = thread::spawn(move || {
-            let _g = state.lock();
-            panic!("boom: poison the mutex");
-        })
-        .join();
-    }
+    let panic = catch_unwind(AssertUnwindSafe(|| {
+        let _guard = generator.state.lock();
+        panic!("boom: poison the mutex");
+    }));
+    assert!(panic.is_err());
 
     generator
         .try_poll_id()
         .expect("parking_lot::Mutex cannot be poisoned");
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_can_call_next_id() {
-    let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-    let backoff = |_| core::hint::spin_loop();
+    let generator = BasicUlidGenerator::new(MockTime { millis: 42 }, MinRand);
+    let backoff = |_: Duration| panic!("expected ready ID");
     let _id: ULID = generator.next_id(backoff);
     let _id: ULID = UlidGenerator::next_id(&generator, backoff);
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_mono_can_call_next_id() {
-    let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-    let backoff = |_| core::hint::spin_loop();
+    let generator = BasicMonoUlidGenerator::new(MockTime { millis: 42 }, MinRand);
+    let backoff = |_: Duration| panic!("expected ready ID");
     let _id: ULID = generator.next_id(backoff);
     let _id: ULID = UlidGenerator::next_id(&generator, backoff);
 }
 
-#[cfg(all(feature = "atomic", target_has_atomic = "128"))]
+#[cfg(feature = "atomic")]
 #[test]
 fn atomic_mono_can_call_next_id() {
     use crate::generator::AtomicMonoUlidGenerator;
-    let generator =
-        AtomicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-    let backoff = |_| core::hint::spin_loop();
+    let generator = AtomicMonoUlidGenerator::new(MockTime { millis: 42 }, MinRand);
+    let backoff = |_: Duration| panic!("expected ready ID");
     let _id: ULID = generator.next_id(backoff);
     let _id: ULID = UlidGenerator::next_id(&generator, backoff);
 }
@@ -459,8 +554,18 @@ fn atomic_mono_can_call_next_id() {
 #[cfg(feature = "parking-lot")]
 #[test]
 fn lock_mono_can_call_next_id() {
-    let generator = LockMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
-    let backoff = |_| core::hint::spin_loop();
+    let generator = LockMonoUlidGenerator::new(MockTime { millis: 42 }, MinRand);
+    let backoff = |_: Duration| panic!("expected ready ID");
     let _id: ULID = generator.next_id(backoff);
     let _id: ULID = UlidGenerator::next_id(&generator, backoff);
+}
+
+#[cfg(feature = "lock")]
+#[test]
+fn lock_mono_can_call_try_next_id() {
+    let generator = LockMonoUlidGenerator::new(MockTime { millis: 42 }, MinRand);
+    let backoff = |_: Duration| panic!("expected ready ID");
+    let first: ULID = generator.try_next_id(backoff).unwrap();
+    let second: ULID = UlidGenerator::try_next_id(&generator, backoff).unwrap();
+    assert!(second > first);
 }

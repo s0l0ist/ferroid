@@ -1,4 +1,4 @@
-use core::marker::PhantomData;
+use core::{marker::PhantomData, time::Duration};
 
 #[cfg(feature = "tracing")]
 use tracing::instrument;
@@ -63,16 +63,19 @@ where
     ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "thread-rng")]
+    /// # {
     /// use ferroid::{
     ///     generator::{BasicUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicUlidGenerator::new(CachedClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
+    /// # }
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
@@ -87,47 +90,48 @@ where
 
     /// Generates a new ULID.
     ///
-    /// Returns a new, time-ordered, unique ID.
+    /// Samples fresh randomness at the current timestamp. IDs within one tick
+    /// have no guaranteed ordering and may collide. The callback is accepted
+    /// for API consistency and is never invoked.
     ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "thread-rng")]
+    /// # {
     /// use ferroid::{
     ///     generator::{BasicUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicUlidGenerator::new(CachedClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
+    /// # }
     /// ```
-    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
-    pub fn next_id(&self, mut f: impl FnMut(ID::Ty)) -> ID {
-        loop {
-            match self.poll_id() {
-                Poll::Ready { id } => break id,
-                Poll::Pending { yield_for } => f(yield_for),
-            }
-        }
+    pub fn next_id(&self, f: impl FnMut(Duration)) -> ID {
+        UlidGenerator::next_id(self, f)
     }
 
     /// Generates a new ULID.
     ///
-    /// Returns a new, time-ordered, unique ID if generation succeeds. A basic
-    /// generator always generates new random bytes and doesn't need to yield.
-    /// Therefore, we can safely assume it will always return `Poll::Ready`.
+    /// Always returns [`Poll::Ready`] with the current timestamp and fresh
+    /// randomness. This generator never yields and does not guarantee strictly
+    /// increasing or collision-free IDs.
     ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "thread-rng")]
+    /// # {
     /// use ferroid::{
     ///     generator::{BasicUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = BasicUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicUlidGenerator::new(CachedClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = loop {
     ///     match generator.poll_id() {
@@ -135,6 +139,7 @@ where
     ///         Poll::Pending { .. } => unreachable!(),
     ///     }
     /// };
+    /// # }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn poll_id(&self) -> Poll<ID> {
@@ -154,18 +159,6 @@ where
 
     fn new(time: T, rng: R) -> Self {
         Self::new(time, rng)
-    }
-
-    fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
-        self.next_id(f)
-    }
-
-    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
-        Ok(self.next_id(f))
-    }
-
-    fn poll_id(&self) -> Poll<ID> {
-        self.poll_id()
     }
 
     fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {

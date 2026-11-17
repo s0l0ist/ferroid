@@ -1,12 +1,12 @@
 use alloc::sync::Arc;
-use core::cmp::Ordering;
+use core::{cmp::Ordering, convert::Infallible, time::Duration};
 
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
 use crate::{
-    generator::{Error, Mutex, Poll, Result, SnowflakeGenerator},
-    id::SnowflakeId,
+    generator::{LockError, Mutex, Poll, Result, SnowflakeGenerator},
+    id::{SnowflakeId, ToU64},
     time::TimeSource,
 };
 
@@ -36,10 +36,7 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    #[cfg(feature = "cache-padded")]
     pub(crate) state: Arc<crossbeam_utils::CachePadded<Mutex<ID>>>,
-    #[cfg(not(feature = "cache-padded"))]
-    pub(crate) state: Arc<Mutex<ID>>,
     pub(crate) time: T,
 }
 
@@ -60,7 +57,7 @@ where
     ///
     /// - `machine_id`: A unique identifier for the node or instance generating
     ///   IDs. This value will be encoded into every generated ID.
-    /// - `time`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
+    /// - `time`: A [`TimeSource`] implementation (e.g., [`CachedClock`])
     ///   that determines how timestamps are generated.
     ///
     /// # Returns
@@ -74,18 +71,18 @@ where
     ///     use ferroid::{
     ///         generator::{Poll, LockSnowflakeGenerator},
     ///         id::SnowflakeTwitterId,
-    ///         time::{MonotonicClock, TWITTER_EPOCH},
+    ///         time::{CachedClock, TWITTER_EPOCH},
     ///     };
     ///
-    ///     let generator =
-    ///         LockSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
+    ///     let clock: CachedClock = CachedClock::with_epoch(TWITTER_EPOCH);
+    ///     let generator = LockSnowflakeGenerator::new(0, clock);
     ///
     ///     let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
     /// }
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
-    /// [`MonotonicClock`]: crate::time::MonotonicClock
+    /// [`CachedClock`]: crate::time::CachedClock
     pub fn new(machine_id: ID::Ty, time: T) -> Self {
         Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
     }
@@ -116,10 +113,7 @@ where
     ) -> Self {
         let id = ID::from_components(timestamp, machine_id, sequence);
         Self {
-            #[cfg(feature = "cache-padded")]
             state: Arc::new(crossbeam_utils::CachePadded::new(Mutex::new(id))),
-            #[cfg(not(feature = "cache-padded"))]
-            state: Arc::new(Mutex::new(id)),
             time,
         }
     }
@@ -128,43 +122,50 @@ where
     ///
     /// Returns a new, time-ordered, unique ID.
     ///
+    /// Requires an infallible mutex backend (`parking-lot`).
+    ///
+    /// When generation is pending, `f` receives a suggested [`Duration`],
+    /// with clock granularity already applied. The delay may be zero and
+    /// saturates at `u64::MAX` milliseconds.
+    ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "parking-lot")] {
     /// use ferroid::{
     ///     generator::{LockSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
+    /// let generator = LockSnowflakeGenerator::new(0, CachedClock::default());
     ///
     /// let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
+    /// # }
     /// ```
-    #[cfg(feature = "parking-lot")]
-    pub fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
-        match self.try_next_id(f) {
-            Ok(id) => id,
-            Err(e) =>
-            {
-                #[allow(unreachable_code)]
-                match e {}
-            }
-        }
+    pub fn next_id(&self, f: impl FnMut(Duration)) -> ID
+    where
+        Self: SnowflakeGenerator<ID, T, Err: Into<Infallible>>,
+    {
+        SnowflakeGenerator::next_id(self, f)
     }
 
     /// Generates a new ID.
     ///
     /// Returns a new, time-ordered, unique ID with fallible error handling.
     ///
+    /// When generation is pending, `f` receives a suggested [`Duration`],
+    /// with clock granularity already applied. The delay may be zero and
+    /// saturates at `u64::MAX` milliseconds.
+    ///
     /// # Example
     /// ```
     /// use ferroid::{
     ///     generator::{LockSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
+    /// let generator = LockSnowflakeGenerator::new(0, CachedClock::default());
     ///
     /// let id: SnowflakeTwitterId = match generator.try_next_id(|_| std::thread::yield_now()) {
     ///     Ok(id) => id,
@@ -175,14 +176,8 @@ where
     /// # Errors
     ///
     /// Returns an error if the generator fails, such as from lock poisoning.
-    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
-    pub fn try_next_id(&self, mut f: impl FnMut(ID::Ty)) -> Result<ID, Error> {
-        loop {
-            match self.try_poll_id()? {
-                Poll::Ready { id } => break Ok(id),
-                Poll::Pending { yield_for } => f(yield_for),
-            }
-        }
+    pub fn try_next_id(&self, f: impl FnMut(Duration)) -> Result<ID, LockError> {
+        SnowflakeGenerator::try_next_id(self, f)
     }
 
     /// Attempts to generate the next available ID.
@@ -191,16 +186,22 @@ where
     /// generator is temporarily exhausted (e.g., the sequence is full and the
     /// time has not advanced), it returns [`Poll::Pending`].
     ///
+    /// Requires an infallible mutex backend (`parking-lot`).
+    ///
+    /// Pending delays are [`Duration`] values with clock granularity already
+    /// applied. [`Duration::ZERO`] permits an immediate retry.
+    ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "parking-lot")] {
     /// use ferroid::{
     ///     generator::{LockSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    ///     time::{CachedClock, TWITTER_EPOCH},
     /// };
     ///
-    /// let generator =
-    ///     LockSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
+    /// let clock: CachedClock = CachedClock::with_epoch(TWITTER_EPOCH);
+    /// let generator = LockSnowflakeGenerator::new(0, clock);
     ///
     /// let id: SnowflakeTwitterId = loop {
     ///     match generator.poll_id() {
@@ -208,20 +209,13 @@ where
     ///         Poll::Pending { .. } => std::thread::yield_now(),
     ///     }
     /// };
+    /// # }
     /// ```
-    #[cfg(feature = "parking-lot")]
     pub fn poll_id(&self) -> Poll<ID>
     where
-        Error: Into<core::convert::Infallible>,
+        Self: SnowflakeGenerator<ID, T, Err: Into<Infallible>>,
     {
-        match self.try_poll_id() {
-            Ok(id) => id,
-            Err(e) => {
-                #[allow(unreachable_code)]
-                // `into()` satisfies the trait bound at compile time.
-                match Into::<core::convert::Infallible>::into(e) {}
-            }
-        }
+        SnowflakeGenerator::poll_id(self)
     }
 
     /// Attempts to generate a new Snowflake ID with fallible error handling.
@@ -234,31 +228,30 @@ where
     ///
     /// # Returns
     /// - `Ok(Poll::Ready { id })`: A new ID is available
-    /// - `Ok(Poll::Pending { yield_for })`: The time to wait in time-source
-    ///   units before trying again
+    /// - `Ok(Poll::Pending { yield_for })`: The suggested [`Duration`]
+    ///   before trying again
     /// - `Err(e)`: the lock was poisoned
+    ///
+    /// Pending delays are [`Duration`] values with clock granularity already
+    /// applied. [`Duration::ZERO`] permits an immediate retry.
     ///
     /// # Example
     /// ```
     /// use ferroid::{
     ///     generator::{LockSnowflakeGenerator, Poll},
-    ///     id::{SnowflakeTwitterId, ToU64},
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    ///     id::SnowflakeTwitterId,
+    ///     time::{CachedClock, TWITTER_EPOCH},
     /// };
     ///
-    /// let generator =
-    ///     LockSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
+    /// let clock: CachedClock = CachedClock::with_epoch(TWITTER_EPOCH);
+    /// let generator = LockSnowflakeGenerator::new(0, clock);
     ///
     /// // Attempt to generate a new ID
     /// let id: SnowflakeTwitterId = loop {
     ///     match generator.try_poll_id() {
     ///         Ok(Poll::Ready { id }) => break id,
     ///         Ok(Poll::Pending { yield_for }) => {
-    ///             std::thread::sleep(core::time::Duration::from_millis(
-    ///                 yield_for
-    ///                     .to_u64()
-    ///                     .saturating_mul(MonotonicClock::<1>::GRANULARITY_MILLIS),
-    ///             ));
+    ///             std::thread::sleep(yield_for);
     ///         }
     ///         Err(e) => panic!("Generator error: {}", e),
     ///     }
@@ -269,18 +262,12 @@ where
     ///
     /// Returns an error if the generator fails, such as from lock poisoning.
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
-    pub fn try_poll_id(&self) -> Result<Poll<ID>, Error> {
+    pub fn try_poll_id(&self) -> Result<Poll<ID>, LockError> {
         let now = self.time.current_millis();
 
-        let mut id = {
-            #[cfg(feature = "parking-lot")]
-            {
-                self.state.lock()
-            }
-            #[cfg(not(feature = "parking-lot"))]
-            {
-                self.state.lock()?
-            }
+        let mut id = core::cfg_select! {
+            feature = "parking-lot" => self.state.lock(),
+            _ => self.state.lock()?,
         };
 
         let current_ts = id.timestamp();
@@ -290,7 +277,9 @@ where
                     *id = id.increment_sequence();
                     Ok(Poll::Ready { id: *id })
                 } else {
-                    Ok(Poll::Pending { yield_for: ID::ONE })
+                    Ok(Poll::Pending {
+                        yield_for: Duration::from_millis(T::GRANULARITY_MILLIS.get()),
+                    })
                 }
             }
             Ordering::Greater => {
@@ -304,9 +293,13 @@ where
     #[cold]
     #[inline(never)]
     fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> Poll<ID> {
-        let yield_for = current_ts - now;
-        debug_assert!(yield_for >= ID::ZERO);
-        Poll::Pending { yield_for }
+        let units = current_ts - now;
+        debug_assert!(units >= ID::ZERO);
+        Poll::Pending {
+            yield_for: Duration::from_millis(
+                units.to_u64().saturating_mul(T::GRANULARITY_MILLIS.get()),
+            ),
+        }
     }
 }
 
@@ -315,14 +308,10 @@ where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    type Err = Error;
+    type Err = LockError;
 
     fn new(machine_id: ID::Ty, time: T) -> Self {
         Self::new(machine_id, time)
-    }
-
-    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
-        self.try_next_id(f)
     }
 
     fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {

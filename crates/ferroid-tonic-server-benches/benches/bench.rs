@@ -1,3 +1,7 @@
+//! End-to-end benchmarks for the ID streaming service.
+//!
+//! Run with `cargo bench -p ferroid-tonic-server-benches`.
+
 use core::{fmt, hint::black_box};
 use std::{
     net::TcpStream,
@@ -52,12 +56,13 @@ struct GrpcBenchParams {
 
 fn grpc_bench(c: &mut Criterion) {
     let uri = Uri::try_from("http://0.0.0.0:50051").expect("Invalid URI");
-    // Start the server. This may require a full compilation so set the timeout
-    // high. Adjust features and CLI args to the server as necessary.
+    // Allow time for Cargo to build the server before it accepts connections.
     #[allow(clippy::zombie_processes)]
     let mut server = Command::new("cargo")
         .args([
             "run",
+            "--package",
+            "ferroid-tonic-server",
             "--release",
             "--features",
             "tracing",
@@ -75,7 +80,7 @@ fn grpc_bench(c: &mut Criterion) {
     let concurrency_cases = [1, 2, 4, 8, 16, 32];
     let compression_cases = [Compression::None, Compression::Zstd];
 
-    // Generate cartesian product of all param combinations
+    // Exercise every combination of request and server parameters.
     let mut cases = Vec::new();
     for &ids_per_request in &ids_per_request_cases {
         for &concurrency in &concurrency_cases {
@@ -161,8 +166,8 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
                     0,
                     "Corrupt chunk: not a multiple of SNOWFLAKE_ID_SIZE"
                 );
-                for chunk in bytes.chunks_exact(SNOWFLAKE_ID_SIZE) {
-                    let raw_id = SnowflakeIdTy::from_le_bytes(chunk.try_into().unwrap());
+                for &chunk in bytes.as_chunks::<SNOWFLAKE_ID_SIZE>().0 {
+                    let raw_id = SnowflakeIdTy::from_le_bytes(chunk);
                     let id = SnowflakeId::from_raw(raw_id);
                     black_box(id);
                 }
@@ -170,7 +175,7 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
         }));
     }
 
-    // Wait for all tasks to complete
+    // Include completion of every client task in the measurement.
     while let Some(res) = tasks.next().await {
         res.unwrap();
     }

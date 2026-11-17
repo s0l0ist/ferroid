@@ -1,0 +1,147 @@
+# Changelog
+
+## 3.0.0
+
+### Highlights
+
+- **Unified APIs across ID families.** Shared Base32 extensions, formatters,
+  Serde adapters, validation, and conversion errors simplify working with
+  built-in and custom IDs.
+- **Runtime-independent async generation.** Supply your own async backoff
+  callback without pulling in runtime dependencies.
+- **Consistent backoff with `Duration`.** Generators calculate the wait for you,
+  ready to pass to a sleep function.
+- **SIMD Base32 encoding and decoding.** NEON and SSSE3 accelerate conversion
+  on supported targets.
+- **Explicit clock selection.** Choose per-call wall-clock reads or a shared
+  cache, with corresponding thread-local ULID generators.
+
+### Breaking Changes
+
+#### Generators and clocks
+
+- Removed `MonotonicClock`. Use `DirectClock` for per-call wall-clock reads or
+  `CachedClock` for a shared timestamp cache refreshed roughly once per
+  millisecond. Direct reads need no background thread. Both follow system-clock
+  corrections instead of advancing from a startup timestamp using elapsed
+  time. A backwards adjustment can pause Snowflake and monotonic ULID
+  generation until time catches up.
+- Replaced `generator::thread_local::Ulid` with
+  `generator::thread_local::direct::Ulid` and
+  `generator::thread_local::cached::Ulid` for explicit clock selection.
+- Renamed ULID `datetime()`, `from_datetime()`, and `from_datetime_and_rand()`
+  to `system_time()`, `from_system_time()`, and `from_system_time_and_rand()`,
+  including the thread-local constructors, to match the `SystemTime` type
+  these APIs accept and return.
+- Changed `Poll::Pending::yield_for` and synchronous backoff callbacks from raw
+  clock units to `core::time::Duration`. Every generator now applies its clock's
+  granularity, so callbacks can pass the delay directly to a sleep function.
+- Changed `TimeSource::GRANULARITY_MILLIS` from `u64` to `NonZeroU64`.
+  This rules out zero-length clock units in the trait contract. Custom clocks
+  now need a constant such as `NonZeroU64::new(8).unwrap()`.
+- Removed `SleepProvider`, `async-tokio`, `async-smol`, and their runtime
+  extension traits. Replaced calls such as `next_id_async::<Sleep>()` with
+  `next_id_async(callback)` under `futures`. The callback receives a `Duration`
+  and returns a future, letting callers supply their runtime's sleep or yield
+  operation.
+- Added `generator::LockError`: `generator::Error` with standard mutexes and
+  `core::convert::Infallible` with `parking-lot`. Changed lock-generator fallible
+  methods to return that type. Removed `generator::Error::Infallible` and the
+  conversion from `generator::Error` to `core::convert::Infallible`.
+  `LockPoisoned` is now available regardless of feature flags, so callers do
+  not need matching feature gates to refer to it.
+- Removed the public `generator::Mutex`, `MutexGuard`, and `PoisonError` aliases.
+
+#### Base32 and Serde
+
+- Replaced `Base32SnowExt` and `Base32UlidExt` with `base32::Base32Ext`.
+  One import now covers built-in and custom IDs backed by `u32`, `u64`, or `u128`,
+  without requiring a Snowflake or ULID family trait.
+- Replaced `Base32SnowFormatter` and `Base32UlidFormatter` with
+  `Base32Formatter`, and their borrowed variants with `Base32FormatterRef`.
+- Sealed `BeBytes` to `u32`, `u64`, and `u128`. External implementations for
+  custom backing integer types are no longer supported. This guarantees that
+  encoding writes the same array that formatters read as UTF-8.
+- Replaced `serde::snow_as_int` and `serde::ulid_as_int` with `serde::as_int`.
+  Replaced both family-specific Base32 adapters with `serde::as_base32`.
+  Both adapters now accept any `Id`, including manually implemented IDs,
+  without requiring a Snowflake or ULID family trait.
+- Unified conversion errors as `ferroid::Error<ID>`, re-exported through
+  `base32::Error` and `serde::Error`. Removed Serde's `Base32Error` wrapper;
+  deserialization now reports the underlying error directly. Character and
+  length variants require `base32`; `DecodeOverflow { id }` is available
+  without it.
+
+#### Features and supported platforms
+
+- Raised the minimum supported Rust version from 1.85.1 to 1.99.1.
+- Separated `thread-rng` from `std`. `ThreadRandom`, `ULID::now()`,
+  `from_timestamp()`, and `from_system_time()` now require `thread-rng`.
+  Using clocks or supplying a custom RNG no longer requires the built-in RNG.
+- Removed the `cache-padded` feature and made padding unconditional for atomic
+  and lock generator state, since benchmarks showed improved performance under
+  contention. This increases state size and alignment to reduce cache-line
+  sharing. Remove the feature from dependency feature lists.
+
+#### PostgreSQL
+
+- Dropped PostgreSQL 13 and 14 support and changed the `pg-ferroid` default to
+  PostgreSQL 15.
+- Removed casts between `ulid` and `timestamp without time zone`. Convert
+  through `timestamptz` instead, specifying the zone for a local timestamp:
+  `(timestamp '2025-01-01 12:00:00' AT TIME ZONE 'UTC')::ulid`.
+  This makes the intended instant explicit instead of treating a local time
+  as an unambiguous ULID timestamp.
+
+### Added
+
+- Implemented checked backing-integer `TryFrom` conversions in both ID macros,
+  also enabling `TryInto`. These reject IDs with reserved bits set and return
+  `Error::DecodeOverflow { id }`, preserving the invalid ID for inspection.
+  Base32 decoding and Serde deserialization now use these checked conversions.
+- Added inherent `const` methods `is_valid()` and `into_valid()` to generated
+  IDs, allowing validation and normalization without importing a trait. Also
+  moved the trait methods to `Id`, so generic code can validate IDs without
+  depending on a Snowflake or ULID family trait.
+- Added NEON and SSSE3 Base32 kernels for 64- and 128-bit IDs, selected at
+  compile time for faster encoding and decoding. The new `intrinsics` feature
+  is enabled by default; SSSE3 also requires `ssse3` in the build's target
+  features.
+
+### Changed
+
+#### Generators and clocks
+
+- Removed blanket `Send` and `Sync` requirements from async generation.
+  Local generators and callbacks can now use the async APIs.
+- Delegated `direct::Ulid::new_ulid()` to `ULID::now()`, avoiding a separate
+  generator TLS lookup.
+
+#### Integrations
+
+- Made `parking-lot` enable the `lock` backend automatically, so selecting a
+  mutex implementation also enables the generators that use it.
+- Reduced intermediate allocations and copies in PostgreSQL ULID text and
+  binary output.
+- Checked PostgreSQL interrupts during monotonic-generation backoff so queries
+  can now be cancelled while waiting after clock rollback.
+- Made the server's `honeycomb` feature required for OTLP export, keeping
+  tracing and metrics collection independent of remote export.
+
+### Fixed
+
+#### ID macros
+
+- Handled zero-width and full-width fields in ID macros without overflowing
+  masks or shifts during construction, extraction, or validation.
+- Resolved generated ULID time APIs through the defining crate, avoiding
+  downstream `std` and `web_time` path resolution failures.
+
+#### PostgreSQL
+
+- Moved PostgreSQL `timestamptz` validation before epoch conversion and
+  millisecond truncation. Infinities, pre-Unix-epoch instants, and values beyond
+  the 48-bit ULID timestamp range are now rejected before conversion.
+- Reported PostgreSQL SQLSTATE `22P02` for invalid text, `22P03` for invalid
+  `bytea` lengths, and `22008` for timestamp range errors, so clients can
+  distinguish input errors without matching message text.

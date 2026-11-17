@@ -5,14 +5,7 @@ mod basic;
 mod interface;
 #[cfg(feature = "lock")]
 mod lock;
-#[cfg(all(
-    test,
-    feature = "std",
-    feature = "alloc",
-    feature = "basic",
-    feature = "lock",
-    feature = "atomic"
-))]
+#[cfg(all(test, any(feature = "basic", feature = "lock", feature = "atomic")))]
 mod tests;
 
 #[cfg_attr(

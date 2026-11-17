@@ -1,4 +1,4 @@
-use core::{cmp, marker::PhantomData};
+use core::{cmp, marker::PhantomData, time::Duration};
 
 use portable_atomic::{AtomicU64, Ordering};
 #[cfg(feature = "tracing")]
@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use crate::{
     generator::{Poll, Result, SnowflakeGenerator},
-    id::SnowflakeId,
+    id::{SnowflakeId, ToU64},
     time::TimeSource,
 };
 
@@ -39,10 +39,7 @@ where
     ID: SnowflakeId<Ty = u64>,
     T: TimeSource<ID::Ty>,
 {
-    #[cfg(feature = "cache-padded")]
     state: crossbeam_utils::CachePadded<AtomicU64>,
-    #[cfg(not(feature = "cache-padded"))]
-    state: AtomicU64,
     time: T,
     _id: PhantomData<ID>,
 }
@@ -64,7 +61,7 @@ where
     ///
     /// - `machine_id`: A unique identifier for the node or instance generating
     ///   IDs. This value will be encoded into every generated ID.
-    /// - `time`: A [`TimeSource`] implementation (e.g., [`MonotonicClock`])
+    /// - `time`: A [`TimeSource`] implementation (e.g., [`CachedClock`])
     ///   that determines how timestamps are generated.
     ///
     /// # Returns
@@ -74,20 +71,23 @@ where
     ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "std")]
+    /// # {
     /// use ferroid::{
     ///     generator::{AtomicSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    ///     time::{CachedClock, TWITTER_EPOCH},
     /// };
     ///
-    /// let generator =
-    ///     AtomicSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
+    /// let clock: CachedClock = CachedClock::with_epoch(TWITTER_EPOCH);
+    /// let generator = AtomicSnowflakeGenerator::new(0, clock);
     ///
     /// let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
+    /// # }
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
-    /// [`MonotonicClock`]: crate::time::MonotonicClock
+    /// [`CachedClock`]: crate::time::CachedClock
     pub fn new(machine_id: ID::Ty, time: T) -> Self {
         Self::from_components(ID::ZERO, machine_id, ID::ZERO, time)
     }
@@ -118,10 +118,7 @@ where
     ) -> Self {
         let initial = ID::from_components(timestamp, machine_id, sequence);
         Self {
-            #[cfg(feature = "cache-padded")]
             state: crossbeam_utils::CachePadded::new(AtomicU64::new(initial.to_raw())),
-            #[cfg(not(feature = "cache-padded"))]
-            state: AtomicU64::new(initial.to_raw()),
             time,
             _id: PhantomData,
         }
@@ -131,26 +128,27 @@ where
     ///
     /// Returns a new, time-ordered, unique ID.
     ///
+    /// When generation is pending, `f` receives a suggested [`Duration`],
+    /// with clock granularity already applied. The delay may be zero and
+    /// saturates at `u64::MAX` milliseconds.
+    ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "std")]
+    /// # {
     /// use ferroid::{
     ///     generator::{AtomicSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
+    /// let generator = AtomicSnowflakeGenerator::new(0, CachedClock::default());
     ///
     /// let id: SnowflakeTwitterId = generator.next_id(|_| std::thread::yield_now());
+    /// # }
     /// ```
-    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
-    pub fn next_id(&self, mut f: impl FnMut(ID::Ty)) -> ID {
-        loop {
-            match self.poll_id() {
-                Poll::Ready { id } => break id,
-                Poll::Pending { yield_for } => f(yield_for),
-            }
-        }
+    pub fn next_id(&self, f: impl FnMut(Duration)) -> ID {
+        SnowflakeGenerator::next_id(self, f)
     }
 
     /// Attempts to generate the next available ID.
@@ -159,16 +157,21 @@ where
     /// generator is temporarily exhausted (e.g., the sequence is full and the
     /// time has not advanced, or CAS fails), it returns [`Poll::Pending`].
     ///
+    /// Pending delays are [`Duration`] values with clock granularity already
+    /// applied. [`Duration::ZERO`] permits an immediate retry.
+    ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "std")]
+    /// # {
     /// use ferroid::{
     ///     generator::{AtomicSnowflakeGenerator, Poll},
     ///     id::SnowflakeTwitterId,
-    ///     time::{MonotonicClock, TWITTER_EPOCH},
+    ///     time::{CachedClock, TWITTER_EPOCH},
     /// };
     ///
-    /// let generator =
-    ///     AtomicSnowflakeGenerator::new(0, MonotonicClock::<1>::with_epoch(TWITTER_EPOCH));
+    /// let clock: CachedClock = CachedClock::with_epoch(TWITTER_EPOCH);
+    /// let generator = AtomicSnowflakeGenerator::new(0, clock);
     ///
     /// let id: SnowflakeTwitterId = loop {
     ///     match generator.poll_id() {
@@ -176,6 +179,7 @@ where
     ///         Poll::Pending { .. } => std::thread::yield_now(),
     ///     }
     /// };
+    /// # }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn poll_id(&self) -> Poll<ID> {
@@ -190,7 +194,9 @@ where
                 if current_id.has_sequence_room() {
                     current_id.increment_sequence()
                 } else {
-                    return Poll::Pending { yield_for: ID::ONE };
+                    return Poll::Pending {
+                        yield_for: Duration::from_millis(T::GRANULARITY_MILLIS.get()),
+                    };
                 }
             }
             cmp::Ordering::Greater => current_id.rollover_to_timestamp(now),
@@ -211,7 +217,7 @@ where
             // CAS failed - another thread won the race. Yield 0 to retry
             // immediately.
             Poll::Pending {
-                yield_for: ID::ZERO,
+                yield_for: Duration::ZERO,
             }
         }
     }
@@ -219,9 +225,13 @@ where
     #[cold]
     #[inline(never)]
     fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> Poll<ID> {
-        let yield_for = current_ts - now;
-        debug_assert!(yield_for >= ID::ZERO);
-        Poll::Pending { yield_for }
+        let units = current_ts - now;
+        debug_assert!(units >= ID::ZERO);
+        Poll::Pending {
+            yield_for: Duration::from_millis(
+                units.to_u64().saturating_mul(T::GRANULARITY_MILLIS.get()),
+            ),
+        }
     }
 }
 
@@ -234,18 +244,6 @@ where
 
     fn new(machine_id: ID::Ty, time: T) -> Self {
         Self::new(machine_id, time)
-    }
-
-    fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
-        self.next_id(f)
-    }
-
-    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
-        Ok(self.next_id(f))
-    }
-
-    fn poll_id(&self) -> Poll<ID> {
-        self.poll_id()
     }
 
     fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {

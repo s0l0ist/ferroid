@@ -1,16 +1,18 @@
-use alloc::{rc::Rc, sync::Arc, vec, vec::Vec};
-use core::cell::Cell;
-use std::{
-    collections::HashSet,
-    panic,
-    sync::Mutex,
-    thread::{self, scope},
-};
+use alloc::{rc::Rc, vec, vec::Vec};
+use core::{cell::Cell, num::NonZeroU64, time::Duration};
+#[cfg(feature = "lock")]
+use std::panic::{AssertUnwindSafe, catch_unwind};
+#[cfg(all(feature = "std", any(feature = "lock", feature = "atomic")))]
+use std::{sync::Barrier, thread};
 
+#[cfg(feature = "basic")]
+use crate::generator::BasicSnowflakeGenerator;
+#[cfg(feature = "lock")]
+use crate::generator::LockSnowflakeGenerator;
 use crate::{
-    generator::{BasicSnowflakeGenerator, LockSnowflakeGenerator, Poll, SnowflakeGenerator},
+    generator::{Poll, SnowflakeGenerator},
     id::{Id, SnowflakeId, SnowflakeTwitterId, ToU64},
-    time::{MonotonicClock, TimeSource, UNIX_EPOCH},
+    time::TimeSource,
 };
 
 struct MockTime {
@@ -35,6 +37,8 @@ struct SharedMockStepTime {
 }
 
 impl TimeSource<u64> for SharedMockStepTime {
+    const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(10).unwrap();
+
     fn current_millis(&self) -> u64 {
         self.clock.values[self.clock.index.get()]
     }
@@ -51,28 +55,130 @@ impl TimeSource<u64> for FixedTime {
     }
 }
 
-trait IdGenStatusExt<T>
-where
-    T: Id,
-{
-    fn unwrap_ready(self) -> T;
-    fn unwrap_pending(self) -> T::Ty;
+struct CoarseTime;
+impl TimeSource<u64> for CoarseTime {
+    const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::MAX;
+
+    fn current_millis(&self) -> u64 {
+        0
+    }
 }
 
-impl<T> IdGenStatusExt<T> for Poll<T>
+#[cfg(any(feature = "basic", feature = "lock"))]
+#[test]
+#[allow(
+    dead_code,
+    clippy::wrong_self_convention,
+    reason = "The layout fixture generates a complete ID API; this test checks wait range."
+)]
+fn pending_delays_exceed_small_backing_types() {
+    crate::define_snowflake_id!(SmallId, u32,
+        reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);
+    struct SlowClock;
+    impl TimeSource<u32> for SlowClock {
+        const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(5_000_000_000).unwrap();
+
+        fn current_millis(&self) -> u32 {
+            0
+        }
+    }
+
+    for (timestamp, expected) in [
+        (0, Duration::from_secs(5_000_000)),
+        (3, Duration::from_mins(250_000)),
+    ] {
+        #[cfg(feature = "basic")]
+        {
+            let generator =
+                BasicSnowflakeGenerator::<SmallId, _>::from_components(timestamp, 0, 0, SlowClock);
+            assert_eq!(generator.poll_id().unwrap_pending(), expected);
+        }
+        #[cfg(feature = "lock")]
+        {
+            let generator =
+                LockSnowflakeGenerator::<SmallId, _>::from_components(timestamp, 0, 0, SlowClock);
+            assert_eq!(generator.try_poll_id().unwrap().unwrap_pending(), expected);
+        }
+    }
+}
+
+#[test]
+fn pending_delays_saturate_at_u64_milliseconds() {
+    #[cfg(feature = "basic")]
+    let basic =
+        BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(2, 0, 0, CoarseTime);
+    #[cfg(feature = "basic")]
+    assert_eq!(
+        basic.poll_id().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+
+    #[cfg(feature = "lock")]
+    let lock =
+        LockSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(2, 0, 0, CoarseTime);
+    #[cfg(feature = "lock")]
+    assert_eq!(
+        lock.try_poll_id().unwrap().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+
+    #[cfg(feature = "atomic")]
+    let atomic =
+        crate::generator::AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(
+            2, 0, 0, CoarseTime,
+        );
+    #[cfg(feature = "atomic")]
+    assert_eq!(
+        atomic.poll_id().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+}
+
+#[cfg(feature = "basic")]
+#[test]
+#[allow(
+    dead_code,
+    clippy::wrong_self_convention,
+    reason = "Layout fixtures generate complete ID APIs; this test exercises wide pending delays."
+)]
+fn pending_delay_caps_wide_timestamps() {
+    crate::define_snowflake_id!(WideTimestampId, u128,
+        reserved: 0, timestamp: 128, machine_id: 0, sequence: 0);
+    let timestamp = u128::from(u64::MAX) + 1;
+    let generator = BasicSnowflakeGenerator::<WideTimestampId, _>::from_components(
+        timestamp,
+        0,
+        0,
+        MockTime { millis: 0 },
+    );
+    assert_eq!(
+        generator.poll_id().unwrap_pending(),
+        Duration::from_millis(u64::MAX)
+    );
+}
+
+trait IdGenStatusExt<ID>
 where
-    T: Id,
+    ID: Id,
 {
-    fn unwrap_ready(self) -> T {
+    fn unwrap_ready(self) -> ID;
+    fn unwrap_pending(self) -> Duration;
+}
+
+impl<ID> IdGenStatusExt<ID> for Poll<ID>
+where
+    ID: Id,
+{
+    fn unwrap_ready(self) -> ID {
         match self {
             Self::Ready { id } => id,
             Self::Pending { yield_for } => {
-                panic!("unexpected pending (yield for: {yield_for})")
+                panic!("unexpected pending (yield for: {yield_for:?})")
             }
         }
     }
 
-    fn unwrap_pending(self) -> T::Ty {
+    fn unwrap_pending(self) -> Duration {
         match self {
             Self::Ready { id } => panic!("unexpected ready ({id:?})"),
             Self::Pending { yield_for } => yield_for,
@@ -106,7 +212,10 @@ where
     T: TimeSource<ID::Ty>,
 {
     let yield_for = generator.try_poll_id().unwrap().unwrap_pending();
-    assert_eq!(yield_for, ID::ONE);
+    assert_eq!(
+        yield_for,
+        Duration::from_millis(T::GRANULARITY_MILLIS.get())
+    );
 }
 
 fn run_generator_handles_rollover<G, ID, T>(generator: &G, shared_time: &SharedMockStepTime)
@@ -122,89 +231,117 @@ where
     }
 
     let yield_for = generator.try_poll_id().unwrap().unwrap_pending();
-    assert_eq!(yield_for, ID::ONE);
+    assert_eq!(yield_for, Duration::from_millis(10));
 
+    // Rolling back the clock must leave the exhausted generator unchanged.
     shared_time.clock.index.set(1);
+    for _ in 0..2 {
+        assert_eq!(
+            generator.try_poll_id().unwrap().unwrap_pending(),
+            Duration::from_millis(30)
+        );
+    }
 
-    let id = generator.try_poll_id().unwrap().unwrap_ready();
+    shared_time.clock.index.set(2);
+    assert_eq!(
+        generator.try_poll_id().unwrap().unwrap_pending(),
+        Duration::from_millis(10),
+    );
+
+    // Callback durations include clock granularity exactly once.
+    let mut delays = Vec::new();
+    let id = generator
+        .try_next_id(|delay| {
+            delays.push(delay);
+            shared_time.clock.index.set(match delays.len() {
+                1 => 1, // Roll the clock back three ticks.
+                2 => 3, // Advance past the exhausted timestamp.
+                _ => panic!("unexpected retry"),
+            });
+        })
+        .unwrap();
+    assert_eq!(
+        delays,
+        [Duration::from_millis(10), Duration::from_millis(30)]
+    );
     assert_eq!(id.timestamp().to_u64(), 43);
     assert_eq!(id.sequence().to_u64(), 0);
 }
 
-fn run_generator_monotonic<G, ID, T>(generator: &G)
+fn run_generator_monotonic<G, ID, T>(generator: &G, shared_time: &SharedMockStepTime)
 where
     G: SnowflakeGenerator<ID, T>,
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    let mut last_timestamp = ID::ZERO;
-    let mut sequence = ID::ZERO;
-    #[allow(clippy::items_after_statements)]
-    const TOTAL_IDS: usize = 4096 * 256;
-
-    for _ in 0..TOTAL_IDS {
-        loop {
-            match generator.try_poll_id().unwrap() {
-                Poll::Ready { id } => {
-                    let ts = id.timestamp();
-                    if ts > last_timestamp {
-                        sequence = ID::ZERO;
-                    }
-
-                    assert!(ts >= last_timestamp);
-                    assert_eq!(id.machine_id(), ID::ONE);
-                    assert_eq!(id.sequence(), sequence);
-
-                    last_timestamp = ts;
-                    sequence += ID::ONE;
-                    break;
-                }
-                Poll::Pending { .. } => {
-                    core::hint::spin_loop();
-                }
+    let mut previous = None;
+    for (index, &timestamp) in shared_time.clock.values.iter().enumerate() {
+        shared_time.clock.index.set(index);
+        for sequence in 0..3 {
+            let id = generator.try_poll_id().unwrap().unwrap_ready();
+            assert_eq!(id.timestamp().to_u64(), timestamp);
+            assert_eq!(id.machine_id(), ID::ONE);
+            assert_eq!(id.sequence().to_u64(), sequence);
+            if let Some(previous) = previous {
+                assert!(id > previous);
             }
+            previous = Some(id);
         }
     }
 }
 
-fn run_generator_monotonic_threaded<G, ID, T>(make_generator: impl Fn() -> G)
+#[cfg(all(feature = "std", any(feature = "lock", feature = "atomic")))]
+fn run_generator_concurrent_uniqueness<G, ID, T>(make_generator: impl Fn() -> G)
 where
     G: SnowflakeGenerator<ID, T> + Send + Sync,
     ID: SnowflakeId + Send,
     T: TimeSource<ID::Ty>,
 {
     const THREADS: usize = 8;
-    const TOTAL_IDS: usize = 4096 * 256;
-    const IDS_PER_THREAD: usize = TOTAL_IDS / THREADS;
+    // The whole batch fits within one Snowflake timestamp's sequence range.
+    const IDS_PER_THREAD: usize = 64;
 
-    let generator = Arc::new(make_generator());
-    let seen_ids = Arc::new(Mutex::new(HashSet::with_capacity(TOTAL_IDS)));
+    let generator = make_generator();
+    let barrier = Barrier::new(THREADS);
+    let mut ids = Vec::with_capacity(THREADS * IDS_PER_THREAD);
 
-    scope(|s| {
+    thread::scope(|s| {
+        let mut handles = Vec::with_capacity(THREADS);
         for _ in 0..THREADS {
-            let generator = Arc::clone(&generator);
-            let seen_ids = Arc::clone(&seen_ids);
-
-            s.spawn(move || {
+            handles.push(s.spawn(|| {
+                barrier.wait();
+                let mut ids = Vec::with_capacity(IDS_PER_THREAD);
+                let mut retries = 0;
                 for _ in 0..IDS_PER_THREAD {
-                    loop {
-                        match generator.try_poll_id().unwrap() {
-                            Poll::Ready { id } => {
-                                assert!(seen_ids.lock().unwrap().insert(id));
-                                break;
-                            }
-                            Poll::Pending { .. } => std::thread::yield_now(),
-                        }
-                    }
+                    let id = generator
+                        .try_next_id(|yield_for| {
+                            // Only a lost CAS may be pending at this fixed timestamp.
+                            assert_eq!(yield_for, Duration::ZERO);
+                            retries += 1;
+                            assert!(retries < THREADS * IDS_PER_THREAD, "generator stalled");
+                        })
+                        .unwrap();
+                    ids.push(id);
                 }
-            });
+                assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
+                ids
+            }));
+        }
+        for handle in handles {
+            ids.extend(handle.join().unwrap());
         }
     });
 
-    let final_count = seen_ids.lock().unwrap().len();
-    assert_eq!(final_count, TOTAL_IDS, "Expected {TOTAL_IDS} unique IDs");
+    ids.sort_unstable();
+    assert_eq!(ids.len(), THREADS * IDS_PER_THREAD);
+    for (sequence, id) in ids.iter().enumerate() {
+        assert_eq!(id.timestamp().to_u64(), 42);
+        assert_eq!(id.machine_id(), ID::ZERO);
+        assert_eq!(id.sequence().to_u64(), u64::try_from(sequence).unwrap());
+    }
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_generator_sequence_test() {
     let mock_time = MockTime { millis: 42 };
@@ -213,6 +350,7 @@ fn basic_generator_sequence_test() {
     run_id_sequence_increments_within_same_tick(&generator);
 }
 
+#[cfg(feature = "lock")]
 #[test]
 fn lock_generator_sequence_test() {
     let mock_time = MockTime { millis: 42 };
@@ -221,8 +359,8 @@ fn lock_generator_sequence_test() {
     run_id_sequence_increments_within_same_tick(&generator);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-#[cfg(target_has_atomic = "64")]
 fn atomic_generator_sequence_test() {
     use crate::generator::AtomicSnowflakeGenerator;
 
@@ -232,6 +370,7 @@ fn atomic_generator_sequence_test() {
     run_id_sequence_increments_within_same_tick(&generator);
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_generator_pending_test() {
     let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
@@ -244,6 +383,7 @@ fn basic_generator_pending_test() {
     run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
+#[cfg(feature = "lock")]
 #[test]
 fn lock_generator_pending_test() {
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
@@ -256,8 +396,8 @@ fn lock_generator_pending_test() {
     run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-#[cfg(target_has_atomic = "64")]
 fn atomic_generator_pending_test() {
     use crate::generator::AtomicSnowflakeGenerator;
 
@@ -271,11 +411,12 @@ fn atomic_generator_pending_test() {
     run_generator_returns_pending_when_sequence_exhausted(&generator);
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_generator_rollover_test() {
     let shared_time = SharedMockStepTime {
         clock: Rc::new(MockStepTime {
-            values: vec![42, 43],
+            values: vec![42, 39, 42, 43],
             index: Cell::new(0),
         }),
     };
@@ -284,11 +425,12 @@ fn basic_generator_rollover_test() {
     run_generator_handles_rollover(&generator, &shared_time);
 }
 
+#[cfg(feature = "lock")]
 #[test]
 fn lock_generator_rollover_test() {
     let shared_time = SharedMockStepTime {
         clock: Rc::new(MockStepTime {
-            values: vec![42, 43],
+            values: vec![42, 39, 42, 43],
             index: Cell::new(0),
         }),
     };
@@ -297,14 +439,14 @@ fn lock_generator_rollover_test() {
     run_generator_handles_rollover(&generator, &shared_time);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-#[cfg(target_has_atomic = "64")]
 fn atomic_generator_rollover_test() {
     use crate::generator::AtomicSnowflakeGenerator;
 
     let shared_time = SharedMockStepTime {
         clock: Rc::new(MockStepTime {
-            values: vec![42, 43],
+            values: vec![42, 39, 42, 43],
             index: Cell::new(0),
         }),
     };
@@ -313,118 +455,125 @@ fn atomic_generator_rollover_test() {
     run_generator_handles_rollover(&generator, &shared_time);
 }
 
+#[cfg(feature = "basic")]
 #[test]
-fn basic_generator_monotonic_clock_sequence_increments() {
-    let clock = MonotonicClock::default();
+fn basic_generator_is_monotonic_across_ticks() {
+    let shared_time = SharedMockStepTime {
+        clock: Rc::new(MockStepTime {
+            values: vec![42, 43, 44],
+            index: Cell::new(0),
+        }),
+    };
     let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
-        BasicSnowflakeGenerator::new(1, clock);
-    run_generator_monotonic(&generator);
+        BasicSnowflakeGenerator::new(1, shared_time.clone());
+    run_generator_monotonic(&generator, &shared_time);
 }
 
+#[cfg(feature = "lock")]
 #[test]
-fn basic_generator_quantized_monotonic_clock_sequence_increments() {
-    let clock = MonotonicClock::<8>::with_epoch(UNIX_EPOCH);
-    let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
-        BasicSnowflakeGenerator::new(1, clock);
-    run_generator_monotonic(&generator);
-}
-
-#[test]
-fn lock_generator_monotonic_clock_sequence_increments() {
-    let clock = MonotonicClock::default();
+fn lock_generator_is_monotonic_across_ticks() {
+    let shared_time = SharedMockStepTime {
+        clock: Rc::new(MockStepTime {
+            values: vec![42, 43, 44],
+            index: Cell::new(0),
+        }),
+    };
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-        LockSnowflakeGenerator::new(1, clock);
-    run_generator_monotonic(&generator);
+        LockSnowflakeGenerator::new(1, shared_time.clone());
+    run_generator_monotonic(&generator, &shared_time);
 }
 
+#[cfg(feature = "atomic")]
 #[test]
-#[cfg(target_has_atomic = "64")]
-fn atomic_generator_monotonic_clock_sequence_increments() {
+fn atomic_generator_is_monotonic_across_ticks() {
     use crate::generator::AtomicSnowflakeGenerator;
 
-    let clock = MonotonicClock::default();
+    let shared_time = SharedMockStepTime {
+        clock: Rc::new(MockStepTime {
+            values: vec![42, 43, 44],
+            index: Cell::new(0),
+        }),
+    };
     let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
-        AtomicSnowflakeGenerator::new(1, clock);
-    run_generator_monotonic(&generator);
+        AtomicSnowflakeGenerator::new(1, shared_time.clone());
+    run_generator_monotonic(&generator, &shared_time);
 }
 
+#[cfg(feature = "lock")]
 #[test]
-fn lock_generator_threaded_monotonic() {
-    let clock = MonotonicClock::default();
-    run_generator_monotonic_threaded(move || {
-        LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock.clone())
+fn lock_generator_concurrent_uniqueness() {
+    run_generator_concurrent_uniqueness(|| {
+        LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MockTime { millis: 42 })
     });
 }
 
+#[cfg(all(feature = "atomic", feature = "std"))]
 #[test]
-#[cfg(target_has_atomic = "64")]
-fn atomic_generator_threaded_monotonic() {
+fn atomic_generator_concurrent_uniqueness() {
     use crate::generator::AtomicSnowflakeGenerator;
 
-    let clock = MonotonicClock::default();
-    run_generator_monotonic_threaded(move || {
-        AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, clock.clone())
+    run_generator_concurrent_uniqueness(|| {
+        AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MockTime { millis: 42 })
     });
 }
 
-#[cfg(not(feature = "parking-lot"))]
+#[cfg(all(feature = "lock", not(feature = "parking-lot")))]
 #[test]
 fn lock_is_poisoned_on_panic_std_mutex() {
     // Arrange
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-        LockSnowflakeGenerator::new(0u64.into(), MonotonicClock::default());
+        LockSnowflakeGenerator::new(0u64, MockTime { millis: 42 });
 
-    {
-        let state = Arc::clone(&generator.state);
-        let _ = thread::spawn(move || {
-            let _g = state.lock();
-            panic!("boom: poison the mutex");
-        })
-        .join();
-    }
+    let panic = catch_unwind(AssertUnwindSafe(|| {
+        let _guard = generator.state.lock();
+        panic!("boom: poison the mutex");
+    }));
+    assert!(panic.is_err());
 
     let err = generator
         .try_poll_id()
+        .expect_err("expected an error after poison");
+    assert!(matches!(err, crate::generator::Error::LockPoisoned));
+    let err = generator
+        .try_next_id(|_| panic!("poisoned generator invoked backoff"))
         .expect_err("expected an error after poison");
     assert!(matches!(err, crate::generator::Error::LockPoisoned));
 }
 
 #[cfg(feature = "parking-lot")]
 #[test]
-fn lock_is_poisoned_on_panic_parking_lot_mutex() {
+fn lock_is_not_poisoned_on_panic_parking_lot_mutex() {
     // Arrange
     let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-        LockSnowflakeGenerator::new(0u64, MonotonicClock::default());
+        LockSnowflakeGenerator::new(0u64, MockTime { millis: 42 });
 
-    {
-        let state = Arc::clone(&generator.state);
-        let _ = thread::spawn(move || {
-            let _g = state.lock();
-            panic!("boom: poison the mutex");
-        })
-        .join();
-    }
+    let panic = catch_unwind(AssertUnwindSafe(|| {
+        let _guard = generator.state.lock();
+        panic!("boom: poison the mutex");
+    }));
+    assert!(panic.is_err());
 
     generator
         .try_poll_id()
         .expect("parking_lot::Mutex cannot be poisoned");
 }
 
+#[cfg(feature = "basic")]
 #[test]
 fn basic_can_call_next_id() {
-    let generator = BasicSnowflakeGenerator::new(0, MonotonicClock::default());
-    let backoff = |_| core::hint::spin_loop();
+    let generator = BasicSnowflakeGenerator::new(0, MockTime { millis: 42 });
+    let backoff = |_: Duration| panic!("expected ready ID");
     let _id: SnowflakeTwitterId = generator.next_id(backoff);
     let _id: SnowflakeTwitterId = SnowflakeGenerator::next_id(&generator, backoff);
 }
 
-#[cfg(target_has_atomic = "64")]
+#[cfg(feature = "atomic")]
 #[test]
 fn atomic_can_call_next_id() {
     use crate::generator::AtomicSnowflakeGenerator;
 
-    let generator = AtomicSnowflakeGenerator::new(0, MonotonicClock::default());
-    let backoff = |_| core::hint::spin_loop();
+    let generator = AtomicSnowflakeGenerator::new(0, MockTime { millis: 42 });
+    let backoff = |_: Duration| panic!("expected ready ID");
     let _id: SnowflakeTwitterId = generator.next_id(backoff);
     let _id: SnowflakeTwitterId = SnowflakeGenerator::next_id(&generator, backoff);
 }
@@ -432,8 +581,18 @@ fn atomic_can_call_next_id() {
 #[cfg(feature = "parking-lot")]
 #[test]
 fn lock_can_call_next_id() {
-    let generator = LockSnowflakeGenerator::new(0, MonotonicClock::default());
-    let backoff = |_| core::hint::spin_loop();
+    let generator = LockSnowflakeGenerator::new(0, MockTime { millis: 42 });
+    let backoff = |_: Duration| panic!("expected ready ID");
     let _id: SnowflakeTwitterId = generator.next_id(backoff);
     let _id: SnowflakeTwitterId = SnowflakeGenerator::next_id(&generator, backoff);
+}
+
+#[cfg(feature = "lock")]
+#[test]
+fn lock_can_call_try_next_id() {
+    let generator = LockSnowflakeGenerator::new(0, MockTime { millis: 42 });
+    let backoff = |_: Duration| panic!("expected ready ID");
+    let first: SnowflakeTwitterId = generator.try_next_id(backoff).unwrap();
+    let second: SnowflakeTwitterId = SnowflakeGenerator::try_next_id(&generator, backoff).unwrap();
+    assert!(second > first);
 }

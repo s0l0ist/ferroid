@@ -1,0 +1,19 @@
+[package]
+name = "ferroid-tonic-server-benches"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bench]]
+name = "bench"
+harness = false
+
+[dependencies]
+criterion = { workspace = true, features = ["async_tokio"] }
+ferroid-tonic-core = { path = "../ferroid-tonic-core" }
+futures = { workspace = true, features = ["alloc"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "time"] }
+tokio-stream = { workspace = true }
+tonic = { workspace = true, features = ["transport", "zstd"] }

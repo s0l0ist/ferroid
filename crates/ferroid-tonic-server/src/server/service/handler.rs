@@ -136,8 +136,9 @@ impl IdService {
 
     /// Initiates a graceful shutdown of the worker pool.
     ///
-    /// All in-flight requests are cancelled, and the shutdown process blocks
-    /// until each worker acknowledges termination.
+    /// Refuses new requests and allows in-flight streams to drain within the
+    /// configured timeout. Remaining work is cancelled before waiting up to
+    /// three seconds for each worker to acknowledge termination.
     pub async fn shutdown(&self) -> Result<(), Error> {
         self.worker_pool.shutdown().await
     }

@@ -1,0 +1,16 @@
+[package]
+name = "ferroid-benches"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[[bench]]
+name = "bench"
+harness = false
+
+[dependencies]
+criterion = { workspace = true }
+ferroid = { path = "../ferroid", features = ["all"] }
+futures = { workspace = true, features = ["alloc"] }
