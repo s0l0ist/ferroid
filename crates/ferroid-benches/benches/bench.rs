@@ -1,6 +1,6 @@
 //! Benchmarks for the public `ferroid` API.
 //!
-//! Run with `cargo bench -p ferroid-benches`.
+//! Run with `cargo criterion -p ferroid-benches --bench bench`.
 use core::num::NonZeroU64;
 use std::{future::pending, hint::black_box};
 
