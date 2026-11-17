@@ -32,6 +32,8 @@ Requires Rust 1.95.0 or later.
   - [Base32](#base32)
   - [Serde](#serde)
 - [Performance](#performance)
+  - [ID generation](#id-generation)
+  - [Base32 with intrinsics enabled](#base32-with-intrinsics-enabled)
 - [Advanced generators](#advanced-generators)
   - [Choosing a generator](#choosing-a-generator)
   - [Backoff and async generation](#backoff-and-async-generation)
@@ -55,13 +57,10 @@ ferroid = { version = "3", features = ["ulid", "thread-rng"] }
 ```
 
 ```rust
-# #[cfg(all(feature = "ulid", feature = "thread-rng"))]
-# {
 use ferroid::id::ULID;
 
 // Read wall time and draw fresh randomness; IDs are not monotonic.
 let id = ULID::now();
-# }
 ```
 
 ### Thread-local ULIDs
@@ -76,8 +75,6 @@ ferroid = { version = "3", features = ["thread-local"] }
 ```
 
 ```rust
-# #[cfg(all(feature = "thread-local", not(all(target_arch = "wasm32", target_os = "unknown"))))]
-# {
 use ferroid::generator::thread_local::{cached, direct};
 
 // Read wall time on each call: fresh randomness or increasing IDs per thread.
@@ -86,9 +83,11 @@ let increasing = direct::Ulid::new_ulid_mono(|_| std::thread::yield_now());
 
 // Use a shared background clock cache for higher throughput.
 let random = cached::Ulid::new_ulid();
-let increasing = cached::Ulid::new_ulid_mono(|_| std::thread::yield_now());
-# }
+let increasing = cached::Ulid::new_ulid_mono(std::thread::sleep);
 ```
+
+Backoff can yield immediately with `|_| std::thread::yield_now()` or sleep for
+the suggested duration with `std::thread::sleep`.
 
 | Method                             | Clock           | Randomness       | Monotonic | Background thread | Throughput |
 | ---------------------------------- | --------------- | ---------------- | --------- | ----------------- | ---------- |
@@ -118,8 +117,6 @@ ferroid = { version = "3", features = ["snowflake", "basic", "std"] }
 ```
 
 ```rust
-# #[cfg(all(feature = "snowflake", feature = "basic", feature = "std", not(all(target_arch = "wasm32", target_os = "unknown"))))]
-# {
 use ferroid::{
     generator::BasicSnowflakeGenerator,
     id::SnowflakeTwitterId,
@@ -129,7 +126,6 @@ use ferroid::{
 let clock = CachedClock::<1>::with_epoch(TWITTER_EPOCH); // Match the layout's epoch.
 let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(1, clock);
 let id = generator.next_id(|_| std::thread::yield_now());
-# }
 ```
 
 Keep the generator alive and assign each independent generator a unique machine
@@ -154,8 +150,6 @@ generators. Epochs are configured on clocks, not stored in ID types.
 Define your own layout with the corresponding ID family enabled:
 
 ```rust
-# #[cfg(all(feature = "snowflake", feature = "ulid"))]
-# {
 use ferroid::{define_snowflake_id, define_ulid};
 
 define_snowflake_id!(
@@ -167,7 +161,6 @@ define_ulid!(
     TraceId, u128,
     reserved: 0, timestamp: 48, random: 80
 );
-# }
 ```
 
 Fields must total the backing integer's width. Pass `EventId` or `TraceId` as the
@@ -182,55 +175,39 @@ storage, `timestamp()` for the timestamp field, and ULID's `system_time()` for a
 
 ### Base32
 
-Enable `base32` for Crockford Base32 formatting and validated decoding. Import
-`Base32Ext` for built-in or custom IDs:
+Enable `base32` for Crockford Base32 encoding and decoding:
 
 ```rust
-# #[cfg(all(feature = "ulid", feature = "base32"))]
-# {
 use ferroid::{base32::Base32Ext, id::ULID};
 
 let id: ULID = "01ARZ3NDEKTSV4RRFFQ69G5FAV".parse().unwrap();
-let encoded = id.encode(); // Fixed-size formatter; no heap allocation.
+let encoded = id.encode(); // Stack buffer; no allocation.
 assert_eq!(ULID::decode(encoded.as_str()).unwrap(), id);
-println!("{id}"); // Display uses the same encoding.
-# assert_eq!(ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap().encode().as_str(),
-#     "7ZZZZZZZZZZZZZZZZZZZZZZZZZ");
-# }
 ```
 
-Canonical encodings preserve numeric sort order: 26 characters for a 128-bit
-ULID and 13 for a 64-bit Snowflake. Use `encode_to_buf` to reuse a buffer, or
-`to_string()` for an owned string.
+Encodings are fixed-width: 7 characters for `u32`, 13 for `u64`, and 26 for
+`u128`. Canonical strings of the same width preserve numeric order when sorted
+in ASCII order. Decoding accepts lowercase and Crockford aliases; re-encoding
+produces uppercase canonical text.
 
-**Decoding invariant:** for every built-in or custom ID type, Ferroid discards
-encoded bits beyond the backing integer's width, then validates reserved layout
-bits. Length and character checks still apply. Different strings can therefore
-decode to the same ID; encoding the result produces its canonical representation.
+The [ULID specification][ulid-spec] states:
 
-This differs from the [ULID specification][ulid-spec], which rejects encodings
-above `7ZZZZZZZZZZZZZZZZZZZZZZZZZ`. Ferroid accepts `ZZZZZZZZZZZZZZZZZZZZZZZZZZ`
-for `ULID` and re-encodes it as `7ZZZZZZZZZZZZZZZZZZZZZZZZZ`. Reserved bits that
-remain set after truncation cause `decode()` and `.parse()` to return
-`base32::Error::DecodeOverflow`.
+> Any attempt to decode or encode a ULID larger than this should be rejected by
+> all implementations, to prevent overflow bugs.
 
-Use `MyId::try_from(raw)` or `raw.try_into()` for checked integer conversion.
-Invalid layouts return `ferroid::Error::DecodeOverflow { id }`, preserving the
-rejected ID.
-`from_raw()` preserves all input bits without checking the layout. For IDs with
-reserved bits, call `is_valid()` to check them or `into_valid()` to clear them,
-which changes the ID's value. Macro-generated IDs expose both methods directly;
-generic code uses the `Id` trait.
+Here, "this" is the maximum ULID encoding, `7ZZZZZZZZZZZZZZZZZZZZZZZZZ`.
 
-`from_components()` masks fields and leaves reserved bits zero. Oversized
-Snowflake components and ULID timestamps panic with debug assertions enabled;
-otherwise they are truncated. Excess ULID random bits are always discarded.
-Validate untrusted components before construction: `is_valid()` cannot detect
-bits that were already discarded.
+**Ferroid handles overflow differently.** It discards
+encoded high bits beyond the backing integer's width before validating the ID.
+For example, `ULID::decode("ZZZZZZZZZZZZZZZZZZZZZZZZZZ")` succeeds and re-encodes
+as `7ZZZZZZZZZZZZZZZZZZZZZZZZZ`; the specification requires rejecting that input.
+Incorrect lengths, invalid characters, and nonzero reserved layout bits are
+rejected for built-in and macro-generated IDs. Encoding does not validate the ID.
 
-The default `intrinsics` feature enables NEON on supported `AArch64` targets and
-SSSE3 on `x86_64` targets built with `ssse3`. Selection is at compile time; 32-bit IDs
-and other targets use scalar code. See the [Base32 reference][base32-docs].
+The default `intrinsics` feature selects NEON on AArch64 builds with `neon`, or
+SSSE3 on x86-64 builds with `ssse3`, for 64- and 128-bit IDs. Other configurations
+use scalar code. See the [Base32 reference][base32-docs] for buffer reuse and
+conversion methods.
 
 ### Serde
 
@@ -244,8 +221,6 @@ serde = { version = "1", features = ["derive"] }
 ```
 
 ```rust
-# #[cfg(all(feature = "ulid", feature = "snowflake", feature = "serde", feature = "base32"))]
-# {
 use ferroid::id::{SnowflakeTwitterId, ULID};
 use serde::{Deserialize, Serialize};
 
@@ -259,15 +234,6 @@ struct Event {
     #[serde(with = "ferroid::serde::as_int")]
     source: SnowflakeTwitterId,
 }
-# let event = Event {
-#     id: ULID::from_components(1_700_000_000_000, 42),
-#     source: SnowflakeTwitterId::from_components(123_456, 1, 42),
-# };
-# let json = serde_json::to_string(&event).unwrap();
-# let decoded: Event = serde_json::from_str(&json).unwrap();
-# assert_eq!(decoded.id, event.id);
-# assert_eq!(decoded.source, event.source);
-# }
 ```
 
 | Representation | Adapter                    | Required features |
@@ -275,15 +241,13 @@ struct Event {
 | Integer        | `ferroid::serde::as_int`    | `serde`           |
 | Base32 string  | `ferroid::serde::as_base32` | `serde`, `base32`  |
 
-Both adapters work with `Id`, including macro-generated and manually implemented
-IDs. Deserialization requires `TryFrom<ID::Ty, Error = ferroid::Error<ID>>`;
-the layout macros implement this checked conversion automatically.
-Base32 supports IDs backed by `u32`, `u64`, or `u128` through the sealed
-`BeBytes` trait.
-
 ## Performance
 
-Generation costs for the convenience methods above and Snowflake backends below:
+Measured on an Apple M1 Pro, macOS, Rust 1.100.0. See the [benchmark suite][benchmarks].
+
+### ID generation
+
+Generation costs after initialization, excluding formatting:
 
 | Method                             | Time per ID | IDs per second |
 | ---------------------------------- | ----------- | -------------- |
@@ -296,12 +260,16 @@ Generation costs for the convenience methods above and Snowflake backends below:
 | `AtomicSnowflakeGenerator`         | ~2.4 ns     | ~416M          |
 | `LockSnowflakeGenerator`           | ~9.13 ns    | ~110M          |
 
-Criterion medians on an Apple M1 Pro, macOS, Rust 1.100.0, with `all` and default
-features enabled. Measurements use one thread after initialization and exclude
-formatting. Snowflake rows use a cached clock and a custom layout with 22 sequence
-bits to avoid exhaustion; each layout's sequence bits bound IDs per timestamp.
-Results vary by platform and workload. See the [benchmark suite][benchmarks] to
-measure your configuration.
+Snowflake measurements use a cached clock and a layout with 22 sequence bits.
+
+### Base32 with intrinsics enabled
+
+Base32 conversion using NEON with the default `intrinsics` feature enabled:
+
+| Operation         | Snowflake (`u64`, 13 characters) | ULID (`u128`, 26 characters) |
+| ----------------- | ------------------------------- | --------------------------- |
+| `encode_to_buf()` | ~1.32 ns                        | ~1.60 ns                    |
+| `decode()`        | ~1.65 ns                        | ~2.40 ns                    |
 
 ## Advanced generators
 
@@ -320,9 +288,6 @@ ratings assume comparable providers and no contention.
 | `LockMonoUlidGenerator`   | ✅        | ✅          | ❌        | Medium     | Shared state protected by a mutex       |
 | `AtomicMonoUlidGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation              |
 
-Keep monotonic generator state alive across calls to preserve ordering. Atomic
-ULID generators require a `u128` backing type and target 128-bit atomics.
-
 **Snowflake generators** take `new(machine_id, clock)`:
 
 | Snowflake Generator        | Monotonic | Thread-Safe | Lock-Free | Throughput | Use Case                                |
@@ -331,51 +296,26 @@ ULID generators require a `u128` backing type and target 128-bit atomics.
 | `LockSnowflakeGenerator`   | ✅        | ✅          | ❌        | Medium     | Shared state protected by a mutex       |
 | `AtomicSnowflakeGenerator` | ✅        | ✅          | ✅        | High       | Fast concurrent generation              |
 
-Atomic Snowflake generators require `u64` and target 64-bit atomics. Basic and
-lock generators support other backing widths. Lock-free describes generator
-state updates; providers and callbacks may still block.
-
-Standard mutex generators use `try_next_id` / `try_poll_id` to report poisoning;
-`parking-lot` makes them infallible.
-
 ### Backoff and async generation
 
-Snowflake and monotonic ULID generators invoke backoff when the sequence/random
-field is exhausted or time moves backwards. Callbacks receive a suggested
-`core::time::Duration`, with clock granularity already applied. It may be zero
-after atomic contention. Returning from the callback retries generation.
-
-For example, use the custom `TraceId` layout above with an owned generator:
+Snowflake and monotonic ULID generators call backoff when time moves backwards
+or the sequence/random field is exhausted. The callback receives a `Duration`;
+returning from it retries generation. Use `std::thread::sleep` for timed backoff:
 
 ```rust
-# #[cfg(all(feature = "ulid", feature = "basic", feature = "thread-rng", not(all(target_arch = "wasm32", target_os = "unknown"))))]
-# {
-# ferroid::define_ulid!(TraceId, u128, reserved: 0, timestamp: 48, random: 80);
 use ferroid::{
-    generator::BasicMonoUlidGenerator, rand::ThreadRandom, time::DirectClock,
+    generator::BasicMonoUlidGenerator, id::ULID, rand::ThreadRandom, time::DirectClock,
 };
 
-let generator = BasicMonoUlidGenerator::<TraceId, _, _>::new(
-    DirectClock::default(), ThreadRandom,
-);
+let generator = BasicMonoUlidGenerator::<ULID, _, _>::new(DirectClock::default(), ThreadRandom);
 let id = generator.next_id(std::thread::sleep);
 
-// Or yield on immediate retries and sleep for clock waits.
-let id = generator.next_id(|delay| {
-    if delay.is_zero() {
-        std::thread::yield_now();
-    } else {
-        std::thread::sleep(delay);
-    }
-});
-# }
+// Or yield without waiting for the suggested duration.
+let id = generator.next_id(|_| std::thread::yield_now());
 ```
 
-For manual retries, `poll_id()` / `try_poll_id()` return `Ready` or `Pending`,
-with the same `Duration` in `Pending::yield_for`.
-
-With `futures`, use the same generator inside an async context. For Tokio,
-enable its `time` feature and pass its sleep function:
+With `futures`, pass your runtime's async sleep function. For Tokio, enable its
+`time` feature:
 
 ```rust ignore
 use ferroid::futures::UlidGeneratorAsyncExt;
@@ -383,7 +323,7 @@ use ferroid::futures::UlidGeneratorAsyncExt;
 let id = generator.next_id_async(tokio::time::sleep).await;
 ```
 
-With Smol, adapt its timer to a sleep callback returning `()`:
+With Smol:
 
 ```rust ignore
 let id = generator.next_id_async(|delay| async move {
@@ -391,8 +331,8 @@ let id = generator.next_id_async(|delay| async move {
 }).await;
 ```
 
-Snowflakes use `SnowflakeGeneratorAsyncExt` with the same calling pattern. Async
-callbacks are awaited before retrying; fallible generators use `try_next_id_async`.
+Snowflakes use `SnowflakeGeneratorAsyncExt`. See the [generator reference][generator-docs]
+for fallible generation, manual polling, and backoff strategies.
 
 ### Clocks and random sources
 
@@ -414,8 +354,9 @@ implementations.
 
 ### Feature flags
 
-Only `intrinsics` is enabled by default. Use `all` for the functional APIs, or
-select the features your application needs:
+Enable at least one ID family: `ulid` or `snowflake`. Only `intrinsics` is
+enabled by default. Use `all` for the functional APIs, or select the features
+your application needs:
 
 | Feature                   | Provides                                                                          |
 | ------------------------- | --------------------------------------------------------------------------------- |
@@ -480,3 +421,4 @@ dual licensed as above, without any additional terms or conditions.
 [id-docs]: https://docs.rs/ferroid/latest/ferroid/id/index.html
 [time-source]: https://docs.rs/ferroid/latest/ferroid/time/trait.TimeSource.html
 [rand-source]: https://docs.rs/ferroid/latest/ferroid/rand/trait.RandSource.html
+[generator-docs]: https://docs.rs/ferroid/latest/ferroid/generator/index.html
