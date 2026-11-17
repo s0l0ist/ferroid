@@ -5,23 +5,14 @@ use crate::id::BeBytes;
 
 /// Encodes big-endian bytes as fixed-width Crockford Base32 using scalar code.
 ///
-/// Buffer types and sizes come from [`BeBytes`]; no allocation is required.
+/// Sealed [`BeBytes`] implementations provide matching fixed-size arrays.
 #[inline(always)]
 #[allow(clippy::inline_always)]
 pub(super) fn encode_base32<T: BeBytes>(input: &T::ByteArray, output: &mut T::Base32Array) {
     let input = input.as_ref();
     let buf_slice = output.as_mut();
-    let input_bits = input
-        .len()
-        .checked_mul(8)
-        .expect("Base32 input is too long");
-    let output_chars = buf_slice.len();
-    assert_eq!(
-        output_chars,
-        input_bits.div_ceil(BITS_PER_CHAR),
-        "Base32 output buffer length does not match input"
-    );
-    let total_bits = output_chars * BITS_PER_CHAR;
+    let input_bits = T::SIZE * 8;
+    let total_bits = T::BASE32_SIZE * BITS_PER_CHAR;
     let mut bits = total_bits - input_bits;
     let mut acc = 0;
     let mask = 0x1F;
