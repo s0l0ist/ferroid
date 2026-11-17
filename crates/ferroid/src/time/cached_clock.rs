@@ -221,8 +221,18 @@ mod tests {
         let first_ulid = ulid.next_id(|_| panic!("expected ready ID"));
 
         clock.current.store(999, Ordering::Relaxed);
-        core::assert_matches!(snowflake.poll_id(), Poll::Pending { yield_for } if yield_for == Duration::from_millis(1));
-        core::assert_matches!(ulid.poll_id(), Poll::Pending { yield_for } if yield_for == Duration::from_millis(1));
+        assert_eq!(
+            snowflake.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(1)
+            }
+        );
+        assert_eq!(
+            ulid.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(1)
+            }
+        );
 
         clock.current.store(1000, Ordering::Relaxed);
         assert!(snowflake.next_id(|_| panic!("expected ready ID")) > first_snowflake);
