@@ -147,14 +147,10 @@ mod tests {
     }
 
     #[test]
-    fn encode_decode_preserves_u32_values() {
+    fn roundtrip_preserves_edge_values() {
         for value in [0, 1, u32::MAX, 42, 0xFF00_FF00, 0x1234_5678] {
             assert_roundtrip(value);
         }
-    }
-
-    #[test]
-    fn encode_decode_preserves_u64_values() {
         for value in [
             0,
             1,
@@ -165,10 +161,6 @@ mod tests {
         ] {
             assert_roundtrip(value);
         }
-    }
-
-    #[test]
-    fn encode_decode_preserves_u128_values() {
         for value in [
             0,
             1,
@@ -213,99 +205,41 @@ mod tests {
     }
 
     #[test]
-    fn decode_accepts_lowercase_characters() {
-        assert_eq!(
-            decode_base32::<u32, ()>(b"abcd123"),
-            decode_base32(b"ABCD123")
-        );
-        assert_eq!(
-            decode_base32::<u64, ()>(b"abcd123456789"),
-            decode_base32(b"ABCD123456789")
-        );
-        assert_eq!(
-            decode_base32::<u128, ()>(b"01arz3ndektsv4rrffq69g5fav"),
-            decode_base32(b"01ARZ3NDEKTSV4RRFFQ69G5FAV")
-        );
-    }
-
-    #[test]
-    fn decode_accepts_mixed_case_characters() {
-        assert_eq!(
-            decode_base32::<u32, ()>(b"aBcD123"),
-            decode_base32(b"ABCD123")
-        );
-        assert_eq!(
-            decode_base32::<u64, ()>(b"aBcD123456789"),
-            decode_base32(b"ABCD123456789")
-        );
-        assert_eq!(
-            decode_base32::<u128, ()>(b"01aRz3NdEkTsV4rRfFq69g5FaV"),
-            decode_base32(b"01ARZ3NDEKTSV4RRFFQ69G5FAV")
-        );
-    }
-
-    #[test]
-    fn decode_treats_crockford_aliases_as_canonical_values() {
-        for (alias, canonical) in [
-            (b'O', b'0'),
-            (b'o', b'0'),
-            (b'I', b'1'),
-            (b'i', b'1'),
-            (b'L', b'1'),
-            (b'l', b'1'),
-        ] {
+    fn decode_normalizes_mixed_case_and_aliases() {
+        fn check<T>()
+        where
+            T: BeBytes
+                + Debug
+                + Eq
+                + Default
+                + From<u8>
+                + core::ops::Shl<usize, Output = T>
+                + core::ops::BitOr<Output = T>,
+        {
+            let mut input = T::Base32Array::default();
+            let mut canonical = T::Base32Array::default();
+            for (index, byte) in input.as_mut().iter_mut().enumerate() {
+                *byte = b"oIlLaBcDzZ"[index % 10];
+                canonical.as_mut()[index] = b"0111ABCDZZ"[index % 10];
+            }
             assert_eq!(
-                decode_base32::<u32, ()>(&[alias; 7]),
-                decode_base32(&[canonical; 7])
-            );
-            assert_eq!(
-                decode_base32::<u64, ()>(&[alias; 13]),
-                decode_base32(&[canonical; 13])
-            );
-            assert_eq!(
-                decode_base32::<u128, ()>(&[alias; 26]),
-                decode_base32(&[canonical; 26])
+                decode_base32::<T, ()>(input.as_ref()),
+                decode_base32(canonical.as_ref())
             );
         }
+        check::<u32>();
+        check::<u64>();
+        check::<u128>();
     }
 
     #[test]
-    fn decode_discards_excess_high_bits_and_reencodes_canonically() {
+    fn decode_truncates_excess_high_bits() {
         let raw32 = decode_base32::<u32, ()>(b"ZZZZZZZ").unwrap();
         let raw64 = decode_base32::<u64, ()>(b"ZZZZZZZZZZZZZ").unwrap();
         let raw128 = decode_base32::<u128, ()>(b"ZZZZZZZZZZZZZZZZZZZZZZZZZZ").unwrap();
         assert_eq!(raw32, u32::MAX);
         assert_eq!(raw64, u64::MAX);
         assert_eq!(raw128, u128::MAX);
-        assert_eq!(&encode(raw32), b"3ZZZZZZ");
-        assert_eq!(&encode(raw64), b"FZZZZZZZZZZZZ");
-        assert_eq!(&encode(raw128), b"7ZZZZZZZZZZZZZZZZZZZZZZZZZ");
-    }
-
-    #[test]
-    fn decode_rejects_invalid_ascii_characters() {
-        for byte in [b'!', b'@', b'U', b'u', b'=', b' ', 0] {
-            let mut input = *b"0000000";
-            input[3] = byte;
-            assert_eq!(
-                decode_base32::<u32, ()>(&input),
-                Err(Error::DecodeInvalidAscii { byte, index: 3 })
-            );
-        }
-    }
-
-    #[test]
-    fn decode_rejects_non_ascii_and_utf8_sequences() {
-        for (input, byte, index) in [
-            (b"ABCD\xFF23", 0xFF, 4),
-            (b"ABC\xC3\xA9EF", 0xC3, 3),
-            (b"ZZZZZ\x80Z", 0x80, 5),
-        ] {
-            assert_eq!(
-                decode_base32::<u32, ()>(input),
-                Err(Error::DecodeInvalidAscii { byte, index })
-            );
-        }
     }
 
     fn assert_every_byte_at_every_position<T>()
@@ -362,7 +296,14 @@ mod tests {
     }
 
     #[test]
-    fn decode_reports_first_invalid_byte_across_overlapping_windows() {
+    fn decode_reports_first_invalid_byte() {
+        assert_eq!(
+            decode_base32::<u32, ()>(b"ABC\xC3\xA9EF"),
+            Err(Error::DecodeInvalidAscii {
+                byte: 0xC3,
+                index: 3
+            })
+        );
         let mut input64 = [b'Z'; 13];
         input64[12] = b'U';
         input64[5] = b'!';

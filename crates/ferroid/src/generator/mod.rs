@@ -1,7 +1,3 @@
-// Generator backends may be enabled without selecting an ID family.
-#[cfg(any(feature = "atomic", feature = "lock"))]
-use crossbeam_utils as _;
-
 mod error;
 #[cfg(feature = "lock")]
 mod mutex;

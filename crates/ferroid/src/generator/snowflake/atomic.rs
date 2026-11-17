@@ -250,3 +250,131 @@ where
         Ok(self.poll_id())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "std")]
+    use super::super::tests::MockTime;
+    use super::super::tests::{OverflowClock, TestClock};
+    use super::*;
+    use crate::generator::Poll;
+    use crate::id::SnowflakeTwitterId;
+    use core::time::Duration;
+
+    #[test]
+    fn pending_delays_saturate_at_u64_milliseconds() {
+        let atomic =
+            crate::generator::AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(
+                2,
+                0,
+                0,
+                OverflowClock,
+            );
+        assert_eq!(
+            atomic.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    fn handles_rollback_and_rollover() {
+        let shared_time = TestClock::new(2);
+        let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
+            AtomicSnowflakeGenerator::from_components(
+                2,
+                1,
+                SnowflakeTwitterId::max_sequence(),
+                &shared_time,
+            );
+        // Exhaustion waits for the next tick: one tick is 10 milliseconds.
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(10)
+            }
+        );
+
+        // Rolling back to zero puts the clock two ticks behind the stored timestamp.
+        shared_time.ticks.set(0);
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(20)
+            }
+        );
+        let id = generator.next_id(|delay| {
+            assert_eq!(delay, Duration::from_millis(20));
+            shared_time.ticks.set(3);
+        });
+        assert_eq!((id.timestamp(), id.sequence()), (3, 0));
+    }
+
+    #[test]
+    fn is_monotonic_across_ticks() {
+        let shared_time = TestClock::new(1);
+        let generator: AtomicSnowflakeGenerator<SnowflakeTwitterId, _> =
+            AtomicSnowflakeGenerator::new(1, &shared_time);
+        // Two IDs in one tick increment the sequence.
+        let first = generator.next_id(|_| panic!("expected ready ID"));
+        let second = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((first.timestamp(), first.sequence()), (1, 0));
+        assert_eq!((second.timestamp(), second.sequence()), (1, 1));
+        assert!(second > first);
+
+        shared_time.ticks.set(2);
+        let next = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((next.timestamp(), next.sequence()), (2, 0));
+        assert!(next > second);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn concurrent_uniqueness() {
+        use std::{sync::Barrier, thread};
+
+        use alloc::vec::Vec;
+
+        const THREADS: usize = 8;
+        // The whole batch fits within one Snowflake timestamp's sequence range.
+        const IDS_PER_THREAD: usize = 64;
+
+        let generator =
+            AtomicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MockTime { millis: 1 });
+        let barrier = Barrier::new(THREADS);
+        let mut ids = Vec::with_capacity(THREADS * IDS_PER_THREAD);
+
+        thread::scope(|s| {
+            let mut handles = Vec::with_capacity(THREADS);
+            for _ in 0..THREADS {
+                handles.push(s.spawn(|| {
+                    barrier.wait();
+                    let mut ids = Vec::with_capacity(IDS_PER_THREAD);
+                    for _ in 0..IDS_PER_THREAD {
+                        let id = generator
+                            .try_next_id(|yield_for| {
+                                // Only a lost CAS may be pending at this fixed timestamp.
+                                assert_eq!(yield_for, Duration::ZERO);
+                            })
+                            .unwrap();
+                        ids.push(id);
+                    }
+                    assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
+                    ids
+                }));
+            }
+            for handle in handles {
+                ids.extend(handle.join().unwrap());
+            }
+        });
+
+        ids.sort_unstable();
+        assert_eq!(ids.len(), THREADS * IDS_PER_THREAD);
+        for (sequence, id) in ids.iter().enumerate() {
+            assert_eq!(id.timestamp(), 1);
+            assert_eq!(id.machine_id(), 0);
+            assert_eq!(id.sequence(), u64::try_from(sequence).unwrap());
+        }
+    }
+}

@@ -60,8 +60,6 @@
 mod crockford;
 mod formatter;
 mod interface;
-#[cfg(test)]
-mod tests;
 
 pub use crate::Error;
 use crockford::{decode_base32, encode_base32};

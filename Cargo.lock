@@ -615,6 +615,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ferroid-feature-tests"
+version = "3.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "shlex",
+ "tokio",
+]
+
+[[package]]
 name = "ferroid-tonic-core"
 version = "3.0.0"
 dependencies = [

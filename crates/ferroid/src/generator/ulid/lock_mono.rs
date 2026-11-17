@@ -325,3 +325,163 @@ where
         self.try_poll_id()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{CountingRand, MockTime, OverflowClock, TestClock, ZeroRand};
+    use super::*;
+    use crate::generator::Poll;
+    use crate::id::ULID;
+    use core::time::Duration;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    #[test]
+    fn pending_delays_saturate_at_u64_milliseconds() {
+        let lock =
+            LockMonoUlidGenerator::<ULID, _, _>::from_components(2, 0, OverflowClock, ZeroRand);
+        assert_eq!(
+            lock.try_poll_id().unwrap(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    fn handles_rollback_and_rollover() {
+        let shared_time = TestClock::new(2);
+        let generator: LockMonoUlidGenerator<ULID, _, _> =
+            LockMonoUlidGenerator::from_components(2, ULID::max_random(), &shared_time, ZeroRand);
+        // Exhaustion waits for the next tick: one tick is 10 milliseconds.
+        assert_eq!(
+            generator.try_poll_id().unwrap(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(10)
+            }
+        );
+
+        // Rolling back to zero puts the clock two ticks behind the stored timestamp.
+        shared_time.ticks.set(0);
+        assert_eq!(
+            generator.try_poll_id().unwrap(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(20)
+            }
+        );
+        let id = generator
+            .try_next_id(|delay| {
+                assert_eq!(delay, Duration::from_millis(20));
+                shared_time.ticks.set(3);
+            })
+            .unwrap();
+        assert_eq!((id.timestamp(), id.random()), (3, 0));
+    }
+
+    #[test]
+    fn is_monotonic_across_ticks() {
+        let shared_time = TestClock::new(1);
+        let generator: LockMonoUlidGenerator<ULID, _, _> =
+            LockMonoUlidGenerator::new(&shared_time, CountingRand::new());
+        // Two IDs in one tick increment the random field.
+        let first = generator
+            .try_next_id(|_| panic!("expected ready ID"))
+            .unwrap();
+        let second = generator
+            .try_next_id(|_| panic!("expected ready ID"))
+            .unwrap();
+        assert_eq!((first.timestamp(), first.random()), (1, 0));
+        assert_eq!((second.timestamp(), second.random()), (1, 1));
+        assert!(second > first);
+
+        shared_time.ticks.set(2);
+        let next = generator
+            .try_next_id(|_| panic!("expected ready ID"))
+            .unwrap();
+        assert_eq!((next.timestamp(), next.random()), (2, 1));
+        assert!(next > second);
+    }
+
+    #[test]
+    fn concurrent_uniqueness() {
+        use std::{sync::Barrier, thread};
+
+        use alloc::vec::Vec;
+
+        const THREADS: usize = 8;
+        const IDS_PER_THREAD: usize = 64;
+
+        let generator = LockMonoUlidGenerator::<ULID, _, _>::new(MockTime { millis: 1 }, ZeroRand);
+        let barrier = Barrier::new(THREADS);
+        let mut ids = Vec::with_capacity(THREADS * IDS_PER_THREAD);
+
+        thread::scope(|s| {
+            let mut handles = Vec::with_capacity(THREADS);
+            for _ in 0..THREADS {
+                handles.push(s.spawn(|| {
+                    barrier.wait();
+                    let mut ids = Vec::with_capacity(IDS_PER_THREAD);
+                    for _ in 0..IDS_PER_THREAD {
+                        let id = generator
+                            .try_next_id(|yield_for| {
+                                // Only a lost CAS may be pending at this fixed timestamp.
+                                assert_eq!(yield_for, Duration::ZERO);
+                            })
+                            .unwrap();
+                        ids.push(id);
+                    }
+                    assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
+                    ids
+                }));
+            }
+            for handle in handles {
+                ids.extend(handle.join().unwrap());
+            }
+        });
+
+        ids.sort_unstable();
+        assert_eq!(ids.len(), THREADS * IDS_PER_THREAD);
+        for (random, id) in ids.iter().enumerate() {
+            assert_eq!(id.timestamp(), 1);
+            assert_eq!(id.random(), u128::try_from(random).unwrap());
+        }
+    }
+
+    #[cfg(not(feature = "parking-lot"))]
+    #[test]
+    fn is_poisoned_on_panic_std_mutex() {
+        let generator: LockMonoUlidGenerator<ULID, _, _> =
+            LockMonoUlidGenerator::new(MockTime { millis: 1 }, ZeroRand);
+
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = generator.state.lock();
+            panic!("boom: poison the mutex");
+        }));
+        assert!(panic.is_err());
+
+        let err = generator
+            .try_poll_id()
+            .expect_err("expected an error after poison");
+        assert!(matches!(err, crate::generator::Error::LockPoisoned));
+        let err = generator
+            .try_next_id(|_| panic!("poisoned generator invoked backoff"))
+            .expect_err("expected an error after poison");
+        assert!(matches!(err, crate::generator::Error::LockPoisoned));
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[test]
+    fn is_not_poisoned_on_panic_parking_lot_mutex() {
+        let generator: LockMonoUlidGenerator<ULID, _, _> =
+            LockMonoUlidGenerator::new(MockTime { millis: 1 }, ZeroRand);
+
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = generator.state.lock();
+            panic!("boom: poison the mutex");
+        }));
+        assert!(panic.is_err());
+
+        generator
+            .try_poll_id()
+            .expect("parking_lot::Mutex cannot be poisoned");
+    }
+}

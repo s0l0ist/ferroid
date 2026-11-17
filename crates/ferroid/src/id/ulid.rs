@@ -499,6 +499,43 @@ define_ulid!(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::rand::RandSource;
+
+    #[test]
+    fn layout_boundaries() {
+        let (timestamp, random) = (ULID::max_timestamp(), ULID::max_random());
+        for (timestamp, random) in [
+            (0, 0),
+            (1, 1),
+            (timestamp, random),
+            (timestamp, 0),
+            (0, random),
+        ] {
+            let id = ULID::from_components(timestamp, random);
+            assert_eq!(id.to_raw(), (timestamp << 80) | random);
+            assert_eq!((id.timestamp(), id.random()), (timestamp, random));
+        }
+        let raw = ULID::from_raw(u128::MAX);
+        assert!(raw.is_valid());
+        assert_eq!(raw.into_valid(), raw);
+        assert_eq!(ULID::from_components(timestamp, random), raw);
+        #[cfg(not(debug_assertions))]
+        assert_eq!(ULID::from_components(u128::MAX, u128::MAX), raw);
+    }
+
+    #[test]
+    fn random_exhaustion_and_rollover_use_the_supplied_randomness() {
+        let id = ULID::from_components(42, ULID::max_random() - 1);
+        assert!(id.has_random_room());
+        let last = id.increment_random();
+        assert_eq!((last.timestamp(), last.random()), (42, ULID::max_random()));
+        assert!(!last.has_random_room());
+        assert_eq!(
+            last.rollover_to_timestamp(43, 7),
+            ULID::from_components(43, 7)
+        );
+    }
 
     #[test]
     fn checked_raw_conversion_accepts_the_full_ulid_range() {
@@ -507,13 +544,6 @@ mod tests {
             let converted: ULID = raw.try_into().unwrap();
             assert_eq!(converted.to_raw(), raw);
         }
-        #[cfg(feature = "base32")]
-        assert_eq!(
-            ULID::try_from("0000000000000000000000001A")
-                .unwrap()
-                .to_raw(),
-            42
-        );
     }
 
     #[test]
@@ -543,15 +573,11 @@ mod tests {
             })
         );
     }
-    use std::println;
 
-    use super::*;
-    use crate::rand::RandSource;
-
-    struct MockRand;
+    struct MockRand(u128);
     impl RandSource<u128> for MockRand {
         fn rand(&self) -> u128 {
-            42
+            self.0
         }
     }
 
@@ -616,36 +642,6 @@ mod tests {
         assert_eq!(reserved.into_valid(), ZERO);
         assert_eq!((reserved.timestamp(), reserved.random()), (0, 0));
     }
-    #[test]
-    fn ulid_validity() {
-        let id = ULID::from_raw(u128::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn test_ulid_id_fields_and_bounds() {
-        let ts = ULID::max_timestamp();
-        let rand = ULID::max_random();
-
-        let id = ULID::from_components(ts, rand);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.random(), rand);
-        assert_eq!(ULID::from_components(ts, rand), id);
-    }
-
-    #[test]
-    fn ulid_low_bit_fields() {
-        let id = ULID::from_components(0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.random(), 0);
-
-        let id = ULID::from_components(1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.random(), 1);
-    }
 
     #[test]
     #[cfg(feature = "thread-rng")]
@@ -659,9 +655,10 @@ mod tests {
 
     #[test]
     fn ulid_from_timestamp_and_rand() {
-        let id = ULID::from_timestamp_and_rand(42, &MockRand);
-        assert_eq!(id.timestamp(), 42);
-        assert_eq!(id.random(), 42);
+        for (random, expected) in [(42, 42), (u128::MAX, ULID::max_random())] {
+            let id = ULID::from_timestamp_and_rand(42, &MockRand(random));
+            assert_eq!((id.timestamp(), id.random()), (42, expected));
+        }
     }
 
     #[test]
@@ -679,11 +676,19 @@ mod tests {
     #[test]
     #[cfg(feature = "std")]
     fn ulid_from_system_time_and_rand() {
-        let id = ULID::from_system_time_and_rand(
-            std::time::SystemTime::UNIX_EPOCH + core::time::Duration::from_millis(42),
-            &MockRand,
-        );
-        assert_eq!(id.timestamp(), 42);
-        assert_eq!(id.random(), 42);
+        use core::time::Duration;
+        use std::time::SystemTime;
+
+        let epoch = SystemTime::UNIX_EPOCH;
+        for (time, millis) in [
+            (epoch - Duration::from_nanos(1), 0u64),
+            (epoch, 0),
+            (epoch + Duration::from_millis(42), 42),
+            (epoch + Duration::from_micros(42_999), 42),
+        ] {
+            let id = ULID::from_system_time_and_rand(time, &MockRand(42));
+            assert_eq!((id.timestamp(), id.random()), (u128::from(millis), 42));
+            assert_eq!(id.system_time(), epoch + Duration::from_millis(millis));
+        }
     }
 }

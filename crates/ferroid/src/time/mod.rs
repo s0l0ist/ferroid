@@ -19,7 +19,15 @@ pub(crate) mod system_time;
     target_has_atomic = "ptr",
     target_has_atomic = "64"
 ))]
-#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
+#[cfg_attr(
+    docsrs,
+    doc(cfg(all(
+        feature = "std",
+        not(all(target_arch = "wasm32", target_os = "unknown")),
+        target_has_atomic = "ptr",
+        target_has_atomic = "64"
+    )))
+)]
 pub use cached_clock::*;
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]

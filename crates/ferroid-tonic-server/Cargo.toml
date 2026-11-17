@@ -16,7 +16,6 @@ categories = [
 ]
 documentation.workspace = true
 keywords = ["ferroid", "grpc", "snowflake", "ulid", "monotonic"]
-publish = true
 
 [[bin]]
 name = "ferroid-tonic-server"

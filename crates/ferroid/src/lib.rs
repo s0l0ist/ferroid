@@ -2,6 +2,9 @@
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+#[cfg(not(any(feature = "snowflake", feature = "ulid")))]
+compile_error!("Enable at least one ID family: `snowflake` or `ulid`.");
+
 #[cfg(any(feature = "std", test))]
 extern crate std;
 

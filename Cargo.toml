@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/ferroid",
     "crates/ferroid-benches",
+    "crates/ferroid-feature-tests",
     "crates/ferroid-tonic-core",
     "crates/ferroid-tonic-server",
     "crates/ferroid-tonic-server-benches",
@@ -17,7 +18,7 @@ default-members = [
 [workspace.package]
 version = "3.0.0"
 edition = "2024"
-rust-version = "1.99.1"
+rust-version = "1.95.0"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Angelou <angelou.nick@gmail.com>"]
 documentation = "https://docs.rs/ferroid"
@@ -44,6 +45,7 @@ prost = { version = "0.14", default-features = false }
 rand = { version = "0.10", default-features = false }
 serde = { version = "1.0", default-features = false }
 serde_json = { version = "1.0", default-features = false }
+shlex = { version = "2.0", default-features = false }
 thiserror = { version = "2.0", default-features = false }
 tokio = { version = "1.54", default-features = false }
 tokio-stream = { version = "0.1", default-features = false }

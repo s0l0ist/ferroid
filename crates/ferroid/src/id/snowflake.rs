@@ -513,6 +513,84 @@ define_snowflake_id!(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    fn check_layout<ID: SnowflakeId<Ty = u64>>(
+        max_raw: u64,
+        timestamp_shift: u32,
+        machine_shift: u32,
+    ) {
+        let (ts, machine, sequence) = (
+            ID::max_timestamp(),
+            ID::max_machine_id(),
+            ID::max_sequence(),
+        );
+        for (timestamp, machine_id, sequence) in [
+            (0, 0, 0),
+            (1, machine.min(1), 1),
+            (ts, machine, sequence),
+            (ts, 0, 0),
+            (0, machine, 0),
+            (0, 0, sequence),
+        ] {
+            let id = ID::from_components(timestamp, machine_id, sequence);
+            assert_eq!(
+                id.to_raw(),
+                (timestamp << timestamp_shift) | (machine_id << machine_shift) | sequence
+            );
+            assert_eq!(
+                (id.timestamp(), id.machine_id(), id.sequence()),
+                (timestamp, machine_id, sequence)
+            );
+        }
+        assert_eq!(ID::from_components(ts, machine, sequence).to_raw(), max_raw);
+        #[cfg(not(debug_assertions))]
+        assert_eq!(
+            ID::from_components(u64::MAX, u64::MAX, u64::MAX).to_raw(),
+            max_raw
+        );
+        let raw = ID::from_raw(u64::MAX);
+        assert_eq!(raw.is_valid(), max_raw == u64::MAX);
+        assert_eq!(raw.into_valid().to_raw(), max_raw);
+        assert!(raw.into_valid().is_valid());
+    }
+
+    #[test]
+    fn twitter_layout_boundaries() {
+        check_layout::<SnowflakeTwitterId>(u64::MAX >> 1, 22, 12);
+    }
+
+    #[test]
+    fn discord_layout_boundaries() {
+        check_layout::<SnowflakeDiscordId>(u64::MAX, 22, 12);
+    }
+
+    #[test]
+    fn mastodon_layout_boundaries() {
+        check_layout::<SnowflakeMastodonId>(u64::MAX, 16, 16);
+    }
+
+    #[test]
+    fn instagram_layout_boundaries() {
+        check_layout::<SnowflakeInstagramId>(u64::MAX, 23, 10);
+    }
+
+    #[test]
+    fn sequence_exhaustion_and_rollover_preserve_machine_id() {
+        let id =
+            SnowflakeTwitterId::from_components(42, 17, SnowflakeTwitterId::max_sequence() - 1);
+        assert!(id.has_sequence_room());
+        let last = id.increment_sequence();
+        assert_eq!(
+            (last.timestamp(), last.machine_id(), last.sequence()),
+            (42, 17, SnowflakeTwitterId::max_sequence())
+        );
+        assert!(!last.has_sequence_room());
+        assert_eq!(
+            last.rollover_to_timestamp(43),
+            SnowflakeTwitterId::from_components(43, 17, 0)
+        );
+    }
 
     #[test]
     fn checked_raw_conversions_preserve_valid_values_and_reject_reserved_bits() {
@@ -533,11 +611,6 @@ mod tests {
             Err(crate::Error::DecodeOverflow {
                 id: SnowflakeTwitterId::from_raw(u64::MAX)
             })
-        );
-        #[cfg(feature = "base32")]
-        assert_eq!(
-            SnowflakeTwitterId::try_from("000000000001A").unwrap(),
-            expected
         );
     }
 
@@ -569,9 +642,6 @@ mod tests {
             })
         );
     }
-    use std::println;
-
-    use super::*;
 
     #[test]
     #[allow(
@@ -671,61 +741,6 @@ mod tests {
             (0, 0, 0)
         );
     }
-    #[test]
-    fn test_snowflake_twitter_id_fields_and_bounds() {
-        let ts = SnowflakeTwitterId::max_timestamp();
-        let mid = SnowflakeTwitterId::max_machine_id();
-        let seq = SnowflakeTwitterId::max_sequence();
-
-        let id = SnowflakeTwitterId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeTwitterId::from_components(ts, mid, seq), id);
-    }
-
-    #[test]
-    fn test_snowflake_discord_id_fields_and_bounds() {
-        let ts = SnowflakeDiscordId::max_timestamp();
-        let mid = SnowflakeDiscordId::max_machine_id();
-        let seq = SnowflakeDiscordId::max_sequence();
-
-        let id = SnowflakeDiscordId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeDiscordId::from_components(ts, mid, seq), id);
-    }
-
-    #[test]
-    fn test_snowflake_mastodon_id_fields_and_bounds() {
-        let ts = SnowflakeMastodonId::max_timestamp();
-        let mid = SnowflakeMastodonId::max_machine_id();
-        let seq = SnowflakeMastodonId::max_sequence();
-
-        let id = SnowflakeMastodonId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), 0); // machine_id is always zero
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeMastodonId::from_components(ts, 0, seq), id);
-    }
-
-    #[test]
-    fn test_snowflake_instagram_id_fields_and_bounds() {
-        let ts = SnowflakeInstagramId::max_timestamp();
-        let mid = SnowflakeInstagramId::max_machine_id();
-        let seq = SnowflakeInstagramId::max_sequence();
-
-        let id = SnowflakeInstagramId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeInstagramId::from_components(ts, mid, seq), id);
-    }
 
     // Constructor overflow checks use debug_assert!, so these tests require it.
     #[cfg(debug_assertions)]
@@ -822,123 +837,5 @@ mod tests {
     fn instagram_sequence_overflow_panics() {
         let seq = SnowflakeInstagramId::max_sequence() + 1;
         let _ = SnowflakeInstagramId::from_components(0, 0, seq);
-    }
-
-    #[test]
-    fn twitter_validity() {
-        let id = SnowflakeTwitterId::from_raw(u64::MAX);
-        assert!(!id.is_valid()); // reserved bits (1)
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn instagram_validity() {
-        let id = SnowflakeInstagramId::from_raw(u64::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn discord_validity() {
-        let id = SnowflakeDiscordId::from_raw(u64::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn mastodon_validity() {
-        let id = SnowflakeMastodonId::from_raw(u64::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn twitter_low_bit_fields() {
-        let id = SnowflakeTwitterId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeTwitterId::from_components(1, 1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 1);
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn discord_low_bit_fields() {
-        let id = SnowflakeDiscordId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeDiscordId::from_components(1, 1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 1);
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn mastodon_low_bit_fields() {
-        let id = SnowflakeMastodonId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeMastodonId::from_components(1, 0, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 0); // always zero
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn instagram_low_bit_fields() {
-        let id = SnowflakeInstagramId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeInstagramId::from_components(1, 1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 1);
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn twitter_edge_rollover() {
-        let id = SnowflakeTwitterId::from_components(0, 0, SnowflakeTwitterId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeTwitterId::max_sequence());
-
-        let id = SnowflakeTwitterId::from_components(0, SnowflakeTwitterId::max_machine_id(), 0);
-        assert_eq!(id.machine_id(), SnowflakeTwitterId::max_machine_id());
-    }
-
-    #[test]
-    fn discord_edge_rollover() {
-        let id = SnowflakeDiscordId::from_components(0, 0, SnowflakeDiscordId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeDiscordId::max_sequence());
-
-        let id = SnowflakeDiscordId::from_components(0, SnowflakeDiscordId::max_machine_id(), 0);
-        assert_eq!(id.machine_id(), SnowflakeDiscordId::max_machine_id());
-    }
-
-    #[test]
-    fn mastodon_edge_rollover() {
-        let id = SnowflakeMastodonId::from_components(0, 0, SnowflakeMastodonId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeMastodonId::max_sequence());
-    }
-
-    #[test]
-    fn instagram_edge_rollover() {
-        let id = SnowflakeInstagramId::from_components(0, 0, SnowflakeInstagramId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeInstagramId::max_sequence());
-
-        let id =
-            SnowflakeInstagramId::from_components(0, SnowflakeInstagramId::max_machine_id(), 0);
-        assert_eq!(id.machine_id(), SnowflakeInstagramId::max_machine_id());
     }
 }

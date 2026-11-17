@@ -165,3 +165,30 @@ where
         Ok(self.poll_id())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{CountingRand, TestClock};
+    use super::*;
+    use crate::id::ULID;
+    use core::time::Duration;
+
+    #[test]
+    fn reads_fresh_randomness_even_after_clock_rollback() {
+        let clock = TestClock::new(1);
+        let generator = BasicUlidGenerator::<ULID, _, _>::new(&clock, CountingRand::new());
+        let first = generator.next_id(|_| panic!("expected ready ID"));
+        clock.ticks.set(0);
+        let backoff = |_: Duration| panic!("non-monotonic generation must not wait");
+        let second = generator.next_id(backoff);
+        let third = UlidGenerator::next_id(&generator, backoff);
+        assert_eq!(
+            [
+                (first.timestamp(), first.random()),
+                (second.timestamp(), second.random()),
+                (third.timestamp(), third.random())
+            ],
+            [(1, 0), (0, 1), (0, 2)]
+        );
+    }
+}

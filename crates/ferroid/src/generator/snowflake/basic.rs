@@ -228,3 +228,135 @@ where
         Ok(self.poll_id())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{MockTime, OverflowClock, TestClock};
+    use super::*;
+    use crate::generator::Poll;
+    use crate::id::SnowflakeTwitterId;
+    use core::num::NonZeroU64;
+    use core::time::Duration;
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "The layout fixture generates a complete ID API; this test checks wait range."
+    )]
+    fn pending_delays_exceed_small_backing_types() {
+        crate::define_snowflake_id!(SmallId, u32,
+            reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);
+        struct SlowClock;
+        impl TimeSource<u32> for SlowClock {
+            const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(1_u64 << u32::BITS).unwrap();
+
+            fn current_millis(&self) -> u32 {
+                0
+            }
+        }
+
+        for (timestamp, expected_millis) in [(0, 1_u64 << 32), (2, 1_u64 << 33)] {
+            let expected = Duration::from_millis(expected_millis);
+            let generator =
+                BasicSnowflakeGenerator::<SmallId, _>::from_components(timestamp, 0, 0, SlowClock);
+            assert_eq!(
+                generator.poll_id(),
+                Poll::Pending {
+                    yield_for: expected
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn pending_delays_saturate_at_u64_milliseconds() {
+        let basic = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(
+            2,
+            0,
+            0,
+            OverflowClock,
+        );
+        assert_eq!(
+            basic.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; this test exercises wide pending delays."
+    )]
+    fn pending_delay_caps_wide_timestamps() {
+        crate::define_snowflake_id!(WideTimestampId, u128,
+            reserved: 0, timestamp: 128, machine_id: 0, sequence: 0);
+        let timestamp = u128::from(u64::MAX) + 1;
+        let generator = BasicSnowflakeGenerator::<WideTimestampId, _>::from_components(
+            timestamp,
+            0,
+            0,
+            MockTime { millis: 0 },
+        );
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    fn handles_rollback_and_rollover() {
+        let shared_time = TestClock::new(2);
+        let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
+            BasicSnowflakeGenerator::from_components(
+                2,
+                1,
+                SnowflakeTwitterId::max_sequence(),
+                &shared_time,
+            );
+        // Exhaustion waits for the next tick: one tick is 10 milliseconds.
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(10)
+            }
+        );
+
+        // Rolling back to zero puts the clock two ticks behind the stored timestamp.
+        shared_time.ticks.set(0);
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(20)
+            }
+        );
+        let id = generator.next_id(|delay| {
+            assert_eq!(delay, Duration::from_millis(20));
+            shared_time.ticks.set(3);
+        });
+        assert_eq!((id.timestamp(), id.sequence()), (3, 0));
+    }
+
+    #[test]
+    fn is_monotonic_across_ticks() {
+        let shared_time = TestClock::new(1);
+        let generator: BasicSnowflakeGenerator<SnowflakeTwitterId, _> =
+            BasicSnowflakeGenerator::new(1, &shared_time);
+        // Two IDs in one tick increment the sequence.
+        let first = generator.next_id(|_| panic!("expected ready ID"));
+        let second = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((first.timestamp(), first.sequence()), (1, 0));
+        assert_eq!((second.timestamp(), second.sequence()), (1, 1));
+        assert!(second > first);
+
+        shared_time.ticks.set(2);
+        let next = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((next.timestamp(), next.sequence()), (2, 0));
+        assert!(next > second);
+    }
+}

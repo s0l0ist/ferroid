@@ -318,3 +318,211 @@ where
         self.try_poll_id()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{MockTime, OverflowClock, TestClock};
+    use super::*;
+    use crate::generator::Poll;
+    use crate::id::SnowflakeTwitterId;
+    use core::num::NonZeroU64;
+    use core::time::Duration;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "The layout fixture generates a complete ID API; this test checks wait range."
+    )]
+    fn pending_delays_exceed_small_backing_types() {
+        crate::define_snowflake_id!(SmallId, u32,
+            reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);
+        struct SlowClock;
+        impl TimeSource<u32> for SlowClock {
+            const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(1_u64 << u32::BITS).unwrap();
+
+            fn current_millis(&self) -> u32 {
+                0
+            }
+        }
+
+        for (timestamp, expected_millis) in [(0, 1_u64 << 32), (2, 1_u64 << 33)] {
+            let expected = Duration::from_millis(expected_millis);
+
+            {
+                let generator = LockSnowflakeGenerator::<SmallId, _>::from_components(
+                    timestamp, 0, 0, SlowClock,
+                );
+                assert_eq!(
+                    generator.try_poll_id().unwrap(),
+                    Poll::Pending {
+                        yield_for: expected
+                    }
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn pending_delays_saturate_at_u64_milliseconds() {
+        let lock = LockSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(
+            2,
+            0,
+            0,
+            OverflowClock,
+        );
+        assert_eq!(
+            lock.try_poll_id().unwrap(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    fn handles_rollback_and_rollover() {
+        let shared_time = TestClock::new(2);
+        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+            LockSnowflakeGenerator::from_components(
+                2,
+                1,
+                SnowflakeTwitterId::max_sequence(),
+                &shared_time,
+            );
+        // Exhaustion waits for the next tick: one tick is 10 milliseconds.
+        assert_eq!(
+            generator.try_poll_id().unwrap(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(10)
+            }
+        );
+
+        // Rolling back to zero puts the clock two ticks behind the stored timestamp.
+        shared_time.ticks.set(0);
+        assert_eq!(
+            generator.try_poll_id().unwrap(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(20)
+            }
+        );
+        let id = generator
+            .try_next_id(|delay| {
+                assert_eq!(delay, Duration::from_millis(20));
+                shared_time.ticks.set(3);
+            })
+            .unwrap();
+        assert_eq!((id.timestamp(), id.sequence()), (3, 0));
+    }
+
+    #[test]
+    fn is_monotonic_across_ticks() {
+        let shared_time = TestClock::new(1);
+        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+            LockSnowflakeGenerator::new(1, &shared_time);
+        // Two IDs in one tick increment the sequence.
+        let first = generator
+            .try_next_id(|_| panic!("expected ready ID"))
+            .unwrap();
+        let second = generator
+            .try_next_id(|_| panic!("expected ready ID"))
+            .unwrap();
+        assert_eq!((first.timestamp(), first.sequence()), (1, 0));
+        assert_eq!((second.timestamp(), second.sequence()), (1, 1));
+        assert!(second > first);
+
+        shared_time.ticks.set(2);
+        let next = generator
+            .try_next_id(|_| panic!("expected ready ID"))
+            .unwrap();
+        assert_eq!((next.timestamp(), next.sequence()), (2, 0));
+        assert!(next > second);
+    }
+
+    #[test]
+    fn concurrent_uniqueness() {
+        use std::{sync::Barrier, thread};
+
+        use alloc::vec::Vec;
+
+        const THREADS: usize = 8;
+        // The whole batch fits within one Snowflake timestamp's sequence range.
+        const IDS_PER_THREAD: usize = 64;
+
+        let generator =
+            LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, MockTime { millis: 1 });
+        let barrier = Barrier::new(THREADS);
+        let mut ids = Vec::with_capacity(THREADS * IDS_PER_THREAD);
+
+        thread::scope(|s| {
+            let mut handles = Vec::with_capacity(THREADS);
+            for _ in 0..THREADS {
+                handles.push(s.spawn(|| {
+                    barrier.wait();
+                    let mut ids = Vec::with_capacity(IDS_PER_THREAD);
+                    for _ in 0..IDS_PER_THREAD {
+                        let id = generator
+                            .try_next_id(|yield_for| {
+                                // Only a lost CAS may be pending at this fixed timestamp.
+                                assert_eq!(yield_for, Duration::ZERO);
+                            })
+                            .unwrap();
+                        ids.push(id);
+                    }
+                    assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
+                    ids
+                }));
+            }
+            for handle in handles {
+                ids.extend(handle.join().unwrap());
+            }
+        });
+
+        ids.sort_unstable();
+        assert_eq!(ids.len(), THREADS * IDS_PER_THREAD);
+        for (sequence, id) in ids.iter().enumerate() {
+            assert_eq!(id.timestamp(), 1);
+            assert_eq!(id.machine_id(), 0);
+            assert_eq!(id.sequence(), u64::try_from(sequence).unwrap());
+        }
+    }
+
+    #[cfg(not(feature = "parking-lot"))]
+    #[test]
+    fn is_poisoned_on_panic_std_mutex() {
+        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+            LockSnowflakeGenerator::new(0u64, MockTime { millis: 1 });
+
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = generator.state.lock();
+            panic!("boom: poison the mutex");
+        }));
+        assert!(panic.is_err());
+
+        let err = generator
+            .try_poll_id()
+            .expect_err("expected an error after poison");
+        assert!(matches!(err, crate::generator::Error::LockPoisoned));
+        let err = generator
+            .try_next_id(|_| panic!("poisoned generator invoked backoff"))
+            .expect_err("expected an error after poison");
+        assert!(matches!(err, crate::generator::Error::LockPoisoned));
+    }
+
+    #[cfg(feature = "parking-lot")]
+    #[test]
+    fn is_not_poisoned_on_panic_parking_lot_mutex() {
+        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
+            LockSnowflakeGenerator::new(0u64, MockTime { millis: 1 });
+
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = generator.state.lock();
+            panic!("boom: poison the mutex");
+        }));
+        assert!(panic.is_err());
+
+        generator
+            .try_poll_id()
+            .expect("parking_lot::Mutex cannot be poisoned");
+    }
+}

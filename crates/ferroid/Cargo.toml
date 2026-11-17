@@ -19,8 +19,7 @@ documentation.workspace = true
 keywords = ["no_std", "id", "snowflake", "ulid", "monotonic"]
 
 [package.metadata.docs.rs]
-features = ["all", "intrinsics"]
-no-default-features = true
+all-features = true
 
 [lib]
 crate-type = ["rlib"]
@@ -52,7 +51,7 @@ all = [
 alloc = ["serde?/alloc"]
 std = ["serde?/std", "tracing?/std", "dep:web-time"]
 
-# ID families and generator backends can be combined independently.
+# Generator backends provide generators for enabled ID families.
 snowflake = []
 ulid = []
 basic = []

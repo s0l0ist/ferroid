@@ -74,7 +74,9 @@
 
 #### Features and supported platforms
 
-- Raised the minimum supported Rust version from 1.85.1 to 1.99.1.
+- Raised the minimum supported Rust version from 1.85.1 to 1.95.0.
+- Required at least one ID family feature: `snowflake` or `ulid`. Builds with
+  neither enabled now fail with an explicit error.
 - Separated `thread-rng` from `std`. `ThreadRandom`, `ULID::now()`,
   `from_timestamp()`, and `from_system_time()` now require `thread-rng`.
   Using clocks or supplying a custom RNG no longer requires the built-in RNG.

@@ -5,7 +5,7 @@ use thread-local generators for monotonic ULIDs or cached clock reads, or
 configure a generator for Snowflake and custom IDs. Supports integer and Base32
 representations, Serde, and `no_std`.
 
-Requires Rust 1.99.1 or later.
+Requires Rust 1.95.0 or later.
 
 [![Crates.io][crates-badge]][crates-url] [![MIT licensed][mit-badge]][mit-url]
 [![Apache 2.0 licensed][apache-badge]][apache-url] [![CI][ci-badge]][ci-url]

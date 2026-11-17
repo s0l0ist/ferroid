@@ -250,3 +250,123 @@ where
         Ok(self.poll_id())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "std")]
+    use super::super::tests::MockTime;
+    use super::super::tests::{CountingRand, OverflowClock, TestClock, ZeroRand};
+    use super::*;
+    use crate::generator::Poll;
+    use crate::id::ULID;
+    use core::time::Duration;
+
+    #[test]
+    fn pending_delays_saturate_at_u64_milliseconds() {
+        let atomic = crate::generator::AtomicMonoUlidGenerator::<ULID, _, _>::from_components(
+            2,
+            0,
+            OverflowClock,
+            ZeroRand,
+        );
+        assert_eq!(
+            atomic.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    fn handles_rollback_and_rollover() {
+        let shared_time = TestClock::new(2);
+        let generator: AtomicMonoUlidGenerator<ULID, _, _> =
+            AtomicMonoUlidGenerator::from_components(2, ULID::max_random(), &shared_time, ZeroRand);
+        // Exhaustion waits for the next tick: one tick is 10 milliseconds.
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(10)
+            }
+        );
+
+        // Rolling back to zero puts the clock two ticks behind the stored timestamp.
+        shared_time.ticks.set(0);
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(20)
+            }
+        );
+        let id = generator.next_id(|delay| {
+            assert_eq!(delay, Duration::from_millis(20));
+            shared_time.ticks.set(3);
+        });
+        assert_eq!((id.timestamp(), id.random()), (3, 0));
+    }
+
+    #[test]
+    fn is_monotonic_across_ticks() {
+        let shared_time = TestClock::new(1);
+        let generator: AtomicMonoUlidGenerator<ULID, _, _> =
+            AtomicMonoUlidGenerator::new(&shared_time, CountingRand::new());
+        // Two IDs in one tick increment the random field.
+        let first = generator.next_id(|_| panic!("expected ready ID"));
+        let second = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((first.timestamp(), first.random()), (1, 0));
+        assert_eq!((second.timestamp(), second.random()), (1, 1));
+        assert!(second > first);
+
+        shared_time.ticks.set(2);
+        let next = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((next.timestamp(), next.random()), (2, 1));
+        assert!(next > second);
+    }
+
+    #[cfg(feature = "std")]
+    #[test]
+    fn concurrent_uniqueness() {
+        use std::{sync::Barrier, thread};
+
+        use alloc::vec::Vec;
+
+        const THREADS: usize = 8;
+        const IDS_PER_THREAD: usize = 64;
+
+        let generator =
+            AtomicMonoUlidGenerator::<ULID, _, _>::new(MockTime { millis: 1 }, ZeroRand);
+        let barrier = Barrier::new(THREADS);
+        let mut ids = Vec::with_capacity(THREADS * IDS_PER_THREAD);
+
+        thread::scope(|s| {
+            let mut handles = Vec::with_capacity(THREADS);
+            for _ in 0..THREADS {
+                handles.push(s.spawn(|| {
+                    barrier.wait();
+                    let mut ids = Vec::with_capacity(IDS_PER_THREAD);
+                    for _ in 0..IDS_PER_THREAD {
+                        let id = generator
+                            .try_next_id(|yield_for| {
+                                // Only a lost CAS may be pending at this fixed timestamp.
+                                assert_eq!(yield_for, Duration::ZERO);
+                            })
+                            .unwrap();
+                        ids.push(id);
+                    }
+                    assert!(ids.windows(2).all(|pair| pair[0] < pair[1]));
+                    ids
+                }));
+            }
+            for handle in handles {
+                ids.extend(handle.join().unwrap());
+            }
+        });
+
+        ids.sort_unstable();
+        assert_eq!(ids.len(), THREADS * IDS_PER_THREAD);
+        for (random, id) in ids.iter().enumerate() {
+            assert_eq!(id.timestamp(), 1);
+            assert_eq!(id.random(), u128::try_from(random).unwrap());
+        }
+    }
+}

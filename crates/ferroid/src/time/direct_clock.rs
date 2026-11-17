@@ -101,19 +101,19 @@ mod tests {
 
     #[test]
     fn reports_wall_clock_millis() {
-        let clock = DirectClock::default();
-        let millis: u64 = clock.current_millis();
-        let system_millis = u64::try_from(
-            system_time_now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis(),
-        )
-        .unwrap();
-        assert!(
-            system_millis.abs_diff(millis) <= 50,
-            "millis diff too large"
-        );
+        let millis_now = || {
+            u64::try_from(
+                system_time_now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis(),
+            )
+            .unwrap()
+        };
+        let before = millis_now();
+        let millis: u64 = DirectClock::default().current_millis();
+        let after = millis_now();
+        assert!((before.min(after)..=before.max(after)).contains(&millis));
     }
 
     #[test]
@@ -123,8 +123,8 @@ mod tests {
         let lower: u64 = ms_clock.current_millis();
         let quantized: u64 = quantized_clock.current_millis();
         let upper: u64 = ms_clock.current_millis();
-        assert!(lower / 8 <= quantized);
-        assert!(quantized <= upper / 8);
+        let bounds = lower.min(upper) / 8..=lower.max(upper) / 8;
+        assert!(bounds.contains(&quantized));
     }
 
     #[test]

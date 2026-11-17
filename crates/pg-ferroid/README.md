@@ -9,7 +9,7 @@ Base32 strings, and supports comparisons, B-tree indexes, and hash indexes.
 
 ## Getting Started
 
-Requires Rust 1.99.1 or newer and PostgreSQL 15–18.
+Requires Rust 1.95.0 or newer and PostgreSQL 15–18.
 
 ```sh
 cargo install cargo-pgrx --version 0.20.0 --locked

@@ -10,35 +10,8 @@ use crate::{
 ///
 /// Uses a caller-supplied async backoff strategy when generation is pending.
 ///
-/// This interface needs neither `std` nor allocation. Local generators and
-/// callbacks are supported; the returned future is `Send` when its captures
-/// and the callback's future are `Send`.
-///
-/// Generic callers can require a `Send` future when the generator is shared
-/// and the callback and its future are `Send`:
-///
-/// # Example
-/// ```
-/// use core::{future::Future, time::Duration};
-/// use ferroid::{
-///     futures::SnowflakeGeneratorAsyncExt,
-///     id::SnowflakeTwitterId,
-///     time::TimeSource,
-/// };
-///
-/// fn send_future<G, T, B, F>(
-///     generator: &G,
-///     f: B,
-/// ) -> impl Future<Output = Result<SnowflakeTwitterId, G::Err>> + Send
-/// where
-///     G: ferroid::generator::SnowflakeGenerator<SnowflakeTwitterId, T> + Sync,
-///     T: TimeSource<u64>,
-///     B: FnMut(Duration) -> F + Send,
-///     F: Future<Output = ()> + Send,
-/// {
-///     generator.try_next_id_async(f)
-/// }
-/// ```
+/// Local generators and callbacks are supported; the returned future
+/// is `Send` when its captures and the callback's future are `Send`.
 pub trait SnowflakeGeneratorAsyncExt<ID, T>: SnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId,
@@ -104,5 +77,111 @@ where
             };
             f(delay).await;
         }
+    }
+}
+
+#[cfg(all(test, feature = "basic"))]
+mod tests {
+    use core::{cell::Cell, future::poll_fn, pin::pin, task::Poll, time::Duration};
+
+    use futures::FutureExt;
+
+    use crate::futures::tests::TestClock;
+    use crate::{
+        futures::SnowflakeGeneratorAsyncExt, generator::BasicSnowflakeGenerator,
+        id::SnowflakeTwitterId,
+    };
+
+    #[test]
+    fn ready_returns_an_id() {
+        let clock = TestClock {
+            ticks: Cell::new(42),
+        };
+        let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, &clock);
+
+        let id = generator
+            .next_id_async(|_| async { panic!("unexpected backoff") })
+            .now_or_never()
+            .expect("generator should be ready");
+
+        assert_eq!((id.timestamp(), id.sequence()), (42, 0));
+    }
+
+    #[test]
+    fn pending_yields_then_returns_an_id() {
+        let clock = TestClock {
+            ticks: Cell::new(0),
+        };
+        let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(
+            0,
+            0,
+            SnowflakeTwitterId::max_sequence(),
+            &clock,
+        );
+
+        let mut future = pin!(generator.next_id_async(|delay| {
+            assert_eq!(delay, Duration::from_millis(10));
+            poll_fn(|_| {
+                if clock.ticks.get() == 0 {
+                    Poll::Pending
+                } else {
+                    Poll::Ready(())
+                }
+            })
+        }));
+
+        assert!(future.as_mut().now_or_never().is_none());
+        clock.ticks.set(1);
+        let id = future.now_or_never().expect("generator should be ready");
+
+        assert_eq!((id.timestamp(), id.sequence()), (1, 0));
+    }
+
+    #[test]
+    fn clock_rollback_passes_scaled_duration() {
+        let clock = TestClock {
+            ticks: Cell::new(39),
+        };
+        let generator =
+            BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(42, 0, 0, &clock);
+
+        let id = generator
+            .try_next_id_async(|delay| {
+                assert_eq!(delay, Duration::from_millis(30));
+                async { clock.ticks.set(43) }
+            })
+            .now_or_never()
+            .expect("backoff should advance the clock")
+            .unwrap();
+
+        assert_eq!((id.timestamp(), id.sequence()), (43, 0));
+    }
+}
+
+#[cfg(all(test, feature = "lock", not(feature = "parking-lot")))]
+mod lock_tests {
+    use crate::{
+        futures::SnowflakeGeneratorAsyncExt, generator::LockSnowflakeGenerator,
+        id::SnowflakeTwitterId, time::DirectClock,
+    };
+    use futures::FutureExt;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    #[test]
+    fn poisoned_lock_returns_error_without_backoff() {
+        let generator =
+            LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, DirectClock::default());
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = generator.state.lock();
+            panic!("poison the mutex");
+        }));
+        assert!(panic.is_err());
+
+        let error = generator
+            .try_next_id_async(|_| async { panic!("unexpected backoff") })
+            .now_or_never()
+            .expect("generator errors must not suspend")
+            .unwrap_err();
+        assert!(matches!(error, crate::generator::Error::LockPoisoned));
     }
 }

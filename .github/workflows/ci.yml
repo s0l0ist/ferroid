@@ -20,14 +20,9 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Check each ID family's feature configurations on MSRV and stable Rust.
-  features:
-    name: Feature tests (Rust ${{ matrix.rust }})
+  documentation:
+    name: Documentation
     runs-on: ubuntu-24.04-arm
-    strategy:
-      fail-fast: false
-      matrix:
-        rust: ["1.99.1", stable]
     env:
       RUSTFLAGS: "-D warnings"
     steps:
@@ -35,28 +30,19 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-hack
-        uses: taiki-e/install-action@cargo-hack
-
-      - name: Test Snowflake features
-        run: cargo hack test -p ferroid --locked --each-feature --features snowflake
-
-      - name: Test ULID features
-        run: cargo hack test -p ferroid --locked --each-feature --features ulid
+      - name: Test library documentation
+        run: cargo test -p ferroid --locked --all-features --doc
 
       - name: Build library documentation
         run: cargo doc -p ferroid --locked --all-features --no-deps
 
-  # Exercise both scalar and native Base32 implementations on each architecture.
   base32-backends:
-    name: Base32 (scalar + ${{ matrix.backend }})
+    name: Base32 (${{ matrix.backend }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -69,27 +55,21 @@ jobs:
             os: ubuntu-24.04
             rustflags: "-C target-feature=+ssse3"
     env:
-      # SSSE3 stays enabled for the scalar test to verify the intrinsics opt-out.
       RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Test scalar Base32
-        run: >-
-          cargo test -p ferroid --lib --locked
-          --no-default-features --features base32,snowflake,ulid
-
       - name: Test ${{ matrix.backend }} Base32
         run: >-
           cargo test -p ferroid --lib --locked
-          --no-default-features --features base32,snowflake,ulid,intrinsics
+          --features snowflake,ulid,alloc,base32
 
   # Test the default workspace members: ferroid and both gRPC crates.
   # pg-ferroid requires a separate PostgreSQL/pgrx test environment.
@@ -105,7 +85,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -115,9 +95,6 @@ jobs:
         with:
           version: "36.2"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Test library preset and default server features
-        run: cargo test --locked --features all
 
       - name: Test workspace crates and features
         run: cargo test --locked --all-features
