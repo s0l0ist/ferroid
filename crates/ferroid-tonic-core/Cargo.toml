@@ -14,10 +14,9 @@ categories = [
 ]
 documentation.workspace = true
 keywords = ["ferroid", "grpc", "snowflake", "ulid", "monotonic"]
-publish = true
 
 [dependencies]
-ferroid = { version = "2.0.0", path = "../ferroid", features = ["std", "alloc", "snowflake", "basic"] }
+ferroid = { version = "3.0.0", path = "../ferroid", features = ["std", "snowflake", "basic"] }
 prost = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tonic = { workspace = true, features = ["transport", "codegen"] }

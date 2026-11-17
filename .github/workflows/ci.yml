@@ -8,64 +8,93 @@ on:
   # allow manual triggers
   workflow_dispatch: {}
 
-# Cancel in progress workflows on pull_requests
-# https://docs.github.com/en/actions/using-jobs/using-concurrency#example-using-a-fallback-value
+permissions:
+  contents: read
+
+# Cancel superseded PR runs; let push and manual runs finish independently.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build and test (${{ matrix.os }})
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-
-    runs-on: ${{ matrix.os }}
-
+  documentation:
+    name: Documentation
+    runs-on: ubuntu-24.04-arm
+    env:
+      RUSTFLAGS: "-D warnings"
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test library documentation
+        run: cargo test -p ferroid --locked --all-features --doc
+
+      - name: Build library documentation
+        run: cargo doc -p ferroid --locked --all-features --no-deps
+
+  base32-backends:
+    name: Base32 (${{ matrix.backend }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: NEON
+            os: ubuntu-24.04-arm
+            rustflags: ""
+          - backend: SSSE3
+            os: ubuntu-24.04
+            rustflags: "-C target-feature=+ssse3"
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test ${{ matrix.backend }} Base32
+        run: >-
+          cargo test -p ferroid --lib --locked
+          --features snowflake,ulid,alloc,base32
+
+  # Test the default workspace members: ferroid and both gRPC crates.
+  # pg-ferroid requires a separate PostgreSQL/pgrx test environment.
+  build:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.95.0
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
 
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
-          version: "33.2"
+          version: "36.2"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install Rust 1.85.1
-        uses: dtolnay/rust-toolchain@1.85.1
-
-      - name: Restore Cargo Cache
-        id: cargo-cache-restore
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-a-${{ hashFiles('Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-a
-
-      - name: Run all unit tests
-        run: |
-          cargo test --features all -- --nocapture
-          cargo test --all-features -- --nocapture
-
-      - name: Save Cargo Cache
-        id: cargo-cache-save
-        if: always() && steps.cargo-cache-restore.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ steps.cargo-cache-restore.outputs.cache-primary-key }}
+      - name: Test workspace crates and features
+        run: cargo test --locked --all-features

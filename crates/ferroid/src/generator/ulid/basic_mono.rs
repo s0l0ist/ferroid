@@ -1,11 +1,11 @@
-use core::{cell::Cell, cmp::Ordering};
+use core::{cell::Cell, cmp::Ordering, time::Duration};
 
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
 use crate::{
     generator::{Poll, Result, UlidGenerator},
-    id::UlidId,
+    id::{ToU64, UlidId},
     rand::RandSource,
     time::TimeSource,
 };
@@ -63,16 +63,19 @@ where
     ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "thread-rng")]
+    /// # {
     /// use ferroid::{
     ///     generator::{BasicMonoUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicMonoUlidGenerator::new(CachedClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
+    /// # }
     /// ```
     ///
     /// [`TimeSource`]: crate::time::TimeSource
@@ -113,27 +116,28 @@ where
     ///
     /// Returns a new, time-ordered, unique ID.
     ///
+    /// When generation is pending, `f` receives a suggested [`Duration`],
+    /// with clock granularity already applied. The delay may be zero and
+    /// saturates at `u64::MAX` milliseconds.
+    ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "thread-rng")]
+    /// # {
     /// use ferroid::{
     ///     generator::{BasicMonoUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicMonoUlidGenerator::new(CachedClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = generator.next_id(|_| std::thread::yield_now());
+    /// # }
     /// ```
-    #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self, f)))]
-    pub fn next_id(&self, mut f: impl FnMut(ID::Ty)) -> ID {
-        loop {
-            match self.poll_id() {
-                Poll::Ready { id } => break id,
-                Poll::Pending { yield_for } => f(yield_for),
-            }
-        }
+    pub fn next_id(&self, f: impl FnMut(Duration)) -> ID {
+        UlidGenerator::next_id(self, f)
     }
 
     /// Generates a new ULID.
@@ -142,16 +146,21 @@ where
     /// generator is temporarily exhausted (e.g., the random component is
     /// exhausted and the time has not advanced), it returns [`Poll::Pending`].
     ///
+    /// Pending delays are [`Duration`] values with clock granularity already
+    /// applied. [`Duration::ZERO`] permits an immediate retry.
+    ///
     /// # Example
     /// ```
+    /// # #[cfg(feature = "thread-rng")]
+    /// # {
     /// use ferroid::{
     ///     generator::{BasicMonoUlidGenerator, Poll},
     ///     id::ULID,
     ///     rand::ThreadRandom,
-    ///     time::MonotonicClock,
+    ///     time::CachedClock,
     /// };
     ///
-    /// let generator = BasicMonoUlidGenerator::new(MonotonicClock::default(), ThreadRandom::default());
+    /// let generator = BasicMonoUlidGenerator::new(CachedClock::default(), ThreadRandom::default());
     ///
     /// let id: ULID = loop {
     ///     match generator.poll_id() {
@@ -159,6 +168,7 @@ where
     ///         Poll::Pending { .. } => std::thread::yield_now(),
     ///     }
     /// };
+    /// # }
     /// ```
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn poll_id(&self) -> Poll<ID> {
@@ -173,7 +183,9 @@ where
                     self.state.set(updated);
                     Poll::Ready { id: updated }
                 } else {
-                    Poll::Pending { yield_for: ID::ONE }
+                    Poll::Pending {
+                        yield_for: Duration::from_millis(T::GRANULARITY_MILLIS.get()),
+                    }
                 }
             }
             Ordering::Greater => {
@@ -190,9 +202,13 @@ where
     #[cold]
     #[inline(never)]
     fn cold_clock_behind(now: ID::Ty, current_ts: ID::Ty) -> Poll<ID> {
-        let yield_for = current_ts - now;
-        debug_assert!(yield_for >= ID::ZERO);
-        Poll::Pending { yield_for }
+        let units = current_ts - now;
+        debug_assert!(units >= ID::ZERO);
+        Poll::Pending {
+            yield_for: Duration::from_millis(
+                units.to_u64().saturating_mul(T::GRANULARITY_MILLIS.get()),
+            ),
+        }
     }
 }
 
@@ -208,19 +224,110 @@ where
         Self::new(time, rng)
     }
 
-    fn next_id(&self, f: impl FnMut(ID::Ty)) -> ID {
-        self.next_id(f)
-    }
-
-    fn try_next_id(&self, f: impl FnMut(ID::Ty)) -> Result<ID, Self::Err> {
-        Ok(self.next_id(f))
-    }
-
-    fn poll_id(&self) -> Poll<ID> {
-        self.poll_id()
-    }
-
     fn try_poll_id(&self) -> Result<Poll<ID>, Self::Err> {
         Ok(self.poll_id())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{CountingRand, MockTime, OverflowClock, TestClock, ZeroRand};
+    use super::*;
+    use crate::generator::Poll;
+    use crate::id::ULID;
+    use core::time::Duration;
+
+    #[test]
+    fn pending_delays_saturate_at_u64_milliseconds() {
+        let basic =
+            BasicMonoUlidGenerator::<ULID, _, _>::from_components(2, 0, OverflowClock, ZeroRand);
+        assert_eq!(
+            basic.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; this test exercises wide pending delays."
+    )]
+    fn pending_delay_caps_wide_timestamps() {
+        crate::define_ulid!(WideTimestampId, u128, reserved: 0, timestamp: 128, random: 0);
+        let timestamp = u128::from(u64::MAX) + 1;
+        let generator = BasicMonoUlidGenerator::<WideTimestampId, _, _>::from_components(
+            timestamp,
+            0,
+            MockTime { millis: 0 },
+            ZeroRand,
+        );
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+
+        let overflowing = BasicMonoUlidGenerator::<WideTimestampId, _, _>::from_components(
+            u128::MAX,
+            0,
+            OverflowClock,
+            ZeroRand,
+        );
+        assert_eq!(
+            overflowing.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(u64::MAX)
+            }
+        );
+    }
+
+    #[test]
+    fn handles_rollback_and_rollover() {
+        let shared_time = TestClock::new(2);
+        let generator: BasicMonoUlidGenerator<ULID, _, _> =
+            BasicMonoUlidGenerator::from_components(2, ULID::max_random(), &shared_time, ZeroRand);
+        // Exhaustion waits for the next tick: one tick is 10 milliseconds.
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(10)
+            }
+        );
+
+        // Rolling back to zero puts the clock two ticks behind the stored timestamp.
+        shared_time.ticks.set(0);
+        assert_eq!(
+            generator.poll_id(),
+            Poll::Pending {
+                yield_for: Duration::from_millis(20)
+            }
+        );
+        let id = generator.next_id(|delay| {
+            assert_eq!(delay, Duration::from_millis(20));
+            shared_time.ticks.set(3);
+        });
+        assert_eq!((id.timestamp(), id.random()), (3, 0));
+    }
+
+    #[test]
+    fn is_monotonic_across_ticks() {
+        let shared_time = TestClock::new(1);
+        let generator: BasicMonoUlidGenerator<ULID, _, _> =
+            BasicMonoUlidGenerator::new(&shared_time, CountingRand::new());
+        // Two IDs in one tick increment the random field.
+        let first = generator.next_id(|_| panic!("expected ready ID"));
+        let second = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((first.timestamp(), first.random()), (1, 0));
+        assert_eq!((second.timestamp(), second.random()), (1, 1));
+        assert!(second > first);
+
+        shared_time.ticks.set(2);
+        let next = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((next.timestamp(), next.random()), (2, 1));
+        assert!(next > second);
     }
 }

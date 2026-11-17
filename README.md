@@ -25,7 +25,7 @@ cargo test --features all
 Run all benchmarks
 
 ```bash
-cargo criterion --all-features
+cargo criterion -p ferroid-benches --bench bench
 ```
 
 ## 📄 License

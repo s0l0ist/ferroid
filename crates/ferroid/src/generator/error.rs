@@ -6,34 +6,19 @@ use core::fmt;
 /// enabled behind feature flags like `lock`.
 pub type Result<T, E = core::convert::Infallible> = core::result::Result<T, E>;
 
-/// All error variants that `ferroid` can emit.
+/// Errors returned by fallible ID generators.
 ///
-/// When either **`lock` is disabled** *or* **`parking-lot` is enabled** (no
-/// poisoning), the crate is effectively infallible at runtime. In that
-/// configuration, the `Error::Infallible` variant exists solely to satisfy the
-/// `Result<T, Error>` API and should never be observed in practice.
+/// The variants are independent of enabled features. Generators that cannot
+/// fail use [`core::convert::Infallible`] as their associated error type.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[non_exhaustive]
 pub enum Error {
     /// The operation failed because the lock was **poisoned**.
     ///
     /// This occurs when a thread panics while holding the lock. When the
-    /// `parking-lot` feature is enabled, mutexes do **not** poison, so this
-    /// variant is not available.
-    #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
+    /// `parking-lot` feature is enabled, mutexes do **not** poison and cannot
+    /// produce this error.
     LockPoisoned,
-
-    /// Placeholder variant for builds where this crate is effectively
-    /// **infallible**.
-    ///
-    /// `ferroid` only produces errors from lock poisoning when using a std
-    /// mutex (`lock` **without** `parking-lot`).
-    ///
-    /// If lock poisoning cannot occur (`lock` is disabled, or `parking-lot` is
-    /// enabled), there is nothing fallible at runtime. This variant exists
-    /// solely to satisfy `Result<T, Error>` and cannot be constructed.
-    #[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
-    Infallible(core::convert::Infallible),
 }
 
 impl fmt::Display for Error {
@@ -45,19 +30,8 @@ impl fmt::Display for Error {
 impl core::error::Error for Error {}
 
 #[cfg(all(feature = "lock", not(feature = "parking-lot")))]
-use crate::generator::{MutexGuard, PoisonError};
-#[cfg(all(feature = "lock", not(feature = "parking-lot")))]
-impl<T> From<PoisonError<MutexGuard<'_, T>>> for Error {
-    fn from(_: PoisonError<MutexGuard<'_, T>>) -> Self {
+impl<T> From<std::sync::PoisonError<T>> for Error {
+    fn from(_: std::sync::PoisonError<T>) -> Self {
         Self::LockPoisoned
-    }
-}
-
-#[cfg(any(not(feature = "lock"), feature = "parking-lot"))]
-impl From<Error> for core::convert::Infallible {
-    fn from(e: Error) -> Self {
-        match e {
-            Error::Infallible(i) => i,
-        }
     }
 }

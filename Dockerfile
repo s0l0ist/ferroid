@@ -9,7 +9,7 @@ RUN apk update && apk add --no-cache \
     g++ \
     gcc
 
-ENV PROTOC_VERSION=33.2
+ENV PROTOC_VERSION=36.2
 
 ARG TARGETARCH
 

@@ -39,6 +39,10 @@ pub trait SnowflakeId: Id {
     fn max_sequence() -> Self::Ty;
 
     /// Constructs a new Snowflake ID from its components.
+    ///
+    /// Macro-generated IDs mask components to their field widths. This is not
+    /// fallible input validation; see the generated constructor's overflow and
+    /// panic behavior. `is_valid()` cannot detect bits discarded here.
     #[must_use]
     fn from_components(timestamp: Self::Ty, machine_id: Self::Ty, sequence: Self::Ty) -> Self;
 
@@ -63,15 +67,6 @@ pub trait SnowflakeId: Id {
     fn rollover_to_timestamp(&self, ts: Self::Ty) -> Self {
         Self::from_components(ts, self.machine_id(), Self::ZERO)
     }
-
-    /// Returns `true` if the ID's internal structure is valid, such as reserved
-    /// bits being unset or fields within expected ranges.
-    fn is_valid(&self) -> bool;
-
-    /// Returns a normalized version of the ID with any invalid or reserved bits
-    /// cleared. This guarantees a valid, canonical representation.
-    #[must_use]
-    fn into_valid(self) -> Self;
 }
 
 /// A macro for defining a bit layout for a custom Snowflake ID using four
@@ -85,6 +80,7 @@ pub trait SnowflakeId: Id {
 /// - The total number of bits **must exactly equal** the size of the backing
 ///   integer type (`u64`, `u128`, etc.). If it doesn't, the macro will trigger
 ///   a compile-time assertion failure.
+/// - A field may be empty (zero bits) or occupy the entire backing integer.
 ///
 /// ```text
 /// define_snowflake_id!(
@@ -137,8 +133,7 @@ macro_rules! define_snowflake_id {
         }
 
         const _: () = {
-            // Compile-time check: total bit width _must_ equal the backing
-            // type. This is to avoid aliasing surprises.
+            // Require the fields to cover the backing integer exactly.
             assert!(
                 $reserved_bits + $timestamp_bits + $machine_bits + $sequence_bits == <$int>::BITS,
                 "Layout must match underlying type width"
@@ -156,43 +151,79 @@ macro_rules! define_snowflake_id {
             pub const TIMESTAMP_SHIFT: $int = Self::MACHINE_ID_SHIFT + Self::MACHINE_ID_BITS;
             pub const RESERVED_SHIFT: $int = Self::TIMESTAMP_SHIFT + Self::TIMESTAMP_BITS;
 
-            pub const RESERVED_MASK: $int = ((1 << Self::RESERVED_BITS) - 1);
-            pub const TIMESTAMP_MASK: $int = ((1 << Self::TIMESTAMP_BITS) - 1);
-            pub const MACHINE_ID_MASK: $int = ((1 << Self::MACHINE_ID_BITS) - 1);
-            pub const SEQUENCE_MASK: $int = ((1 << Self::SEQUENCE_BITS) - 1);
+            // Unbounded shifts handle empty fields and fields spanning the
+            // backing integer. The layout assertion bounds every count.
+            pub const RESERVED_MASK: $int =
+                <$int>::MAX.unbounded_shr(<$int>::BITS - Self::bit_count(Self::RESERVED_BITS));
+            pub const TIMESTAMP_MASK: $int =
+                <$int>::MAX.unbounded_shr(<$int>::BITS - Self::bit_count(Self::TIMESTAMP_BITS));
+            pub const MACHINE_ID_MASK: $int =
+                <$int>::MAX.unbounded_shr(<$int>::BITS - Self::bit_count(Self::MACHINE_ID_BITS));
+            pub const SEQUENCE_MASK: $int =
+                <$int>::MAX.unbounded_shr(<$int>::BITS - Self::bit_count(Self::SEQUENCE_BITS));
 
-            const fn valid_mask() -> $int {
-                (Self::TIMESTAMP_MASK << Self::TIMESTAMP_SHIFT) |
-                (Self::MACHINE_ID_MASK << Self::MACHINE_ID_SHIFT) |
-                (Self::SEQUENCE_MASK << Self::SEQUENCE_SHIFT)
+            // Public layout constants use the backing integer for compatibility;
+            // primitive shift methods take u32. The layout bounds every count.
+            // Const blocks at call sites keep these checks out of runtime code
+            // and preserve cross-crate inlining of the small field methods.
+            #[allow(clippy::cast_possible_truncation, clippy::unnecessary_cast)]
+            const fn bit_count(bits: $int) -> u32 {
+                assert!(
+                    bits <= <$int>::BITS as $int,
+                    "bit count exceeds backing integer"
+                );
+                bits as u32
             }
 
+            const fn valid_mask() -> $int {
+                Self::TIMESTAMP_MASK.unbounded_shl(const { Self::bit_count(Self::TIMESTAMP_SHIFT) }) |
+                Self::MACHINE_ID_MASK.unbounded_shl(const { Self::bit_count(Self::MACHINE_ID_SHIFT) }) |
+                Self::SEQUENCE_MASK.unbounded_shl(const { Self::bit_count(Self::SEQUENCE_SHIFT) })
+            }
+
+            /// Packs a timestamp, machine ID, and sequence into this layout.
+            ///
+            /// Each component is masked to its field width; reserved bits stay
+            /// zero. With debug assertions disabled, oversized components are
+            /// truncated. Validate untrusted components before calling:
+            /// `is_valid()` cannot detect bits discarded during construction.
+            ///
+            /// # Panics
+            ///
+            /// With debug assertions enabled, panics if any component exceeds
+            /// its field's maximum.
             #[must_use]
             pub const fn from_components(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
                 debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
                 debug_assert!(machine_id <= Self::MACHINE_ID_MASK, "machine_id overflow");
                 debug_assert!(sequence <= Self::SEQUENCE_MASK, "sequence overflow");
 
-                let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
-                let m = (machine_id & Self::MACHINE_ID_MASK) << Self::MACHINE_ID_SHIFT;
-                let s = (sequence & Self::SEQUENCE_MASK) << Self::SEQUENCE_SHIFT;
+                let t = (timestamp & Self::TIMESTAMP_MASK)
+                    .unbounded_shl(const { Self::bit_count(Self::TIMESTAMP_SHIFT) });
+                let m = (machine_id & Self::MACHINE_ID_MASK)
+                    .unbounded_shl(const { Self::bit_count(Self::MACHINE_ID_SHIFT) });
+                let s = (sequence & Self::SEQUENCE_MASK)
+                    .unbounded_shl(const { Self::bit_count(Self::SEQUENCE_SHIFT) });
                 Self { id: t | m | s }
             }
 
             /// Extracts the timestamp from the packed ID.
             #[must_use]
             pub const fn timestamp(&self) -> $int {
-                (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
+                self.id.unbounded_shr(const { Self::bit_count(Self::TIMESTAMP_SHIFT) })
+                    & Self::TIMESTAMP_MASK
             }
             /// Extracts the machine ID from the packed ID.
             #[must_use]
             pub const fn machine_id(&self) -> $int {
-                (self.id >> Self::MACHINE_ID_SHIFT) & Self::MACHINE_ID_MASK
+                self.id.unbounded_shr(const { Self::bit_count(Self::MACHINE_ID_SHIFT) })
+                    & Self::MACHINE_ID_MASK
             }
             /// Extracts the sequence number from the packed ID.
             #[must_use]
             pub const fn sequence(&self) -> $int {
-                (self.id >> Self::SEQUENCE_SHIFT) & Self::SEQUENCE_MASK
+                self.id.unbounded_shr(const { Self::bit_count(Self::SEQUENCE_SHIFT) })
+                    & Self::SEQUENCE_MASK
             }
             /// Returns the maximum representable timestamp value based on
             /// `Self::TIMESTAMP_BITS`.
@@ -219,10 +250,32 @@ macro_rules! define_snowflake_id {
                 self.id
             }
 
-            /// Converts a raw type into this type
+            /// Wraps a packed integer without validating reserved bits.
+            ///
+            /// Use [`TryFrom`] for checked conversion from the backing integer.
+            ///
+            /// All input bits are preserved, including reserved ones. Passing
+            /// the backing integer's maximum is invalid if the layout reserves
+            /// any bits. For untrusted values, use
+            /// `is_valid()` to check the layout, or
+            /// `into_valid()` to clear reserved bits and change the raw value.
             #[must_use]
             pub const fn from_raw(raw: $int) -> Self {
                 Self { id: raw }
+            }
+
+            /// Returns `true` when this ID's reserved bits are zero.
+            ///
+            /// This cannot detect component values truncated during construction.
+            #[must_use]
+            pub const fn is_valid(&self) -> bool {
+                (self.id & !Self::valid_mask()) == 0
+            }
+
+            /// Clears reserved bits, which can change the ID's raw value.
+            #[must_use]
+            pub const fn into_valid(self) -> Self {
+                Self::from_raw(self.id & Self::valid_mask())
             }
         }
 
@@ -239,6 +292,27 @@ macro_rules! define_snowflake_id {
             /// Converts a raw type into this type
             fn from_raw(raw: Self::Ty) -> Self {
                 Self::from_raw(raw)
+            }
+
+            fn is_valid(&self) -> bool {
+                self.is_valid()
+            }
+
+            fn into_valid(self) -> Self {
+                self.into_valid()
+            }
+        }
+
+        impl core::convert::TryFrom<$int> for $name {
+            type Error = $crate::Error<Self>;
+
+            fn try_from(raw: $int) -> core::result::Result<Self, Self::Error> {
+                let id = Self::from_raw(raw);
+                if id.is_valid() {
+                    Ok(id)
+                } else {
+                    Err($crate::Error::DecodeOverflow { id })
+                }
             }
         }
 
@@ -270,28 +344,17 @@ macro_rules! define_snowflake_id {
             fn from_components(timestamp: $int, machine_id: $int, sequence: $int) -> Self {
                 Self::from_components(timestamp, machine_id, sequence)
             }
-
-            fn is_valid(&self) -> bool {
-                (self.to_raw() & !Self::valid_mask()) == 0
-            }
-
-            fn into_valid(self) -> Self {
-                let raw = self.to_raw() & Self::valid_mask();
-                Self::from_raw(raw)
-            }
         }
 
         $crate::cfg_base32! {
             impl core::fmt::Display for $name {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    use $crate::base32::Base32SnowExt;
-                    self.encode().fmt(f)
+                    $crate::base32::Base32Ext::encode(self).fmt(f)
                 }
             }
             impl PartialEq<str> for $name {
                 fn eq(&self, other: &str) -> bool {
-                    use $crate::base32::Base32SnowExt;
-                    Self::decode(other).map(|id| id == *self).unwrap_or(false)
+                    <Self as $crate::base32::Base32Ext>::decode(other).map(|id| id == *self).unwrap_or(false)
                 }
             }
             impl PartialEq<&str> for $name {
@@ -318,14 +381,12 @@ macro_rules! define_snowflake_id {
                 }
                 impl From<$name> for $crate::__internal::String {
                     fn from(val: $name) -> Self {
-                        use $crate::base32::Base32SnowExt;
-                        val.encode().as_string()
+                        $crate::base32::Base32Ext::encode(&val).as_string()
                     }
                 }
                 impl From<&$name> for $crate::__internal::String {
                     fn from(val: &$name) -> Self {
-                        use $crate::base32::Base32SnowExt;
-                        val.encode().as_string()
+                        $crate::base32::Base32Ext::encode(val).as_string()
                     }
                 }
             }
@@ -334,8 +395,7 @@ macro_rules! define_snowflake_id {
                 type Error = $crate::base32::Error<$name>;
 
                 fn try_from(s: &str) -> Result<Self, Self::Error> {
-                    use $crate::base32::Base32SnowExt;
-                    Self::decode(s)
+                    <Self as $crate::base32::Base32Ext>::decode(s)
                 }
             }
 
@@ -343,8 +403,7 @@ macro_rules! define_snowflake_id {
                 type Err = $crate::base32::Error<$name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    use $crate::base32::Base32SnowExt;
-                    Self::decode(s)
+                    <Self as $crate::base32::Base32Ext>::decode(s)
                 }
             }
         }
@@ -452,68 +511,239 @@ define_snowflake_id!(
     sequence: 10
 );
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(test)]
 mod tests {
-    use std::println;
-
     use super::*;
 
-    #[test]
-    fn test_snowflake_twitter_id_fields_and_bounds() {
-        let ts = SnowflakeTwitterId::max_timestamp();
-        let mid = SnowflakeTwitterId::max_machine_id();
-        let seq = SnowflakeTwitterId::max_sequence();
-
-        let id = SnowflakeTwitterId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeTwitterId::from_components(ts, mid, seq), id);
+    fn check_layout<ID: SnowflakeId<Ty = u64>>(
+        max_raw: u64,
+        timestamp_shift: u32,
+        machine_shift: u32,
+    ) {
+        let (ts, machine, sequence) = (
+            ID::max_timestamp(),
+            ID::max_machine_id(),
+            ID::max_sequence(),
+        );
+        for (timestamp, machine_id, sequence) in [
+            (0, 0, 0),
+            (1, machine.min(1), 1),
+            (ts, machine, sequence),
+            (ts, 0, 0),
+            (0, machine, 0),
+            (0, 0, sequence),
+        ] {
+            let id = ID::from_components(timestamp, machine_id, sequence);
+            assert_eq!(
+                id.to_raw(),
+                (timestamp << timestamp_shift) | (machine_id << machine_shift) | sequence
+            );
+            assert_eq!(
+                (id.timestamp(), id.machine_id(), id.sequence()),
+                (timestamp, machine_id, sequence)
+            );
+        }
+        assert_eq!(ID::from_components(ts, machine, sequence).to_raw(), max_raw);
+        #[cfg(not(debug_assertions))]
+        assert_eq!(
+            ID::from_components(u64::MAX, u64::MAX, u64::MAX).to_raw(),
+            max_raw
+        );
+        let raw = ID::from_raw(u64::MAX);
+        assert_eq!(raw.is_valid(), max_raw == u64::MAX);
+        assert_eq!(raw.into_valid().to_raw(), max_raw);
+        assert!(raw.into_valid().is_valid());
     }
 
     #[test]
-    fn test_snowflake_discord_id_fields_and_bounds() {
-        let ts = SnowflakeDiscordId::max_timestamp();
-        let mid = SnowflakeDiscordId::max_machine_id();
-        let seq = SnowflakeDiscordId::max_sequence();
-
-        let id = SnowflakeDiscordId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeDiscordId::from_components(ts, mid, seq), id);
+    fn twitter_layout_boundaries() {
+        check_layout::<SnowflakeTwitterId>(u64::MAX >> 1, 22, 12);
     }
 
     #[test]
-    fn test_snowflake_mastodon_id_fields_and_bounds() {
-        let ts = SnowflakeMastodonId::max_timestamp();
-        let mid = SnowflakeMastodonId::max_machine_id();
-        let seq = SnowflakeMastodonId::max_sequence();
-
-        let id = SnowflakeMastodonId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), 0); // machine_id is always zero
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeMastodonId::from_components(ts, 0, seq), id);
+    fn discord_layout_boundaries() {
+        check_layout::<SnowflakeDiscordId>(u64::MAX, 22, 12);
     }
 
     #[test]
-    fn test_snowflake_instagram_id_fields_and_bounds() {
-        let ts = SnowflakeInstagramId::max_timestamp();
-        let mid = SnowflakeInstagramId::max_machine_id();
-        let seq = SnowflakeInstagramId::max_sequence();
-
-        let id = SnowflakeInstagramId::from_components(ts, mid, seq);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.machine_id(), mid);
-        assert_eq!(id.sequence(), seq);
-        assert_eq!(SnowflakeInstagramId::from_components(ts, mid, seq), id);
+    fn mastodon_layout_boundaries() {
+        check_layout::<SnowflakeMastodonId>(u64::MAX, 16, 16);
     }
 
+    #[test]
+    fn instagram_layout_boundaries() {
+        check_layout::<SnowflakeInstagramId>(u64::MAX, 23, 10);
+    }
+
+    #[test]
+    fn sequence_exhaustion_and_rollover_preserve_machine_id() {
+        let id =
+            SnowflakeTwitterId::from_components(42, 17, SnowflakeTwitterId::max_sequence() - 1);
+        assert!(id.has_sequence_room());
+        let last = id.increment_sequence();
+        assert_eq!(
+            (last.timestamp(), last.machine_id(), last.sequence()),
+            (42, 17, SnowflakeTwitterId::max_sequence())
+        );
+        assert!(!last.has_sequence_room());
+        assert_eq!(
+            last.rollover_to_timestamp(43),
+            SnowflakeTwitterId::from_components(43, 17, 0)
+        );
+    }
+
+    #[test]
+    fn checked_raw_conversions_preserve_valid_values_and_reject_reserved_bits() {
+        let raw = 42u64;
+        let expected = SnowflakeTwitterId::from_raw(raw);
+        assert_eq!(SnowflakeTwitterId::try_from(raw).unwrap(), expected);
+        let converted: SnowflakeTwitterId = raw.try_into().unwrap();
+        assert_eq!(converted, expected);
+        assert_eq!(
+            SnowflakeTwitterId::try_from(u64::MAX),
+            Err(crate::Error::DecodeOverflow {
+                id: SnowflakeTwitterId::from_raw(u64::MAX)
+            })
+        );
+        let converted: Result<SnowflakeTwitterId, _> = u64::MAX.try_into();
+        assert_eq!(
+            converted,
+            Err(crate::Error::DecodeOverflow {
+                id: SnowflakeTwitterId::from_raw(u64::MAX)
+            })
+        );
+    }
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate a complete ID API; this test checks raw conversion."
+    )]
+    fn checked_raw_conversion_supports_custom_backing_widths() {
+        crate::define_snowflake_id!(CustomId, u32,
+            reserved: 1, timestamp: 31, machine_id: 0, sequence: 0);
+        assert_eq!(CustomId::try_from(0u32).unwrap().to_raw(), 0);
+        assert_eq!(
+            CustomId::try_from(u32::MAX >> 1).unwrap().to_raw(),
+            u32::MAX >> 1
+        );
+        assert_eq!(
+            CustomId::try_from(u32::MAX),
+            Err(crate::Error::DecodeOverflow {
+                id: CustomId::from_raw(u32::MAX)
+            })
+        );
+        let converted: Result<CustomId, _> = u32::MAX.try_into();
+        assert_eq!(
+            converted,
+            Err(crate::Error::DecodeOverflow {
+                id: CustomId::from_raw(u32::MAX)
+            })
+        );
+    }
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
+    )]
+    fn timestamp_can_fill_u32() {
+        define_snowflake_id!(TimestampOnly, u32,
+            reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);
+
+        const ID: TimestampOnly = TimestampOnly::from_components(u32::MAX, 0, 0);
+        const _: () = assert!(ID.timestamp() == u32::MAX);
+
+        assert_eq!(ID.to_raw(), u32::MAX);
+        assert_eq!(
+            (ID.timestamp(), ID.machine_id(), ID.sequence()),
+            (u32::MAX, 0, 0)
+        );
+        assert!(ID.is_valid());
+    }
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
+    )]
+    fn machine_id_can_fill_u64() {
+        define_snowflake_id!(MachineOnly, u64,
+            reserved: 0, timestamp: 0, machine_id: 64, sequence: 0);
+
+        const ID: MachineOnly = MachineOnly::from_components(0, u64::MAX, 0);
+        const _: () = assert!(ID.machine_id() == u64::MAX);
+
+        assert_eq!(ID.to_raw(), u64::MAX);
+        assert_eq!(
+            (ID.timestamp(), ID.machine_id(), ID.sequence()),
+            (0, u64::MAX, 0)
+        );
+        assert!(ID.is_valid());
+    }
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
+    )]
+    fn sequence_can_fill_u128() {
+        define_snowflake_id!(SequenceOnly, u128,
+            reserved: 0, timestamp: 0, machine_id: 0, sequence: 128);
+
+        const ID: SequenceOnly = SequenceOnly::from_components(0, 0, u128::MAX);
+        const _: () = assert!(ID.sequence() == u128::MAX);
+
+        assert_eq!(ID.to_raw(), u128::MAX);
+        assert_eq!(
+            (ID.timestamp(), ID.machine_id(), ID.sequence()),
+            (0, 0, u128::MAX)
+        );
+        assert!(ID.is_valid());
+        assert_eq!(ID.into_valid(), ID);
+    }
+
+    #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
+    )]
+    fn fully_reserved_layout_only_accepts_zero() {
+        define_snowflake_id!(ReservedOnly, u64,
+            reserved: 64, timestamp: 0, machine_id: 0, sequence: 0);
+
+        const ZERO: ReservedOnly = ReservedOnly::from_components(0, 0, 0);
+        let reserved = ReservedOnly::from_raw(u64::MAX);
+        assert_eq!(ReservedOnly::try_from(0u64).unwrap().to_raw(), 0);
+        assert_eq!(
+            ReservedOnly::try_from(1u64),
+            Err(crate::Error::DecodeOverflow {
+                id: ReservedOnly::from_raw(1u64)
+            })
+        );
+
+        assert_eq!(ReservedOnly::RESERVED_MASK, u64::MAX);
+        assert_eq!(ZERO.to_raw(), 0);
+        assert!(ZERO.is_valid());
+        assert!(!reserved.is_valid());
+        assert_eq!(reserved.into_valid(), ZERO);
+        assert_eq!(
+            (
+                reserved.timestamp(),
+                reserved.machine_id(),
+                reserved.sequence()
+            ),
+            (0, 0, 0)
+        );
+    }
+
+    // Constructor overflow checks use debug_assert!, so these tests require it.
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn twitter_timestamp_overflow_panics() {
@@ -521,6 +751,7 @@ mod tests {
         let _ = SnowflakeTwitterId::from_components(ts, 0, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn twitter_machine_id_overflow_panics() {
@@ -528,6 +759,7 @@ mod tests {
         let _ = SnowflakeTwitterId::from_components(0, mid, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn twitter_sequence_overflow_panics() {
@@ -535,6 +767,7 @@ mod tests {
         let _ = SnowflakeTwitterId::from_components(0, 0, seq);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn discord_timestamp_overflow_panics() {
@@ -542,6 +775,7 @@ mod tests {
         let _ = SnowflakeDiscordId::from_components(ts, 0, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn discord_machine_id_overflow_panics() {
@@ -549,6 +783,7 @@ mod tests {
         let _ = SnowflakeDiscordId::from_components(0, mid, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn discord_sequence_overflow_panics() {
@@ -556,6 +791,7 @@ mod tests {
         let _ = SnowflakeDiscordId::from_components(0, 0, seq);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn mastodon_timestamp_overflow_panics() {
@@ -563,6 +799,7 @@ mod tests {
         let _ = SnowflakeMastodonId::from_components(ts, 0, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn mastodon_machine_id_overflow_panics() {
@@ -570,6 +807,7 @@ mod tests {
         let _ = SnowflakeMastodonId::from_components(0, mid, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn mastodon_sequence_overflow_panics() {
@@ -577,6 +815,7 @@ mod tests {
         let _ = SnowflakeMastodonId::from_components(0, 0, seq);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "timestamp overflow")]
     fn instagram_timestamp_overflow_panics() {
@@ -584,6 +823,7 @@ mod tests {
         let _ = SnowflakeInstagramId::from_components(ts, 0, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "machine_id overflow")]
     fn instagram_machine_id_overflow_panics() {
@@ -591,128 +831,11 @@ mod tests {
         let _ = SnowflakeInstagramId::from_components(0, mid, 0);
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "sequence overflow")]
     fn instagram_sequence_overflow_panics() {
         let seq = SnowflakeInstagramId::max_sequence() + 1;
         let _ = SnowflakeInstagramId::from_components(0, 0, seq);
-    }
-
-    #[test]
-    fn twitter_validity() {
-        let id = SnowflakeTwitterId::from_raw(u64::MAX);
-        assert!(!id.is_valid()); // reserved bits (1)
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn instagram_validity() {
-        let id = SnowflakeInstagramId::from_raw(u64::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn discord_validity() {
-        let id = SnowflakeDiscordId::from_raw(u64::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn mastodon_validity() {
-        let id = SnowflakeMastodonId::from_raw(u64::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
-    }
-
-    #[test]
-    fn twitter_low_bit_fields() {
-        let id = SnowflakeTwitterId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeTwitterId::from_components(1, 1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 1);
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn discord_low_bit_fields() {
-        let id = SnowflakeDiscordId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeDiscordId::from_components(1, 1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 1);
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn mastodon_low_bit_fields() {
-        let id = SnowflakeMastodonId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeMastodonId::from_components(1, 0, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 0); // always zero
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn instagram_low_bit_fields() {
-        let id = SnowflakeInstagramId::from_components(0, 0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.machine_id(), 0);
-        assert_eq!(id.sequence(), 0);
-
-        let id = SnowflakeInstagramId::from_components(1, 1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.machine_id(), 1);
-        assert_eq!(id.sequence(), 1);
-    }
-
-    #[test]
-    fn twitter_edge_rollover() {
-        let id = SnowflakeTwitterId::from_components(0, 0, SnowflakeTwitterId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeTwitterId::max_sequence());
-
-        let id = SnowflakeTwitterId::from_components(0, SnowflakeTwitterId::max_machine_id(), 0);
-        assert_eq!(id.machine_id(), SnowflakeTwitterId::max_machine_id());
-    }
-
-    #[test]
-    fn discord_edge_rollover() {
-        let id = SnowflakeDiscordId::from_components(0, 0, SnowflakeDiscordId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeDiscordId::max_sequence());
-
-        let id = SnowflakeDiscordId::from_components(0, SnowflakeDiscordId::max_machine_id(), 0);
-        assert_eq!(id.machine_id(), SnowflakeDiscordId::max_machine_id());
-    }
-
-    #[test]
-    fn mastodon_edge_rollover() {
-        let id = SnowflakeMastodonId::from_components(0, 0, SnowflakeMastodonId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeMastodonId::max_sequence());
-    }
-
-    #[test]
-    fn instagram_edge_rollover() {
-        let id = SnowflakeInstagramId::from_components(0, 0, SnowflakeInstagramId::max_sequence());
-        assert_eq!(id.sequence(), SnowflakeInstagramId::max_sequence());
-
-        let id =
-            SnowflakeInstagramId::from_components(0, SnowflakeInstagramId::max_machine_id(), 0);
-        assert_eq!(id.machine_id(), SnowflakeInstagramId::max_machine_id());
     }
 }

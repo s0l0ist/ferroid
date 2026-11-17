@@ -24,6 +24,10 @@ pub trait UlidId: Id {
     fn max_random() -> Self::Ty;
 
     /// Constructs a new ULID from its components.
+    ///
+    /// Macro-generated IDs mask components to their field widths. This is not
+    /// fallible input validation; see the generated constructor's overflow and
+    /// panic behavior. `is_valid()` cannot detect bits discarded here.
     #[must_use]
     fn from_components(timestamp: Self::Ty, random: Self::Ty) -> Self;
 
@@ -48,15 +52,6 @@ pub trait UlidId: Id {
     fn rollover_to_timestamp(&self, ts: Self::Ty, rand: Self::Ty) -> Self {
         Self::from_components(ts, rand)
     }
-
-    /// Returns `true` if the ID's internal structure is valid, such as reserved
-    /// bits being unset or fields within expected ranges.
-    fn is_valid(&self) -> bool;
-
-    /// Returns a normalized version of the ID with any invalid or reserved bits
-    /// cleared. This guarantees a valid, canonical representation.
-    #[must_use]
-    fn into_valid(self) -> Self;
 }
 
 /// A macro for defining a bit layout for a custom Ulid using three required
@@ -70,6 +65,7 @@ pub trait UlidId: Id {
 /// - The total number of bits **must exactly equal** the size of the backing
 ///   integer type (`u64`, `u128`, etc.). If it doesn't, the macro will trigger
 ///   a compile-time assertion failure.
+/// - A field may be empty (zero bits) or occupy the entire backing integer.
 ///
 /// ```text
 /// define_ulid!(
@@ -119,8 +115,7 @@ macro_rules! define_ulid {
         }
 
         const _: () = {
-            // Compile-time check: total bit width _must_ equal the backing
-            // type. This is to avoid aliasing surprises.
+            // Require the fields to cover the backing integer exactly.
             assert!(
                 $reserved_bits + $timestamp_bits + $random_bits == <$int>::BITS,
                 "Layout must match underlying type width"
@@ -137,37 +132,69 @@ macro_rules! define_ulid {
             pub const TIMESTAMP_SHIFT: $int = Self::RANDOM_SHIFT + Self::RANDOM_BITS;
             pub const RESERVED_SHIFT: $int = Self::TIMESTAMP_SHIFT + Self::TIMESTAMP_BITS;
 
-            pub const RESERVED_MASK: $int = ((1 << Self::RESERVED_BITS) - 1);
-            pub const TIMESTAMP_MASK: $int = ((1 << Self::TIMESTAMP_BITS) - 1);
-            pub const RANDOM_MASK: $int = ((1 << Self::RANDOM_BITS) - 1);
+            // Unbounded shifts handle empty fields and fields spanning the
+            // backing integer. The layout assertion bounds every count.
+            pub const RESERVED_MASK: $int =
+                <$int>::MAX.unbounded_shr(<$int>::BITS - Self::bit_count(Self::RESERVED_BITS));
+            pub const TIMESTAMP_MASK: $int =
+                <$int>::MAX.unbounded_shr(<$int>::BITS - Self::bit_count(Self::TIMESTAMP_BITS));
+            pub const RANDOM_MASK: $int =
+                <$int>::MAX.unbounded_shr(<$int>::BITS - Self::bit_count(Self::RANDOM_BITS));
 
-            const fn valid_mask() -> $int {
-                (Self::TIMESTAMP_MASK << Self::TIMESTAMP_SHIFT) |
-                (Self::RANDOM_MASK << Self::RANDOM_SHIFT)
+            // Public layout constants use the backing integer for compatibility;
+            // primitive shift methods take u32. The layout bounds every count.
+            // Const blocks at call sites keep these checks out of runtime code
+            // and preserve cross-crate inlining of the small field methods.
+            #[allow(clippy::cast_possible_truncation, clippy::unnecessary_cast)]
+            const fn bit_count(bits: $int) -> u32 {
+                assert!(
+                    bits <= <$int>::BITS as $int,
+                    "bit count exceeds backing integer"
+                );
+                bits as u32
             }
 
+            const fn valid_mask() -> $int {
+                Self::TIMESTAMP_MASK.unbounded_shl(const { Self::bit_count(Self::TIMESTAMP_SHIFT) }) |
+                Self::RANDOM_MASK.unbounded_shl(const { Self::bit_count(Self::RANDOM_SHIFT) })
+            }
+
+            /// Packs a timestamp and randomness into this layout.
+            ///
+            /// Both components are masked to their field widths; reserved bits
+            /// stay zero. Excess random bits are always discarded, allowing
+            /// full-width RNG output. With debug assertions disabled, oversized
+            /// timestamps are truncated too. `is_valid()` cannot detect bits
+            /// discarded during construction.
+            ///
+            /// # Panics
+            ///
+            /// With debug assertions enabled, panics if the timestamp exceeds
+            /// its field's maximum. Excess random bits do not cause a panic.
             #[must_use]
             pub const fn from_components(timestamp: $int, random: $int) -> Self {
-                // Random bits can frequencly overflow, but this is okay since
-                // they're masked. We don't need a debug assertion here because
-                // this is expected behavior. However, the timestamp should
-                // never overflow.
+                // Mask excess random bits; full-width RNG output is expected.
+                // The timestamp must still fit its field.
                 debug_assert!(timestamp <= Self::TIMESTAMP_MASK, "timestamp overflow");
 
-                let t = (timestamp & Self::TIMESTAMP_MASK) << Self::TIMESTAMP_SHIFT;
-                let r = (random & Self::RANDOM_MASK) << Self::RANDOM_SHIFT;
+                let t = (timestamp & Self::TIMESTAMP_MASK)
+                    .unbounded_shl(const { Self::bit_count(Self::TIMESTAMP_SHIFT) });
+                let r = (random & Self::RANDOM_MASK)
+                    .unbounded_shl(const { Self::bit_count(Self::RANDOM_SHIFT) });
                 Self { id: t | r }
             }
 
             /// Extracts the timestamp from the packed ID.
             #[must_use]
             pub const fn timestamp(&self) -> $int {
-                (self.id >> Self::TIMESTAMP_SHIFT) & Self::TIMESTAMP_MASK
+                self.id.unbounded_shr(const { Self::bit_count(Self::TIMESTAMP_SHIFT) })
+                    & Self::TIMESTAMP_MASK
             }
             /// Extracts the random number from the packed ID.
             #[must_use]
             pub const fn random(&self) -> $int {
-                (self.id >> Self::RANDOM_SHIFT) & Self::RANDOM_MASK
+                self.id.unbounded_shr(const { Self::bit_count(Self::RANDOM_SHIFT) })
+                    & Self::RANDOM_MASK
             }
             /// Returns the maximum representable timestamp value based on
             /// `Self::TIMESTAMP_BITS`.
@@ -188,43 +215,53 @@ macro_rules! define_ulid {
                 self.id
             }
 
-            /// Converts a raw type into this type
+            /// Wraps a packed integer without validating reserved bits.
+            ///
+            /// Use [`TryFrom`] for checked conversion from the backing integer.
+            ///
+            /// All input bits are preserved, including reserved ones. Passing
+            /// the backing integer's maximum is invalid if the layout reserves
+            /// any bits. For untrusted values, use
+            /// `is_valid()` to check the layout, or
+            /// `into_valid()` to clear reserved bits and change the raw value.
             #[must_use]
             pub const fn from_raw(raw: $int) -> Self {
                 Self { id: raw }
             }
 
-            $crate::cfg_std! {
+            /// Returns `true` when this ID's reserved bits are zero.
+            ///
+            /// This cannot detect component values truncated during construction.
+            #[must_use]
+            pub const fn is_valid(&self) -> bool {
+                (self.id & !Self::valid_mask()) == 0
+            }
+
+            /// Clears reserved bits, which can change the ID's raw value.
+            #[must_use]
+            pub const fn into_valid(self) -> Self {
+                Self::from_raw(self.id & Self::valid_mask())
+            }
+
+            $crate::cfg_thread_rng! {
                 /// Generates a non-monotonic ULID using the current system time
                 /// in milliseconds since the Unix epoch and the built-in
                 /// [`ThreadRandom`] random generator.
                 ///
-                /// This convenience constructor does **not** maintain any
-                /// internal state and therefore does *not* guarantee
-                /// monotonicity when multiple IDs are created within the same
-                /// millisecond. If you have a bursty load or need strictly
-                /// monotonic ULIDs, prefer a stateful generator such as
-                /// [`BasicUlidGenerator`] or [`BasicMonoUlidGenerator`].
+                /// Samples fresh randomness on every call, without retaining
+                /// the previous ID. IDs generated within the same millisecond
+                /// have no guaranteed ordering. For strictly increasing IDs,
+                /// use a monotonic generator such as [`BasicMonoUlidGenerator`].
                 ///
-                /// Internally, this performs a system time query on every call,
-                /// making it the slowest way to generate a ULID, but it is
-                /// suitable for low-volume or one-off ID generation.
+                /// Reads wall time on every call. For the built-in `ULID`,
+                /// `thread_local::direct::Ulid::new_ulid()` delegates here.
                 ///
                 /// [`ThreadRandom`]: crate::rand::ThreadRandom
-                /// [`BasicUlidGenerator`]: crate::generator::BasicUlidGenerator
                 /// [`BasicMonoUlidGenerator`]:
                 ///     crate::generator::BasicMonoUlidGenerator
                 #[must_use]
                 pub fn now() -> Self {
-                    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-                    {
-                        use web_time::web::SystemTimeExt;
-                        Self::from_datetime(web_time::SystemTime::now().to_std())
-                    }
-                    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-                    {
-                        Self::from_datetime(std::time::SystemTime::now())
-                    }
+                    Self::from_system_time($crate::__internal::system_time_now())
                 }
             }
 
@@ -241,13 +278,13 @@ macro_rules! define_ulid {
                 /// will be truncated.
                 #[must_use]
                 #[allow(clippy::cast_possible_truncation)]
-                pub fn datetime(&self) -> std::time::SystemTime {
-                    std::time::SystemTime::UNIX_EPOCH
-                        + std::time::Duration::from_millis(self.timestamp() as u64)
+                pub fn system_time(&self) -> $crate::__internal::SystemTime {
+                    $crate::__internal::SystemTime::UNIX_EPOCH
+                        + core::time::Duration::from_millis(self.timestamp() as u64)
                 }
             }
 
-            $crate::cfg_std! {
+            $crate::cfg_thread_rng! {
                 /// Generates a ULID from the given timestamp in milliseconds
                 /// since UNIX epoch, using the built-in [`ThreadRandom`] random
                 /// generator.
@@ -273,14 +310,14 @@ macro_rules! define_ulid {
                 Self::from_components(timestamp, random)
             }
 
-            $crate::cfg_std! {
+            $crate::cfg_thread_rng! {
                 /// Generates a ULID from the given `SystemTime`, using the
                 /// built-in [`ThreadRandom`] random generator.
                 ///
                 /// [`ThreadRandom`]: crate::rand::ThreadRandom
                 #[must_use]
-                pub fn from_datetime(datetime: std::time::SystemTime) -> Self {
-                    Self::from_datetime_and_rand(datetime, &$crate::rand::ThreadRandom)
+                pub fn from_system_time(system_time: $crate::__internal::SystemTime) -> Self {
+                    Self::from_system_time_and_rand(system_time, &$crate::rand::ThreadRandom)
                 }
             }
 
@@ -291,12 +328,12 @@ macro_rules! define_ulid {
                 /// [`RandSource`]: crate::rand::RandSource
                 ///
                 #[must_use]
-                pub fn from_datetime_and_rand<R>(datetime: std::time::SystemTime, rng: &R) -> Self
+                pub fn from_system_time_and_rand<R>(system_time: $crate::__internal::SystemTime, rng: &R) -> Self
                 where
                     R: $crate::rand::RandSource<<Self as $crate::id::Id>::Ty>,
                 {
-                    let timestamp = datetime
-                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    let timestamp = system_time
+                        .duration_since($crate::__internal::SystemTime::UNIX_EPOCH)
                         .unwrap_or(core::time::Duration::ZERO)
                         .as_millis();
                     let random = rng.rand();
@@ -318,6 +355,27 @@ macro_rules! define_ulid {
             /// Converts a raw type into this type
             fn from_raw(raw: Self::Ty) -> Self {
                 Self::from_raw(raw)
+            }
+
+            fn is_valid(&self) -> bool {
+                self.is_valid()
+            }
+
+            fn into_valid(self) -> Self {
+                self.into_valid()
+            }
+        }
+
+        impl core::convert::TryFrom<$int> for $name {
+            type Error = $crate::Error<Self>;
+
+            fn try_from(raw: $int) -> core::result::Result<Self, Self::Error> {
+                let id = Self::from_raw(raw);
+                if id.is_valid() {
+                    Ok(id)
+                } else {
+                    Err($crate::Error::DecodeOverflow { id })
+                }
             }
         }
 
@@ -341,28 +399,17 @@ macro_rules! define_ulid {
             fn from_components(timestamp: $int, random: $int) -> Self {
                 Self::from_components(timestamp, random)
             }
-
-            fn is_valid(&self) -> bool {
-                (self.to_raw() & !Self::valid_mask()) == 0
-            }
-
-            fn into_valid(self) -> Self {
-                let raw = self.to_raw() & Self::valid_mask();
-                Self::from_raw(raw)
-            }
         }
 
         $crate::cfg_base32! {
             impl core::fmt::Display for $name {
                 fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                    use $crate::base32::Base32UlidExt;
-                    self.encode().fmt(f)
+                    $crate::base32::Base32Ext::encode(self).fmt(f)
                 }
             }
             impl PartialEq<str> for $name {
                 fn eq(&self, other: &str) -> bool {
-                    use $crate::base32::Base32UlidExt;
-                    Self::decode(other).map(|id| id == *self).unwrap_or(false)
+                    <Self as $crate::base32::Base32Ext>::decode(other).map(|id| id == *self).unwrap_or(false)
                 }
             }
             impl PartialEq<&str> for $name {
@@ -389,14 +436,12 @@ macro_rules! define_ulid {
                 }
                 impl From<$name> for $crate::__internal::String {
                     fn from(val: $name) -> Self {
-                        use $crate::base32::Base32UlidExt;
-                        val.encode().as_string()
+                        $crate::base32::Base32Ext::encode(&val).as_string()
                     }
                 }
                 impl From<&$name> for $crate::__internal::String {
                     fn from(val: &$name) -> Self {
-                        use $crate::base32::Base32UlidExt;
-                        val.encode().as_string()
+                        $crate::base32::Base32Ext::encode(val).as_string()
                     }
                 }
             }
@@ -405,8 +450,7 @@ macro_rules! define_ulid {
                 type Error = $crate::base32::Error<$name>;
 
                 fn try_from(s: &str) -> Result<Self, Self::Error> {
-                    use $crate::base32::Base32UlidExt;
-                    Self::decode(s)
+                    <Self as $crate::base32::Base32Ext>::decode(s)
                 }
             }
 
@@ -414,8 +458,7 @@ macro_rules! define_ulid {
                 type Err = $crate::base32::Error<$name>;
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    use $crate::base32::Base32UlidExt;
-                    Self::decode(s)
+                    <Self as $crate::base32::Base32Ext>::decode(s)
                 }
             }
         }
@@ -454,52 +497,154 @@ define_ulid!(
     random: 80
 );
 
-#[cfg(all(test, feature = "std"))]
+#[cfg(test)]
 mod tests {
-    use std::println;
-
     use super::*;
     use crate::rand::RandSource;
 
-    struct MockRand;
-    impl RandSource<u128> for MockRand {
-        fn rand(&self) -> u128 {
-            42
+    #[test]
+    fn layout_boundaries() {
+        let (timestamp, random) = (ULID::max_timestamp(), ULID::max_random());
+        for (timestamp, random) in [
+            (0, 0),
+            (1, 1),
+            (timestamp, random),
+            (timestamp, 0),
+            (0, random),
+        ] {
+            let id = ULID::from_components(timestamp, random);
+            assert_eq!(id.to_raw(), (timestamp << 80) | random);
+            assert_eq!((id.timestamp(), id.random()), (timestamp, random));
+        }
+        let raw = ULID::from_raw(u128::MAX);
+        assert!(raw.is_valid());
+        assert_eq!(raw.into_valid(), raw);
+        assert_eq!(ULID::from_components(timestamp, random), raw);
+        #[cfg(not(debug_assertions))]
+        assert_eq!(ULID::from_components(u128::MAX, u128::MAX), raw);
+    }
+
+    #[test]
+    fn random_exhaustion_and_rollover_use_the_supplied_randomness() {
+        let id = ULID::from_components(42, ULID::max_random() - 1);
+        assert!(id.has_random_room());
+        let last = id.increment_random();
+        assert_eq!((last.timestamp(), last.random()), (42, ULID::max_random()));
+        assert!(!last.has_random_room());
+        assert_eq!(
+            last.rollover_to_timestamp(43, 7),
+            ULID::from_components(43, 7)
+        );
+    }
+
+    #[test]
+    fn checked_raw_conversion_accepts_the_full_ulid_range() {
+        for raw in [0u128, 42, u128::MAX] {
+            assert_eq!(ULID::try_from(raw).unwrap().to_raw(), raw);
+            let converted: ULID = raw.try_into().unwrap();
+            assert_eq!(converted.to_raw(), raw);
         }
     }
 
     #[test]
-    fn ulid_validity() {
-        let id = ULID::from_raw(u128::MAX);
-        assert!(id.is_valid());
-        let valid = id.into_valid();
-        assert!(valid.is_valid());
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "The layout fixture generates a complete ID API; this test checks raw conversion."
+    )]
+    fn checked_raw_conversion_validates_custom_ulid_reserved_bits() {
+        crate::define_ulid!(CustomId, u128, reserved: 1, timestamp: 47, random: 80);
+        assert_eq!(CustomId::try_from(0u128).unwrap().to_raw(), 0);
+        assert_eq!(
+            CustomId::try_from(u128::MAX >> 1).unwrap().to_raw(),
+            u128::MAX >> 1
+        );
+        assert_eq!(
+            CustomId::try_from(u128::MAX),
+            Err(crate::Error::DecodeOverflow {
+                id: CustomId::from_raw(u128::MAX)
+            })
+        );
+        let converted: Result<CustomId, _> = u128::MAX.try_into();
+        assert_eq!(
+            converted,
+            Err(crate::Error::DecodeOverflow {
+                id: CustomId::from_raw(u128::MAX)
+            })
+        );
+    }
+
+    struct MockRand(u128);
+    impl RandSource<u128> for MockRand {
+        fn rand(&self) -> u128 {
+            self.0
+        }
     }
 
     #[test]
-    fn test_ulid_id_fields_and_bounds() {
-        let ts = ULID::max_timestamp();
-        let rand = ULID::max_random();
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
+    )]
+    fn timestamp_can_fill_u128() {
+        define_ulid!(TimestampOnly, u128, reserved: 0, timestamp: 128, random: 0);
 
-        let id = ULID::from_components(ts, rand);
-        println!("ID: {id:#?}");
-        assert_eq!(id.timestamp(), ts);
-        assert_eq!(id.random(), rand);
-        assert_eq!(ULID::from_components(ts, rand), id);
+        const ID: TimestampOnly = TimestampOnly::from_components(u128::MAX, 0);
+        const _: () = assert!(ID.timestamp() == u128::MAX);
+
+        assert_eq!(ID.to_raw(), u128::MAX);
+        assert_eq!((ID.timestamp(), ID.random()), (u128::MAX, 0));
+        assert!(ID.is_valid());
     }
 
     #[test]
-    fn ulid_low_bit_fields() {
-        let id = ULID::from_components(0, 0);
-        assert_eq!(id.timestamp(), 0);
-        assert_eq!(id.random(), 0);
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
+    )]
+    fn random_can_fill_u128() {
+        define_ulid!(RandomOnly, u128, reserved: 0, timestamp: 0, random: 128);
 
-        let id = ULID::from_components(1, 1);
-        assert_eq!(id.timestamp(), 1);
-        assert_eq!(id.random(), 1);
+        const ID: RandomOnly = RandomOnly::from_components(0, u128::MAX);
+        const _: () = assert!(ID.random() == u128::MAX);
+
+        assert_eq!(ID.to_raw(), u128::MAX);
+        assert_eq!((ID.timestamp(), ID.random()), (0, u128::MAX));
+        assert!(ID.is_valid());
+        assert_eq!(ID.into_valid(), ID);
     }
 
     #[test]
+    #[allow(
+        dead_code,
+        clippy::wrong_self_convention,
+        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
+    )]
+    fn fully_reserved_layout_only_accepts_zero() {
+        define_ulid!(ReservedOnly, u128, reserved: 128, timestamp: 0, random: 0);
+
+        const ZERO: ReservedOnly = ReservedOnly::from_components(0, 0);
+        let reserved = ReservedOnly::from_raw(u128::MAX);
+        assert_eq!(ReservedOnly::try_from(0u128).unwrap().to_raw(), 0);
+        assert_eq!(
+            ReservedOnly::try_from(1u128),
+            Err(crate::Error::DecodeOverflow {
+                id: ReservedOnly::from_raw(1u128)
+            })
+        );
+
+        assert_eq!(ReservedOnly::RESERVED_MASK, u128::MAX);
+        assert_eq!(ZERO.to_raw(), 0);
+        assert!(ZERO.is_valid());
+        assert!(!reserved.is_valid());
+        assert_eq!(reserved.into_valid(), ZERO);
+        assert_eq!((reserved.timestamp(), reserved.random()), (0, 0));
+    }
+
+    #[test]
+    #[cfg(feature = "thread-rng")]
     fn ulid_from_timestamp() {
         let id = ULID::from_timestamp(0);
         assert_eq!(id.timestamp(), 0);
@@ -510,29 +655,40 @@ mod tests {
 
     #[test]
     fn ulid_from_timestamp_and_rand() {
-        let id = ULID::from_timestamp_and_rand(42, &MockRand);
-        assert_eq!(id.timestamp(), 42);
-        assert_eq!(id.random(), 42);
+        for (random, expected) in [(42, 42), (u128::MAX, ULID::max_random())] {
+            let id = ULID::from_timestamp_and_rand(42, &MockRand(random));
+            assert_eq!((id.timestamp(), id.random()), (42, expected));
+        }
     }
 
     #[test]
-    fn ulid_from_datetime() {
-        let id = ULID::from_datetime(std::time::SystemTime::UNIX_EPOCH);
+    #[cfg(feature = "thread-rng")]
+    fn ulid_from_system_time() {
+        let id = ULID::from_system_time(std::time::SystemTime::UNIX_EPOCH);
         assert_eq!(id.timestamp(), 0);
 
-        let id = ULID::from_datetime(
-            std::time::SystemTime::UNIX_EPOCH + core::time::Duration::from_millis(1000),
+        let id = ULID::from_system_time(
+            std::time::SystemTime::UNIX_EPOCH + core::time::Duration::from_secs(1),
         );
         assert_eq!(id.timestamp(), 1000);
     }
 
     #[test]
-    fn ulid_from_datetime_and_rand() {
-        let id = ULID::from_datetime_and_rand(
-            std::time::SystemTime::UNIX_EPOCH + core::time::Duration::from_millis(42),
-            &MockRand,
-        );
-        assert_eq!(id.timestamp(), 42);
-        assert_eq!(id.random(), 42);
+    #[cfg(feature = "std")]
+    fn ulid_from_system_time_and_rand() {
+        use core::time::Duration;
+        use std::time::SystemTime;
+
+        let epoch = SystemTime::UNIX_EPOCH;
+        for (time, millis) in [
+            (epoch - Duration::from_nanos(1), 0u64),
+            (epoch, 0),
+            (epoch + Duration::from_millis(42), 42),
+            (epoch + Duration::from_micros(42_999), 42),
+        ] {
+            let id = ULID::from_system_time_and_rand(time, &MockRand(42));
+            assert_eq!((id.timestamp(), id.random()), (u128::from(millis), 42));
+            assert_eq!(id.system_time(), epoch + Duration::from_millis(millis));
+        }
     }
 }

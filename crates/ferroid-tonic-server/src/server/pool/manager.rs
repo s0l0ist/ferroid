@@ -83,18 +83,20 @@ impl WorkerPool {
 
     /// Gracefully shuts down all workers in the pool.
     ///
-    /// - Cancels the shared [`CancellationToken`] to prevent new work.
+    /// - Refuses new requests and waits up to `shutdown_timeout` seconds for
+    ///   in-flight streams to drain.
+    /// - Cancels the shared [`CancellationToken`] to stop remaining work.
     /// - Sends a [`WorkRequest::Shutdown`] to each worker.
     /// - Waits (up to 3 seconds per worker) for shutdown acknowledgements.
     ///
     /// This method is typically invoked during service termination.
     pub async fn shutdown(&self) -> Result<(), Error> {
-        // === Phase 0: Stop accepting new requests ===
+        // Stop accepting new requests before draining existing streams.
         #[cfg(feature = "tracing")]
         tracing::info!("Refusing new requests");
         set_global_shutdown();
 
-        // === Phase 1: Wait for in-flight streams to drain (up to 3s) ===
+        // Allow in-flight streams to drain within the configured timeout.
         #[cfg(feature = "tracing")]
         tracing::info!(
             "Draining in-flight streams ({} active)",
@@ -112,12 +114,12 @@ impl WorkerPool {
             tracing::debug!("All in-flight streams drained successfully");
         }
 
-        // === Phase 2: Cancel any remaining work ===
+        // Cancel work that did not finish within the drain timeout.
         #[cfg(feature = "tracing")]
         tracing::debug!("Cancelling remaining work via shutdown token");
         self.shutdown_token.cancel();
 
-        // === Phase 3: Notify workers to shut down ===
+        // Notify workers and collect their shutdown acknowledgements.
         #[cfg(feature = "tracing")]
         tracing::debug!("Notifying all workers to shut down");
         let mut shutdown_handles = Vec::with_capacity(self.workers.len());

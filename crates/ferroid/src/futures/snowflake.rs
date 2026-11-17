@@ -1,176 +1,187 @@
 use core::{convert::Infallible, future::Future, time::Duration};
 
-use super::SleepProvider;
 use crate::{
     generator::{Poll, Result, SnowflakeGenerator},
-    id::{SnowflakeId, ToU64},
+    id::SnowflakeId,
     time::TimeSource,
 };
 
-/// Extension trait for asynchronously generating Snowflake IDs.
+/// Extension trait for asynchronous Snowflake generation.
 ///
-/// This trait enables `SnowflakeGenerator` types to yield IDs in a
-/// `Future`-based context by awaiting until the generator is ready to produce a
-/// new ID.
-pub trait SnowflakeGeneratorAsyncExt<ID, T>
+/// Uses a caller-supplied async backoff strategy when generation is pending.
+///
+/// Local generators and callbacks are supported; the returned future
+/// is `Send` when its captures and the callback's future are `Send`.
+pub trait SnowflakeGeneratorAsyncExt<ID, T>: SnowflakeGenerator<ID, T>
 where
     ID: SnowflakeId,
     T: TimeSource<ID::Ty>,
 {
-    type Err;
-
-    /// Returns a future that resolves to the next available ID.
+    /// Waits for the next ID from an infallible generator.
     ///
-    /// This infallible method automatically retries when the generator is
-    /// temporarily unable to produce an ID. Only available for generators with
-    /// infallible error types.
-    ///
-    /// For fallible generators, use
-    /// [`Self::try_next_id_async`]
-    fn next_id_async<S>(&self) -> impl Future<Output = ID>
+    /// `f` receives a suggested [`Duration`], including [`Duration::ZERO`],
+    /// with clock granularity already applied. It may sleep, yield, or perform
+    /// any other async work. The generator awaits it before retrying. The
+    /// delay is advisory; waits saturate at `u64::MAX`
+    /// milliseconds.
+    fn next_id_async<B, F>(&self, f: B) -> impl Future<Output = ID>
     where
-        S: SleepProvider,
+        B: FnMut(Duration) -> F,
+        F: Future<Output = ()>,
         Self::Err: Into<Infallible>;
 
-    /// Returns a future that resolves to the next available ID.
+    /// Waits for the next ID, propagating generator errors immediately.
     ///
-    /// Automatically retries when the generator is temporarily unable to
-    /// produce an ID.
+    /// On [`Poll::Pending`], awaits `f` with the suggested [`Duration`]
+    /// before polling again. The callback may perform any async work and may
+    /// ignore the delay.
+    /// Cancelling this future stops retrying; it does not reserve an ID.
     ///
     /// # Errors
     ///
-    /// Returns an error if the generator fails, such as from lock poisoning.
-    fn try_next_id_async<S>(&self) -> impl Future<Output = Result<ID, Self::Err>>
+    /// Returns the underlying generator error, such as mutex poisoning.
+    fn try_next_id_async<B, F>(&self, f: B) -> impl Future<Output = Result<ID, Self::Err>>
     where
-        S: SleepProvider;
+        B: FnMut(Duration) -> F,
+        F: Future<Output = ()>;
 }
 
 impl<G, ID, T> SnowflakeGeneratorAsyncExt<ID, T> for G
 where
-    G: SnowflakeGenerator<ID, T> + Sync,
-    ID: SnowflakeId + Send,
-    T: TimeSource<ID::Ty> + Send,
+    G: SnowflakeGenerator<ID, T>,
+    ID: SnowflakeId,
+    T: TimeSource<ID::Ty>,
 {
-    type Err = G::Err;
-
-    async fn next_id_async<S>(&self) -> ID
+    async fn next_id_async<B, F>(&self, f: B) -> ID
     where
-        S: SleepProvider,
+        B: FnMut(Duration) -> F,
+        F: Future<Output = ()>,
         Self::Err: Into<Infallible>,
     {
-        match self.try_next_id_async::<S>().await {
-            Ok(id) => id,
-            Err(e) => {
-                #[allow(unreachable_code)]
-                // `into()` satisfies the trait bound at compile time.
-                match e.into() {}
-            }
-        }
+        let Ok(id) = self
+            .try_next_id_async(f)
+            .await
+            .map_err(Into::<Infallible>::into);
+        id
     }
 
-    async fn try_next_id_async<S>(&self) -> Result<ID, Self::Err>
+    async fn try_next_id_async<B, F>(&self, mut f: B) -> Result<ID, Self::Err>
     where
-        S: SleepProvider,
+        B: FnMut(Duration) -> F,
+        F: Future<Output = ()>,
     {
         loop {
-            let dur = match self.try_poll_id()? {
-                Poll::Ready { id } => break Ok(id),
-                Poll::Pending { yield_for } => {
-                    Duration::from_millis(yield_for.to_u64().saturating_mul(T::GRANULARITY_MILLIS))
-                }
+            let delay = match self.try_poll_id()? {
+                Poll::Ready { id } => return Ok(id),
+                Poll::Pending { yield_for } => yield_for,
             };
-            S::sleep_for(dur).await;
+            f(delay).await;
         }
     }
 }
 
-#[cfg(all(test, feature = "lock"))]
+#[cfg(all(test, feature = "basic"))]
 mod tests {
-    use core::{
-        pin::pin,
-        task::{Context, Poll as TaskPoll, RawWaker, RawWakerVTable, Waker},
+    use core::{cell::Cell, future::poll_fn, pin::pin, task::Poll, time::Duration};
+
+    use futures::FutureExt;
+
+    use crate::futures::tests::TestClock;
+    use crate::{
+        futures::SnowflakeGeneratorAsyncExt, generator::BasicSnowflakeGenerator,
+        id::SnowflakeTwitterId,
     };
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    };
 
-    use super::*;
-    use crate::{generator::LockSnowflakeGenerator, id::SnowflakeTwitterId};
+    #[test]
+    fn ready_returns_an_id() {
+        let clock = TestClock {
+            ticks: Cell::new(42),
+        };
+        let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, &clock);
 
-    static LAST_SLEEP: Mutex<Option<Duration>> = Mutex::new(None);
+        let id = generator
+            .next_id_async(|_| async { panic!("unexpected backoff") })
+            .now_or_never()
+            .expect("generator should be ready");
 
-    struct RecordingSleep;
-
-    impl SleepProvider for RecordingSleep {
-        fn sleep_for(dur: Duration) -> impl Future<Output = ()> + Send {
-            async move {
-                *LAST_SLEEP.lock().unwrap() = Some(dur);
-            }
-        }
-    }
-
-    #[derive(Default)]
-    struct CoarseStepTime {
-        reads: AtomicUsize,
-    }
-
-    impl TimeSource<u64> for CoarseStepTime {
-        const GRANULARITY_MILLIS: u64 = 8;
-
-        fn current_millis(&self) -> u64 {
-            self.reads.fetch_add(1, Ordering::Relaxed) as u64
-        }
-    }
-
-    fn block_on<F: Future>(future: F) -> F::Output {
-        fn raw_waker() -> RawWaker {
-            fn clone(_: *const ()) -> RawWaker {
-                raw_waker()
-            }
-            fn wake(_: *const ()) {}
-            fn wake_by_ref(_: *const ()) {}
-            fn drop(_: *const ()) {}
-
-            RawWaker::new(
-                core::ptr::null(),
-                &RawWakerVTable::new(clone, wake, wake_by_ref, drop),
-            )
-        }
-
-        let waker = unsafe { Waker::from_raw(raw_waker()) };
-        let mut context = Context::from_waker(&waker);
-        let mut future = pin!(future);
-
-        loop {
-            match future.as_mut().poll(&mut context) {
-                TaskPoll::Ready(value) => break value,
-                TaskPoll::Pending => core::hint::spin_loop(),
-            }
-        }
+        assert_eq!((id.timestamp(), id.sequence()), (42, 0));
     }
 
     #[test]
-    fn async_backoff_uses_time_source_granularity() {
-        *LAST_SLEEP.lock().unwrap() = None;
+    fn pending_yields_then_returns_an_id() {
+        let clock = TestClock {
+            ticks: Cell::new(0),
+        };
+        let generator = BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(
+            0,
+            0,
+            SnowflakeTwitterId::max_sequence(),
+            &clock,
+        );
 
-        let generator: LockSnowflakeGenerator<SnowflakeTwitterId, _> =
-            LockSnowflakeGenerator::from_components(
-                0,
-                0,
-                SnowflakeTwitterId::max_sequence(),
-                CoarseStepTime::default(),
-            );
+        let mut future = pin!(generator.next_id_async(|delay| {
+            assert_eq!(delay, Duration::from_millis(10));
+            poll_fn(|_| {
+                if clock.ticks.get() == 0 {
+                    Poll::Pending
+                } else {
+                    Poll::Ready(())
+                }
+            })
+        }));
 
-        let id = block_on(
-            <LockSnowflakeGenerator<SnowflakeTwitterId, _> as SnowflakeGeneratorAsyncExt<
-                SnowflakeTwitterId,
-                _,
-            >>::try_next_id_async::<RecordingSleep>(&generator),
-        )
-        .unwrap();
+        assert!(future.as_mut().now_or_never().is_none());
+        clock.ticks.set(1);
+        let id = future.now_or_never().expect("generator should be ready");
 
-        assert_eq!(*LAST_SLEEP.lock().unwrap(), Some(Duration::from_millis(8)));
-        assert_eq!(id.timestamp(), 1);
+        assert_eq!((id.timestamp(), id.sequence()), (1, 0));
+    }
+
+    #[test]
+    fn clock_rollback_passes_scaled_duration() {
+        let clock = TestClock {
+            ticks: Cell::new(39),
+        };
+        let generator =
+            BasicSnowflakeGenerator::<SnowflakeTwitterId, _>::from_components(42, 0, 0, &clock);
+
+        let id = generator
+            .try_next_id_async(|delay| {
+                assert_eq!(delay, Duration::from_millis(30));
+                async { clock.ticks.set(43) }
+            })
+            .now_or_never()
+            .expect("backoff should advance the clock")
+            .unwrap();
+
+        assert_eq!((id.timestamp(), id.sequence()), (43, 0));
+    }
+}
+
+#[cfg(all(test, feature = "lock", not(feature = "parking-lot")))]
+mod lock_tests {
+    use crate::{
+        futures::SnowflakeGeneratorAsyncExt, generator::LockSnowflakeGenerator,
+        id::SnowflakeTwitterId, time::DirectClock,
+    };
+    use futures::FutureExt;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    #[test]
+    fn poisoned_lock_returns_error_without_backoff() {
+        let generator =
+            LockSnowflakeGenerator::<SnowflakeTwitterId, _>::new(0, DirectClock::default());
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = generator.state.lock();
+            panic!("poison the mutex");
+        }));
+        assert!(panic.is_err());
+
+        let error = generator
+            .try_next_id_async(|_| async { panic!("unexpected backoff") })
+            .now_or_never()
+            .expect("generator errors must not suspend")
+            .unwrap_err();
+        assert!(matches!(error, crate::generator::Error::LockPoisoned));
     }
 }

@@ -1,3 +1,5 @@
+use core::time::Duration;
+
 use crate::id::Id;
 
 /// Represents the result of attempting to generate a new ID.
@@ -8,12 +10,15 @@ use crate::id::Id;
 ///
 /// - [`Poll::Ready`] indicates a new ID was successfully generated.
 /// - [`Poll::Pending`] means the generator is throttled and cannot produce a
-///   new ID until the time source advances past `yield_for`.
+///   new ID yet. `yield_for` is a suggested [`Duration`] before retrying;
+///   [`Duration::ZERO`] allows an immediate retry after contention.
 ///
 /// This allows non-blocking generation loops and clean backoff strategies.
 ///
 /// # Example
 /// ```
+/// # #[cfg(all(feature = "snowflake", feature = "basic"))]
+/// # {
 /// use ferroid::{
 ///     generator::{BasicSnowflakeGenerator, Poll},
 ///     id::{SnowflakeId, SnowflakeTwitterId},
@@ -34,22 +39,23 @@ use crate::id::Id;
 /// );
 /// match generator.poll_id() {
 ///     Poll::Ready { id } => println!("ID: {}", id.timestamp()),
-///     Poll::Pending { yield_for } => println!("Back off for: {yield_for}"),
+///     Poll::Pending { yield_for } => println!("Back off for: {yield_for:?}"),
 /// }
+/// # }
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Poll<T: Id> {
+pub enum Poll<ID: Id> {
     /// A new ID was successfully generated.
     Ready {
         /// The generated ID.
-        id: T,
+        id: ID,
     },
     /// The generator is not ready to produce a new ID yet.
     ///
-    /// Wait for the specified number of time-source units (`yield_for`) before
-    /// trying again.
+    /// Clock granularity is already applied. Waits saturate at `u64::MAX`
+    /// milliseconds. [`Duration::ZERO`] permits an immediate retry after contention.
     Pending {
-        /// Time-source units to wait before the next attempt.
-        yield_for: T::Ty,
+        /// Suggested wait before the next attempt.
+        yield_for: Duration,
     },
 }

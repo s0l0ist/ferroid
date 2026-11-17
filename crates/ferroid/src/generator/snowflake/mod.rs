@@ -5,15 +5,6 @@ mod basic;
 mod interface;
 #[cfg(feature = "lock")]
 mod lock;
-#[cfg(all(
-    test,
-    feature = "std",
-    feature = "alloc",
-    feature = "basic",
-    feature = "lock",
-    feature = "atomic"
-))]
-mod tests;
 
 #[cfg_attr(
     docsrs,
@@ -29,3 +20,13 @@ pub use interface::*;
 #[cfg_attr(docsrs, doc(cfg(all(feature = "snowflake", feature = "lock"))))]
 #[cfg(feature = "lock")]
 pub use lock::*;
+
+#[cfg(all(
+    test,
+    any(
+        feature = "basic",
+        feature = "lock",
+        all(feature = "atomic", target_has_atomic = "64")
+    )
+))]
+mod tests;

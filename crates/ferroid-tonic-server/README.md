@@ -63,6 +63,17 @@ ferroid.IdGenerator/StreamIds
 > { "packedIds": "AADANUc+1AA=" }
 ```
 
+## Benchmarks
+
+Run the gRPC benchmarks from the repository root:
+
+```sh
+cargo criterion -p ferroid-tonic-server-benches --bench bench
+```
+
+The benchmark starts the server with tracing enabled and measures streaming
+throughput across request sizes, concurrency levels, and compression settings.
+
 ## Healthcheck
 
 ```bash

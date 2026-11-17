@@ -45,15 +45,13 @@
 use ferroid::{
     generator::BasicSnowflakeGenerator,
     id::{Id, SnowflakeTwitterId},
-    time::{MonotonicClock, TWITTER_EPOCH},
+    time::{CachedClock, TWITTER_EPOCH},
 };
 
 /// The canonical Snowflake ID type used across the system.
 ///
 /// Defaults to [`SnowflakeTwitterId`], but can be replaced in custom builds
-/// with any type implementing [`SnowflakeId`].
-///
-/// [`SnowflakeId`]: crate::ferroid::id::SnowflakeId
+/// with any type implementing [`ferroid::id::SnowflakeId`].
 pub type SnowflakeId = SnowflakeTwitterId;
 
 /// The primitive integer type that backs a [`SnowflakeId`] (typically `u64`).
@@ -65,13 +63,13 @@ pub type SnowflakeIdTy = <SnowflakeId as Id>::Ty;
 /// Used for allocating buffers and decoding packed ID streams.
 pub const SNOWFLAKE_ID_SIZE: usize = core::mem::size_of::<SnowflakeIdTy>();
 
-/// The system clock used by ID generators for timestamp encoding.
-pub type Clock = MonotonicClock;
+/// The shared wall-clock cache used by ID generators for timestamp encoding.
+pub type Clock = CachedClock;
 
 /// The epoch offset used as the zero-point for timestamp calculations.
 ///
-/// This value is subtracted from the system clock to produce smaller, monotonic
-/// timestamps. Defaults to [`TWITTER_EPOCH`].
+/// This value is subtracted from wall-clock time to produce smaller timestamps.
+/// It does not prevent backwards clock adjustments. Defaults to [`TWITTER_EPOCH`].
 pub const EPOCH: core::time::Duration = TWITTER_EPOCH;
 
 /// The default Snowflake ID generator used by each worker.
