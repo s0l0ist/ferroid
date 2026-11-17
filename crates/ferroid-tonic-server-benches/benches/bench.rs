@@ -1,6 +1,4 @@
 //! End-to-end benchmarks for the ID streaming service.
-//!
-//! Run with `cargo bench -p ferroid-tonic-server-benches`.
 
 use core::{fmt, hint::black_box};
 use std::{

@@ -68,7 +68,7 @@ ferroid.IdGenerator/StreamIds
 Run the gRPC benchmarks from the repository root:
 
 ```sh
-cargo bench -p ferroid-tonic-server-benches --bench bench
+cargo criterion -p ferroid-tonic-server-benches --bench bench
 ```
 
 The benchmark starts the server with tracing enabled and measures streaming
