@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- Removed the requirement to enable `snowflake` or `ulid`.
 - Fixed custom ULIDs with narrower backing integers failing to compile with
   `std` enabled. `from_system_time_and_rand` now converts `u128` milliseconds
   to the backing type, saturating at its maximum before applying the layout's
