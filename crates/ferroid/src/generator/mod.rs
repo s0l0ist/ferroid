@@ -1,3 +1,8 @@
+#[cfg(all(
+    feature = "atomic",
+    any(target_has_atomic = "64", target_has_atomic = "128")
+))]
+mod atomic_integer;
 mod error;
 #[cfg(feature = "lock")]
 mod mutex;
@@ -6,6 +11,12 @@ mod snowflake;
 mod status;
 #[cfg(feature = "ulid")]
 mod ulid;
+#[cfg_attr(docsrs, doc(cfg(feature = "atomic")))]
+#[cfg(all(
+    feature = "atomic",
+    any(target_has_atomic = "64", target_has_atomic = "128")
+))]
+pub use atomic_integer::*;
 pub use error::*;
 #[cfg(feature = "lock")]
 pub use mutex::*;

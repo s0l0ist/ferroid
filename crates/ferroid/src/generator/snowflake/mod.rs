@@ -1,4 +1,7 @@
-#[cfg(all(feature = "atomic", target_has_atomic = "64"))]
+#[cfg(all(
+    feature = "atomic",
+    any(target_has_atomic = "64", target_has_atomic = "128")
+))]
 mod atomic;
 #[cfg(feature = "basic")]
 mod basic;
@@ -8,9 +11,16 @@ mod lock;
 
 #[cfg_attr(
     docsrs,
-    doc(cfg(all(feature = "snowflake", feature = "atomic", target_has_atomic = "64")))
+    doc(cfg(all(
+        feature = "snowflake",
+        feature = "atomic",
+        any(target_has_atomic = "64", target_has_atomic = "128")
+    )))
 )]
-#[cfg(all(feature = "atomic", target_has_atomic = "64"))]
+#[cfg(all(
+    feature = "atomic",
+    any(target_has_atomic = "64", target_has_atomic = "128")
+))]
 pub use atomic::*;
 #[cfg_attr(docsrs, doc(cfg(all(feature = "snowflake", feature = "basic"))))]
 #[cfg(feature = "basic")]
@@ -26,7 +36,10 @@ pub use lock::*;
     any(
         feature = "basic",
         feature = "lock",
-        all(feature = "atomic", target_has_atomic = "64")
+        all(
+            feature = "atomic",
+            any(target_has_atomic = "64", target_has_atomic = "128")
+        )
     )
 ))]
 mod tests;

@@ -28,7 +28,7 @@ pg_test = []
 
 [dependencies]
 pgrx = { workspace = true }
-ferroid = { version = "3.0.0", path = "../ferroid", features = ["ulid", "thread-local", "base32"] }
+ferroid = { version = "3.1.0", path = "../ferroid", features = ["ulid", "thread-local", "base32"] }
 serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]

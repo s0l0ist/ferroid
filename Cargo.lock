@@ -592,7 +592,7 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
 name = "ferroid"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "crossbeam-utils",
  "futures",
@@ -607,16 +607,15 @@ dependencies = [
 
 [[package]]
 name = "ferroid-benches"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "criterion",
  "ferroid",
- "futures",
 ]
 
 [[package]]
 name = "ferroid-feature-tests"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -628,7 +627,7 @@ dependencies = [
 
 [[package]]
 name = "ferroid-tonic-core"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "ferroid",
  "prost",
@@ -640,7 +639,7 @@ dependencies = [
 
 [[package]]
 name = "ferroid-tonic-server"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -671,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "ferroid-tonic-server-benches"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "criterion",
  "ferroid-tonic-core",
@@ -1477,7 +1476,7 @@ dependencies = [
 
 [[package]]
 name = "pg-ferroid"
-version = "3.0.0"
+version = "3.1.0"
 dependencies = [
  "ferroid",
  "pgrx",

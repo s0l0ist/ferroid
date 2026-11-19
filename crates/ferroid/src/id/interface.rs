@@ -71,7 +71,7 @@ pub trait Id: Copy + Clone + PartialOrd + Ord + PartialEq + Eq + Hash + fmt::Deb
         + ShrAssign<Self::Ty>;
 
     /// Converts this type into its raw type representation
-    fn to_raw(&self) -> Self::Ty;
+    fn to_raw(self) -> Self::Ty;
 
     /// Constructs an ID from its packed integer representation.
     ///

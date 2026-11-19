@@ -140,6 +140,10 @@ macro_rules! define_snowflake_id {
             );
         };
 
+        #[allow(
+            dead_code,
+            reason = "Custom layouts may use only part of the generated ID API."
+        )]
         impl $name {
             pub const RESERVED_BITS: $int = $reserved_bits;
             pub const TIMESTAMP_BITS: $int = $timestamp_bits;
@@ -246,7 +250,7 @@ macro_rules! define_snowflake_id {
 
             /// Converts this type into its raw type representation
             #[must_use]
-            pub const fn to_raw(&self) -> $int {
+            pub const fn to_raw(self) -> $int {
                 self.id
             }
 
@@ -285,7 +289,7 @@ macro_rules! define_snowflake_id {
             const ONE: $int = 1;
 
             /// Converts this type into its raw type representation
-            fn to_raw(&self) -> Self::Ty {
+            fn to_raw(self) -> Self::Ty {
                 self.to_raw()
             }
 
@@ -615,11 +619,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate a complete ID API; this test checks raw conversion."
-    )]
     fn checked_raw_conversion_supports_custom_backing_widths() {
         crate::define_snowflake_id!(CustomId, u32,
             reserved: 1, timestamp: 31, machine_id: 0, sequence: 0);
@@ -644,11 +643,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
-    )]
     fn timestamp_can_fill_u32() {
         define_snowflake_id!(TimestampOnly, u32,
             reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);
@@ -665,11 +659,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
-    )]
     fn machine_id_can_fill_u64() {
         define_snowflake_id!(MachineOnly, u64,
             reserved: 0, timestamp: 0, machine_id: 64, sequence: 0);
@@ -686,11 +675,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
-    )]
     fn sequence_can_fill_u128() {
         define_snowflake_id!(SequenceOnly, u128,
             reserved: 0, timestamp: 0, machine_id: 0, sequence: 128);
@@ -708,11 +692,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
-    )]
     fn fully_reserved_layout_only_accepts_zero() {
         define_snowflake_id!(ReservedOnly, u64,
             reserved: 64, timestamp: 0, machine_id: 0, sequence: 0);

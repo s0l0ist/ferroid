@@ -190,7 +190,7 @@ where
             }
             Ordering::Greater => {
                 // Set the new timestamp and random number.
-                let rand = self.rng.rand();
+                let rand = self.rng.rand::<ID>();
                 let updated = state.rollover_to_timestamp(now, rand);
                 self.state.set(updated);
                 Poll::Ready { id: updated }
@@ -250,11 +250,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; this test exercises wide pending delays."
-    )]
     fn pending_delay_caps_wide_timestamps() {
         crate::define_ulid!(WideTimestampId, u128, reserved: 0, timestamp: 128, random: 0);
         let timestamp = u128::from(u64::MAX) + 1;
