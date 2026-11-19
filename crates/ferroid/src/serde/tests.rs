@@ -1,9 +1,3 @@
-#![allow(
-    dead_code,
-    clippy::wrong_self_convention,
-    reason = "The fixture macros generate to_raw(&self) for Copy IDs."
-)]
-
 use crate::{Error, id::Id};
 
 // This ID deliberately implements neither SnowflakeId nor UlidId.
@@ -15,7 +9,7 @@ impl Id for EvenId {
     const ONE: Self::Ty = 1;
     type Ty = u64;
 
-    fn to_raw(&self) -> Self::Ty {
+    fn to_raw(self) -> Self::Ty {
         self.0
     }
 

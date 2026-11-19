@@ -123,6 +123,10 @@ macro_rules! define_ulid {
         };
 
 
+        #[allow(
+            dead_code,
+            reason = "Custom layouts may use only part of the generated ID API."
+        )]
         impl $name {
             pub const RESERVED_BITS: $int = $reserved_bits;
             pub const TIMESTAMP_BITS: $int = $timestamp_bits;
@@ -211,7 +215,7 @@ macro_rules! define_ulid {
 
             /// Converts this type into its raw type representation
             #[must_use]
-            pub const fn to_raw(&self) -> $int {
+            pub const fn to_raw(self) -> $int {
                 self.id
             }
 
@@ -325,6 +329,9 @@ macro_rules! define_ulid {
                 /// Generates a ULID from the given `SystemTime` and a custom
                 /// random number generator implementing [`RandSource`]
                 ///
+                /// Milliseconds exceeding the backing integer's range saturate
+                /// at its maximum before applying the layout's field bounds.
+                ///
                 /// [`RandSource`]: crate::rand::RandSource
                 ///
                 #[must_use]
@@ -336,6 +343,12 @@ macro_rules! define_ulid {
                         .duration_since($crate::__internal::SystemTime::UNIX_EPOCH)
                         .unwrap_or(core::time::Duration::ZERO)
                         .as_millis();
+                    #[allow(
+                        clippy::useless_conversion,
+                        reason = "SystemTime returns u128 milliseconds; custom layouts can use narrower integers."
+                    )]
+                    let timestamp = core::convert::TryFrom::try_from(timestamp)
+                        .unwrap_or(<$int>::MAX);
                     let random = rng.rand();
                     Self::from_components(timestamp, random)
                 }
@@ -348,7 +361,7 @@ macro_rules! define_ulid {
             const ONE: $int = 1;
 
             /// Converts this type into its raw type representation
-            fn to_raw(&self) -> Self::Ty {
+            fn to_raw(self) -> Self::Ty {
                 self.to_raw()
             }
 
@@ -547,11 +560,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "The layout fixture generates a complete ID API; this test checks raw conversion."
-    )]
     fn checked_raw_conversion_validates_custom_ulid_reserved_bits() {
         crate::define_ulid!(CustomId, u128, reserved: 1, timestamp: 47, random: 80);
         assert_eq!(CustomId::try_from(0u128).unwrap().to_raw(), 0);
@@ -582,11 +590,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
-    )]
     fn timestamp_can_fill_u128() {
         define_ulid!(TimestampOnly, u128, reserved: 0, timestamp: 128, random: 0);
 
@@ -599,11 +602,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
-    )]
     fn random_can_fill_u128() {
         define_ulid!(RandomOnly, u128, reserved: 0, timestamp: 0, random: 128);
 
@@ -617,11 +615,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; these tests exercise field boundaries."
-    )]
     fn fully_reserved_layout_only_accepts_zero() {
         define_ulid!(ReservedOnly, u128, reserved: 128, timestamp: 0, random: 0);
 
@@ -679,6 +672,14 @@ mod tests {
         use core::time::Duration;
         use std::time::SystemTime;
 
+        define_ulid!(CompactId, u64, reserved: 0, timestamp: 48, random: 16);
+        struct Random;
+        impl crate::rand::RandSource<u64> for Random {
+            fn rand(&self) -> u64 {
+                42
+            }
+        }
+
         let epoch = SystemTime::UNIX_EPOCH;
         for (time, millis) in [
             (epoch - Duration::from_nanos(1), 0u64),
@@ -689,6 +690,9 @@ mod tests {
             let id = ULID::from_system_time_and_rand(time, &MockRand(42));
             assert_eq!((id.timestamp(), id.random()), (u128::from(millis), 42));
             assert_eq!(id.system_time(), epoch + Duration::from_millis(millis));
+            let compact = CompactId::from_system_time_and_rand(time, &Random);
+            assert_eq!((compact.timestamp(), compact.random()), (millis, 42));
+            assert_eq!(compact.system_time(), epoch + Duration::from_millis(millis));
         }
     }
 }

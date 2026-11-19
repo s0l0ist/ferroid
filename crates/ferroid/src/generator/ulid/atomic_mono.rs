@@ -1,11 +1,10 @@
 use core::{cmp, marker::PhantomData, time::Duration};
 
-use portable_atomic::{AtomicU128, Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
 use crate::{
-    generator::{Poll, Result, UlidGenerator},
+    generator::{AtomicInteger, Poll, Result, UlidGenerator},
     id::{ToU64, UlidId},
     rand::RandSource,
     time::TimeSource,
@@ -14,18 +13,14 @@ use crate::{
 /// A lock-free *monotonic* ULID-style ID generator suitable for multi-threaded
 /// environments.
 ///
-/// This generator stores the ULID in an [`AtomicU128`], allowing safe shared
-/// use across threads.
+/// The ID's backing type selects the atomic storage: `u64` uses
+/// [`portable_atomic::AtomicU64`] and `u128` uses [`portable_atomic::AtomicU128`].
+/// Both allow safe shared use across threads with the same generator API.
 ///
 /// ## Features
 /// - ✅ Thread-safe
 /// - ✅ Probabilistically unique (no coordination required)
 /// - ✅ Time-ordered (monotonically increasing per time-source tick)
-///
-/// ## Caveats
-/// This implementation uses an [`AtomicU128`] internally, so it only supports
-/// ID layouts where the underlying type is [`u128`]. You cannot use layouts
-/// with larger or smaller representations (i.e., `ID::Ty` must be [`u128`]).
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
@@ -42,11 +37,12 @@ use crate::{
 /// [`LockMonoUlidGenerator`]: crate::generator::LockMonoUlidGenerator
 pub struct AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: UlidId<Ty = u128>,
+    ID: UlidId,
+    ID::Ty: AtomicInteger,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
-    state: crossbeam_utils::CachePadded<AtomicU128>,
+    state: crossbeam_utils::CachePadded<<ID::Ty as AtomicInteger>::Atomic>,
     time: T,
     rng: R,
     _id: PhantomData<ID>,
@@ -54,7 +50,8 @@ where
 
 impl<ID, T, R> AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: UlidId<Ty = u128>,
+    ID: UlidId,
+    ID::Ty: AtomicInteger,
     T: TimeSource<ID::Ty>,
     R: RandSource<ID::Ty>,
 {
@@ -71,7 +68,7 @@ where
     ///
     /// # Example
     /// ```
-    /// # #[cfg(feature = "thread-rng")]
+    /// # #[cfg(all(feature = "thread-rng", target_has_atomic = "128"))]
     /// # {
     /// use ferroid::{
     ///     generator::{AtomicMonoUlidGenerator, Poll},
@@ -114,7 +111,7 @@ where
     pub fn from_components(timestamp: ID::Ty, random: ID::Ty, time: T, rng: R) -> Self {
         let id = ID::from_components(timestamp, random);
         Self {
-            state: crossbeam_utils::CachePadded::new(AtomicU128::new(id.to_raw())),
+            state: crossbeam_utils::CachePadded::new(ID::Ty::new_atomic(id.to_raw())),
             time,
             rng,
             _id: PhantomData,
@@ -131,7 +128,7 @@ where
     ///
     /// # Example
     /// ```
-    /// # #[cfg(feature = "thread-rng")]
+    /// # #[cfg(all(feature = "thread-rng", target_has_atomic = "128"))]
     /// # {
     /// use ferroid::{
     ///     generator::{AtomicMonoUlidGenerator, Poll},
@@ -161,7 +158,7 @@ where
     ///
     /// # Example
     /// ```
-    /// # #[cfg(feature = "thread-rng")]
+    /// # #[cfg(all(feature = "thread-rng", target_has_atomic = "128"))]
     /// # {
     /// use ferroid::{
     ///     generator::{AtomicMonoUlidGenerator, Poll},
@@ -184,7 +181,7 @@ where
     pub fn poll_id(&self) -> Poll<ID> {
         let now = self.time.current_millis();
 
-        let current_raw = self.state.load(Ordering::Relaxed);
+        let current_raw = ID::Ty::load(&self.state);
         let current_id = ID::from_raw(current_raw);
         let current_ts = current_id.timestamp();
 
@@ -206,11 +203,7 @@ where
 
         let next_raw = next_id.to_raw();
 
-        if self
-            .state
-            .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
-            .is_ok()
-        {
+        if ID::Ty::compare_exchange(&self.state, current_raw, next_raw).is_ok() {
             Poll::Ready { id: next_id }
         } else {
             // CAS failed - another thread won the race. Yield 0 to retry
@@ -236,9 +229,10 @@ where
 
 impl<ID, T, R> UlidGenerator<ID, T, R> for AtomicMonoUlidGenerator<ID, T, R>
 where
-    ID: UlidId<Ty = u128>,
-    T: TimeSource<u128>,
-    R: RandSource<u128>,
+    ID: UlidId,
+    ID::Ty: AtomicInteger,
+    T: TimeSource<ID::Ty>,
+    R: RandSource<ID::Ty>,
 {
     type Err = core::convert::Infallible;
 
@@ -253,14 +247,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "std")]
+    use core::time::Duration;
+
+    #[cfg(all(feature = "std", target_has_atomic = "128"))]
     use super::super::tests::MockTime;
+    #[cfg(target_has_atomic = "128")]
     use super::super::tests::{CountingRand, OverflowClock, TestClock, ZeroRand};
     use super::*;
     use crate::generator::Poll;
+    #[cfg(target_has_atomic = "128")]
     use crate::id::ULID;
-    use core::time::Duration;
 
+    #[cfg(target_has_atomic = "128")]
     #[test]
     fn pending_delays_saturate_at_u64_milliseconds() {
         let atomic = crate::generator::AtomicMonoUlidGenerator::<ULID, _, _>::from_components(
@@ -277,6 +275,7 @@ mod tests {
         );
     }
 
+    #[cfg(target_has_atomic = "128")]
     #[test]
     fn handles_rollback_and_rollover() {
         let shared_time = TestClock::new(2);
@@ -305,6 +304,7 @@ mod tests {
         assert_eq!((id.timestamp(), id.random()), (3, 0));
     }
 
+    #[cfg(target_has_atomic = "128")]
     #[test]
     fn is_monotonic_across_ticks() {
         let shared_time = TestClock::new(1);
@@ -323,12 +323,25 @@ mod tests {
         assert!(next > second);
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(target_has_atomic = "128")]
+    #[test]
+    fn u128_increments_random_past_u64_max() {
+        let clock = TestClock::new(1);
+        let generator = AtomicMonoUlidGenerator::<ULID, _, _>::from_components(
+            1,
+            u128::from(u64::MAX),
+            &clock,
+            ZeroRand,
+        );
+        let id = generator.next_id(|_| panic!("expected ready ID"));
+        assert_eq!((id.timestamp(), id.random()), (1, u128::from(u64::MAX) + 1));
+    }
+
+    #[cfg(all(feature = "std", target_has_atomic = "128"))]
     #[test]
     fn concurrent_uniqueness() {
-        use std::{sync::Barrier, thread};
-
         use alloc::vec::Vec;
+        use std::{sync::Barrier, thread};
 
         const THREADS: usize = 8;
         const IDS_PER_THREAD: usize = 64;
@@ -367,6 +380,76 @@ mod tests {
         for (random, id) in ids.iter().enumerate() {
             assert_eq!(id.timestamp(), 1);
             assert_eq!(id.random(), u128::try_from(random).unwrap());
+        }
+    }
+
+    #[cfg(target_has_atomic = "64")]
+    mod compact {
+        use super::super::super::tests::{CountingRand, OverflowClock, TestClock, ZeroRand};
+        use super::*;
+
+        crate::define_ulid!(CompactId, u64, reserved: 0, timestamp: 48, random: 16);
+
+        #[test]
+        fn pending_delays_saturate_at_u64_milliseconds() {
+            let generator = AtomicMonoUlidGenerator::<CompactId, _, _>::from_components(
+                2,
+                0,
+                OverflowClock,
+                ZeroRand,
+            );
+            assert_eq!(
+                generator.poll_id(),
+                Poll::Pending {
+                    yield_for: Duration::from_millis(u64::MAX)
+                }
+            );
+        }
+
+        #[test]
+        fn is_monotonic_across_ticks() {
+            let clock = TestClock::new(1);
+            let generator = AtomicMonoUlidGenerator::new(&clock, CountingRand::new());
+            let first: CompactId = generator.next_id(|_| panic!("expected ready ID"));
+            let second = generator.next_id(|_| panic!("expected ready ID"));
+            assert_eq!((first.timestamp(), first.random()), (1, 0));
+            assert_eq!((second.timestamp(), second.random()), (1, 1));
+            assert!(second > first);
+
+            clock.ticks.set(2);
+            let next = generator.next_id(|_| panic!("expected ready ID"));
+            assert_eq!((next.timestamp(), next.random()), (2, 1));
+            assert!(next > second);
+        }
+
+        #[test]
+        fn handles_rollback_and_rollover() {
+            let clock = TestClock::new(2);
+            let generator = AtomicMonoUlidGenerator::<CompactId, _, _>::from_components(
+                2,
+                CompactId::max_random(),
+                &clock,
+                ZeroRand,
+            );
+            assert_eq!(
+                generator.poll_id(),
+                Poll::Pending {
+                    yield_for: Duration::from_millis(10)
+                }
+            );
+
+            clock.ticks.set(0);
+            assert_eq!(
+                generator.poll_id(),
+                Poll::Pending {
+                    yield_for: Duration::from_millis(20)
+                }
+            );
+            let id = generator.next_id(|delay| {
+                assert_eq!(delay, Duration::from_millis(20));
+                clock.ticks.set(3);
+            });
+            assert_eq!((id.timestamp(), id.random()), (3, 0));
         }
     }
 }

@@ -239,11 +239,6 @@ mod tests {
     use core::time::Duration;
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "The layout fixture generates a complete ID API; this test checks wait range."
-    )]
     fn pending_delays_exceed_small_backing_types() {
         crate::define_snowflake_id!(SmallId, u32,
             reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);
@@ -286,11 +281,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "Layout fixtures generate complete ID APIs; this test exercises wide pending delays."
-    )]
     fn pending_delay_caps_wide_timestamps() {
         crate::define_snowflake_id!(WideTimestampId, u128,
             reserved: 0, timestamp: 128, machine_id: 0, sequence: 0);

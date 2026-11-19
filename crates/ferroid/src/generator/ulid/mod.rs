@@ -1,4 +1,7 @@
-#[cfg(all(feature = "atomic", target_has_atomic = "128"))]
+#[cfg(all(
+    feature = "atomic",
+    any(target_has_atomic = "64", target_has_atomic = "128")
+))]
 mod atomic_mono;
 #[cfg(feature = "basic")]
 mod basic;
@@ -14,9 +17,16 @@ pub mod thread_local;
 
 #[cfg_attr(
     docsrs,
-    doc(cfg(all(feature = "ulid", feature = "atomic", target_has_atomic = "128")))
+    doc(cfg(all(
+        feature = "ulid",
+        feature = "atomic",
+        any(target_has_atomic = "64", target_has_atomic = "128")
+    )))
 )]
-#[cfg(all(feature = "atomic", target_has_atomic = "128"))]
+#[cfg(all(
+    feature = "atomic",
+    any(target_has_atomic = "64", target_has_atomic = "128")
+))]
 pub use atomic_mono::*;
 #[cfg_attr(docsrs, doc(cfg(all(feature = "ulid", feature = "basic"))))]
 #[cfg(feature = "basic")]
@@ -35,7 +45,10 @@ pub use lock_mono::*;
     any(
         feature = "basic",
         feature = "lock",
-        all(feature = "atomic", target_has_atomic = "128")
+        all(
+            feature = "atomic",
+            any(target_has_atomic = "64", target_has_atomic = "128")
+        )
     )
 ))]
 mod tests;

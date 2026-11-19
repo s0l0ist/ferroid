@@ -1,9 +1,8 @@
-use crate::rand::RandSource;
-use crate::time::TimeSource;
+use crate::{rand::RandSource, time::TimeSource};
 use core::{cell::Cell, num::NonZeroU64};
 
 pub(super) struct CountingRand {
-    next: Cell<u128>,
+    next: Cell<u64>,
 }
 
 impl CountingRand {
@@ -12,18 +11,18 @@ impl CountingRand {
     }
 }
 
-impl RandSource<u128> for CountingRand {
-    fn rand(&self) -> u128 {
+impl<T: From<u64>> RandSource<T> for CountingRand {
+    fn rand(&self) -> T {
         let next = self.next.get();
         self.next.set(next + 1);
-        next
+        T::from(next)
     }
 }
 
 pub(super) struct ZeroRand;
-impl RandSource<u128> for ZeroRand {
-    fn rand(&self) -> u128 {
-        0
+impl<T: From<u64>> RandSource<T> for ZeroRand {
+    fn rand(&self) -> T {
+        T::from(0)
     }
 }
 
@@ -33,9 +32,9 @@ pub(super) struct MockTime {
 }
 
 #[cfg(any(feature = "basic", feature = "lock", feature = "std"))]
-impl TimeSource<u128> for MockTime {
-    fn current_millis(&self) -> u128 {
-        u128::from(self.millis)
+impl<T: From<u64>> TimeSource<T> for MockTime {
+    fn current_millis(&self) -> T {
+        T::from(self.millis)
     }
 }
 
@@ -51,19 +50,19 @@ impl TestClock {
     }
 }
 
-impl TimeSource<u128> for &TestClock {
+impl<T: From<u64>> TimeSource<T> for &TestClock {
     const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(10).unwrap();
 
-    fn current_millis(&self) -> u128 {
-        u128::from(self.ticks.get())
+    fn current_millis(&self) -> T {
+        T::from(self.ticks.get())
     }
 }
 
 pub(super) struct OverflowClock;
-impl TimeSource<u128> for OverflowClock {
+impl<T: From<u64>> TimeSource<T> for OverflowClock {
     const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::MAX;
 
-    fn current_millis(&self) -> u128 {
-        0
+    fn current_millis(&self) -> T {
+        T::from(0)
     }
 }

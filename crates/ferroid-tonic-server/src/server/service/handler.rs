@@ -173,8 +173,12 @@ impl IdGenerator for IdService {
         }
         let start = std::time::Instant::now();
 
-        #[allow(clippy::cast_possible_truncation)]
-        let total_ids = req.get_ref().count as usize;
+        let total_ids = usize::try_from(req.get_ref().count).map_err(|_| {
+            increment_stream_errors_metric();
+            Error::InvalidRequest {
+                reason: "Count exceeds platform capacity".to_string(),
+            }
+        })?;
 
         if total_ids == 0 {
             increment_stream_errors_metric();

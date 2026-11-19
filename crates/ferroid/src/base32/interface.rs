@@ -217,11 +217,6 @@ mod tests {
         }
 
         #[test]
-        #[allow(
-            dead_code,
-            clippy::wrong_self_convention,
-            reason = "The layout fixture generates a complete ID API."
-        )]
         fn custom_u32_roundtrip() {
             crate::define_snowflake_id!(SmallId, u32,
                 reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);

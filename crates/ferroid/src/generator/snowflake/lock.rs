@@ -330,11 +330,6 @@ mod tests {
     use std::panic::{AssertUnwindSafe, catch_unwind};
 
     #[test]
-    #[allow(
-        dead_code,
-        clippy::wrong_self_convention,
-        reason = "The layout fixture generates a complete ID API; this test checks wait range."
-    )]
     fn pending_delays_exceed_small_backing_types() {
         crate::define_snowflake_id!(SmallId, u32,
             reserved: 0, timestamp: 32, machine_id: 0, sequence: 0);

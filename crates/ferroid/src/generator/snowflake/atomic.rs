@@ -1,28 +1,23 @@
 use core::{cmp, marker::PhantomData, time::Duration};
 
-use portable_atomic::{AtomicU64, Ordering};
 #[cfg(feature = "tracing")]
 use tracing::instrument;
 
 use crate::{
-    generator::{Poll, Result, SnowflakeGenerator},
+    generator::{AtomicInteger, Poll, Result, SnowflakeGenerator},
     id::{SnowflakeId, ToU64},
     time::TimeSource,
 };
 
 /// A lock-free Snowflake ID generator suitable for multi-threaded environments.
 ///
-/// This generator stores the Snowflake state in an [`AtomicU64`], allowing safe
-/// shared use across threads.
+/// The ID's backing type selects the atomic storage: `u64` uses
+/// [`portable_atomic::AtomicU64`] and `u128` uses [`portable_atomic::AtomicU128`].
+/// Both allow safe shared use across threads with the same generator API.
 ///
 /// ## Features
 /// - ✅ Thread-safe
-/// - ❌ Safely implement any [`SnowflakeId`] layout
-///
-/// ## Caveats
-/// This implementation uses an [`AtomicU64`] internally, so it only supports ID
-/// layouts where the underlying type is [`u64`]. You cannot use layouts with
-/// larger or smaller representations (i.e., `ID::Ty` must be [`u64`]).
+/// - ✅ Custom [`SnowflakeId`] layouts backed by `u64` or `u128`
 ///
 /// ## Recommended When
 /// - You're in a multi-threaded environment
@@ -36,17 +31,19 @@ use crate::{
 /// [`LockSnowflakeGenerator`]: crate::generator::LockSnowflakeGenerator
 pub struct AtomicSnowflakeGenerator<ID, T>
 where
-    ID: SnowflakeId<Ty = u64>,
+    ID: SnowflakeId,
+    ID::Ty: AtomicInteger,
     T: TimeSource<ID::Ty>,
 {
-    state: crossbeam_utils::CachePadded<AtomicU64>,
+    state: crossbeam_utils::CachePadded<<ID::Ty as AtomicInteger>::Atomic>,
     time: T,
     _id: PhantomData<ID>,
 }
 
 impl<ID, T> AtomicSnowflakeGenerator<ID, T>
 where
-    ID: SnowflakeId<Ty = u64>,
+    ID: SnowflakeId,
+    ID::Ty: AtomicInteger,
     T: TimeSource<ID::Ty>,
 {
     /// Creates a new [`AtomicSnowflakeGenerator`] initialized with the current
@@ -71,7 +68,7 @@ where
     ///
     /// # Example
     /// ```
-    /// # #[cfg(feature = "std")]
+    /// # #[cfg(all(feature = "std", target_has_atomic = "64"))]
     /// # {
     /// use ferroid::{
     ///     generator::{AtomicSnowflakeGenerator, Poll},
@@ -118,7 +115,7 @@ where
     ) -> Self {
         let initial = ID::from_components(timestamp, machine_id, sequence);
         Self {
-            state: crossbeam_utils::CachePadded::new(AtomicU64::new(initial.to_raw())),
+            state: crossbeam_utils::CachePadded::new(ID::Ty::new_atomic(initial.to_raw())),
             time,
             _id: PhantomData,
         }
@@ -134,7 +131,7 @@ where
     ///
     /// # Example
     /// ```
-    /// # #[cfg(feature = "std")]
+    /// # #[cfg(all(feature = "std", target_has_atomic = "64"))]
     /// # {
     /// use ferroid::{
     ///     generator::{AtomicSnowflakeGenerator, Poll},
@@ -162,7 +159,7 @@ where
     ///
     /// # Example
     /// ```
-    /// # #[cfg(feature = "std")]
+    /// # #[cfg(all(feature = "std", target_has_atomic = "64"))]
     /// # {
     /// use ferroid::{
     ///     generator::{AtomicSnowflakeGenerator, Poll},
@@ -185,7 +182,7 @@ where
     pub fn poll_id(&self) -> Poll<ID> {
         let now = self.time.current_millis();
 
-        let current_raw = self.state.load(Ordering::Relaxed);
+        let current_raw = ID::Ty::load(&self.state);
         let current_id = ID::from_raw(current_raw);
         let current_ts = current_id.timestamp();
 
@@ -207,11 +204,7 @@ where
 
         let next_raw = next_id.to_raw();
 
-        if self
-            .state
-            .compare_exchange(current_raw, next_raw, Ordering::Relaxed, Ordering::Relaxed)
-            .is_ok()
-        {
+        if ID::Ty::compare_exchange(&self.state, current_raw, next_raw).is_ok() {
             Poll::Ready { id: next_id }
         } else {
             // CAS failed - another thread won the race. Yield 0 to retry
@@ -237,8 +230,9 @@ where
 
 impl<ID, T> SnowflakeGenerator<ID, T> for AtomicSnowflakeGenerator<ID, T>
 where
-    ID: SnowflakeId<Ty = u64>,
-    T: TimeSource<u64>,
+    ID: SnowflakeId,
+    ID::Ty: AtomicInteger,
+    T: TimeSource<ID::Ty>,
 {
     type Err = core::convert::Infallible;
 
@@ -253,14 +247,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "std")]
+    use core::time::Duration;
+
+    #[cfg(all(feature = "std", target_has_atomic = "64"))]
     use super::super::tests::MockTime;
+    #[cfg(target_has_atomic = "64")]
     use super::super::tests::{OverflowClock, TestClock};
     use super::*;
     use crate::generator::Poll;
+    #[cfg(target_has_atomic = "64")]
     use crate::id::SnowflakeTwitterId;
-    use core::time::Duration;
 
+    #[cfg(target_has_atomic = "64")]
     #[test]
     fn pending_delays_saturate_at_u64_milliseconds() {
         let atomic =
@@ -278,6 +276,7 @@ mod tests {
         );
     }
 
+    #[cfg(target_has_atomic = "64")]
     #[test]
     fn handles_rollback_and_rollover() {
         let shared_time = TestClock::new(2);
@@ -311,6 +310,7 @@ mod tests {
         assert_eq!((id.timestamp(), id.sequence()), (3, 0));
     }
 
+    #[cfg(target_has_atomic = "64")]
     #[test]
     fn is_monotonic_across_ticks() {
         let shared_time = TestClock::new(1);
@@ -329,12 +329,11 @@ mod tests {
         assert!(next > second);
     }
 
-    #[cfg(feature = "std")]
+    #[cfg(all(feature = "std", target_has_atomic = "64"))]
     #[test]
     fn concurrent_uniqueness() {
-        use std::{sync::Barrier, thread};
-
         use alloc::vec::Vec;
+        use std::{sync::Barrier, thread};
 
         const THREADS: usize = 8;
         // The whole batch fits within one Snowflake timestamp's sequence range.
@@ -375,6 +374,110 @@ mod tests {
             assert_eq!(id.timestamp(), 1);
             assert_eq!(id.machine_id(), 0);
             assert_eq!(id.sequence(), u64::try_from(sequence).unwrap());
+        }
+    }
+
+    #[cfg(target_has_atomic = "128")]
+    mod wide {
+        use super::super::super::tests::TestClock;
+        use super::*;
+
+        crate::define_snowflake_id!(WideId, u128,
+            reserved: 0, timestamp: 80, machine_id: 16, sequence: 32);
+        crate::define_snowflake_id!(WideSequenceId, u128,
+            reserved: 0, timestamp: 16, machine_id: 16, sequence: 96);
+
+        #[test]
+        fn is_monotonic_across_ticks() {
+            let timestamp = u128::from(u64::MAX) + 42;
+            let clock = TestClock::new(timestamp);
+            let generator = AtomicSnowflakeGenerator::new(7, &clock);
+            let first: WideId = generator.next_id(|_| panic!("expected ready ID"));
+            let second = generator.next_id(|_| panic!("expected ready ID"));
+            assert_eq!(
+                (first.timestamp(), first.machine_id(), first.sequence()),
+                (timestamp, 7, 0)
+            );
+            assert_eq!(
+                (second.timestamp(), second.machine_id(), second.sequence()),
+                (timestamp, 7, 1)
+            );
+            assert!(second > first);
+
+            clock.ticks.set(timestamp + 1);
+            let next = generator.next_id(|_| panic!("expected ready ID"));
+            assert_eq!(
+                (next.timestamp(), next.machine_id(), next.sequence()),
+                (timestamp + 1, 7, 0)
+            );
+            assert!(next > second);
+        }
+
+        #[test]
+        fn handles_rollback_and_rollover() {
+            let timestamp = u128::from(u64::MAX) + 42;
+            let clock = TestClock::new(timestamp);
+            let generator = AtomicSnowflakeGenerator::<WideId, _>::from_components(
+                timestamp,
+                7,
+                WideId::max_sequence(),
+                &clock,
+            );
+            assert_eq!(
+                generator.poll_id(),
+                Poll::Pending {
+                    yield_for: Duration::from_millis(10)
+                }
+            );
+
+            clock.ticks.set(timestamp - 2);
+            assert_eq!(
+                generator.poll_id(),
+                Poll::Pending {
+                    yield_for: Duration::from_millis(20)
+                }
+            );
+            let id = generator.next_id(|delay| {
+                assert_eq!(delay, Duration::from_millis(20));
+                clock.ticks.set(timestamp + 1);
+            });
+            assert_eq!(
+                (id.timestamp(), id.machine_id(), id.sequence()),
+                (timestamp + 1, 7, 0)
+            );
+        }
+
+        #[test]
+        fn pending_delays_saturate_at_u64_milliseconds() {
+            let clock = TestClock::new(0);
+            let generator = AtomicSnowflakeGenerator::<WideId, _>::from_components(
+                u128::from(u64::MAX) + 42,
+                7,
+                0,
+                &clock,
+            );
+            assert_eq!(
+                generator.poll_id(),
+                Poll::Pending {
+                    yield_for: Duration::from_millis(u64::MAX)
+                }
+            );
+        }
+
+        #[test]
+        fn sequence_increments_past_u64_max() {
+            let clock = TestClock::new(1);
+            let generator = AtomicSnowflakeGenerator::<WideSequenceId, _>::from_components(
+                1,
+                7,
+                u128::from(u64::MAX),
+                &clock,
+            );
+            let id = generator.next_id(|_| panic!("expected ready ID"));
+            assert_eq!(
+                (id.timestamp(), id.machine_id(), id.sequence()),
+                (1, 7, u128::from(u64::MAX) + 1)
+            );
         }
     }
 }

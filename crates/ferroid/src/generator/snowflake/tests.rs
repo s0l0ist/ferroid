@@ -7,44 +7,37 @@ pub(super) struct MockTime {
 }
 
 #[cfg(any(feature = "basic", feature = "lock", feature = "std"))]
-impl TimeSource<u64> for MockTime {
-    fn current_millis(&self) -> u64 {
-        self.millis
+impl<T: From<u64>> TimeSource<T> for MockTime {
+    fn current_millis(&self) -> T {
+        T::from(self.millis)
     }
 }
 
-#[cfg(any(feature = "basic", feature = "lock", feature = "std"))]
-impl TimeSource<u128> for MockTime {
-    fn current_millis(&self) -> u128 {
-        u128::from(self.millis)
-    }
+pub(super) struct TestClock<T> {
+    pub(super) ticks: Cell<T>,
 }
 
-pub(super) struct TestClock {
-    pub(super) ticks: Cell<u64>,
-}
-
-impl TestClock {
-    pub(super) fn new(ticks: u64) -> Self {
+impl<T> TestClock<T> {
+    pub(super) fn new(ticks: T) -> Self {
         Self {
             ticks: Cell::new(ticks),
         }
     }
 }
 
-impl TimeSource<u64> for &TestClock {
+impl<T: Copy> TimeSource<T> for &TestClock<T> {
     const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(10).unwrap();
 
-    fn current_millis(&self) -> u64 {
+    fn current_millis(&self) -> T {
         self.ticks.get()
     }
 }
 
 pub(super) struct OverflowClock;
-impl TimeSource<u64> for OverflowClock {
+impl<T: From<u64>> TimeSource<T> for OverflowClock {
     const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::MAX;
 
-    fn current_millis(&self) -> u64 {
-        0
+    fn current_millis(&self) -> T {
+        T::from(0)
     }
 }

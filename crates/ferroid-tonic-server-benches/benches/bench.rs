@@ -179,8 +179,7 @@ async fn run_grpc_id_bench(channel: &Channel, params: &GrpcBenchParams) {
     }
 }
 
-#[allow(clippy::missing_panics_doc)]
-pub fn wait_for_port(addr: &str, timeout_secs: u64) {
+fn wait_for_port(addr: &str, timeout_secs: u64) {
     let start = Instant::now();
     while start.elapsed().as_secs() < timeout_secs {
         if TcpStream::connect(addr).is_ok() {
