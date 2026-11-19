@@ -206,7 +206,7 @@ mod tests {
 
         struct ZeroRand;
         impl RandSource<u128> for ZeroRand {
-            fn rand(&self) -> u128 {
+            fn rand<M: crate::rand::RandomMask<u128>>(&self) -> u128 {
                 0
             }
         }

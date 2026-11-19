@@ -13,4 +13,3 @@ harness = false
 [dependencies]
 criterion = { workspace = true }
 ferroid = { path = "../ferroid", features = ["all"] }
-futures = { workspace = true, features = ["alloc"] }

@@ -1,13 +1,15 @@
-//! Benchmarks for the public `ferroid` API.
+//! Benchmarks for ID generation and Base32 conversion.
+//!
+//! Compare generator backends, direct/cached clocks, and thread-local APIs on
+//! one calling thread. Shared generators are measured without contention.
+//! Base32 covers reusable buffers, allocated strings, and valid decoding.
 //!
 //! Run with `cargo criterion -p ferroid-benches --bench bench`.
-use core::num::NonZeroU64;
-use std::{future::pending, hint::black_box};
+use std::hint::black_box;
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use ferroid::{
     base32::Base32Ext,
-    futures::{SnowflakeGeneratorAsyncExt, UlidGeneratorAsyncExt},
     generator::{
         AtomicMonoUlidGenerator, AtomicSnowflakeGenerator, BasicMonoUlidGenerator,
         BasicSnowflakeGenerator, BasicUlidGenerator, LockMonoUlidGenerator, LockSnowflakeGenerator,
@@ -15,10 +17,9 @@ use ferroid::{
         thread_local::{cached, direct},
     },
     id::{SnowflakeTwitterId, ULID},
-    rand::{RandSource, ThreadRandom},
-    time::{CachedClock, DirectClock, TWITTER_EPOCH, TimeSource},
+    rand::ThreadRandom,
+    time::{CachedClock, DirectClock, TWITTER_EPOCH},
 };
-use futures::FutureExt;
 
 ferroid::define_snowflake_id!(
     /// A single-worker layout with room for 4,194,304 IDs per millisecond.
@@ -44,26 +45,6 @@ fn bench_snow_base32(c: &mut Criterion) {
         });
     });
 
-    group.bench_function("encode_as_str", |b| {
-        let mut index = 0;
-        b.iter(move || {
-            let id = black_box(ids[index]);
-            index = (index + 1) % ids.len();
-            let encoded = id.encode();
-            black_box(encoded.as_str());
-        });
-    });
-
-    group.bench_function("encode_to_buf_as_str", |b| {
-        let mut output = SnowflakeTwitterId::base32_array();
-        let mut index = 0;
-        b.iter(move || {
-            let id = black_box(ids[index]);
-            index = (index + 1) % ids.len();
-            black_box(id.encode_to_buf(&mut output).as_str());
-        });
-    });
-
     group.bench_function("encode_as_string", |b| {
         let mut index = 0;
         b.iter(move || {
@@ -82,15 +63,6 @@ fn bench_snow_base32(c: &mut Criterion) {
             index = (index + 1) % inputs.len();
             black_box(SnowflakeTwitterId::decode(input).unwrap());
         });
-    });
-
-    // Put the invalid character last to exercise the complete cold scan.
-    let mut invalid = SnowflakeTwitterId::base32_array();
-    invalid.copy_from_slice(encoded[3].as_bytes());
-    *invalid.last_mut().unwrap() = b'!';
-    assert!(SnowflakeTwitterId::decode(invalid).is_err());
-    group.bench_function("decode_invalid_ascii", |b| {
-        b.iter(|| black_box(SnowflakeTwitterId::decode(black_box(&invalid))));
     });
 
     group.finish();
@@ -112,26 +84,6 @@ fn bench_ulid_base32(c: &mut Criterion) {
         });
     });
 
-    group.bench_function("encode_as_str", |b| {
-        let mut index = 0;
-        b.iter(move || {
-            let id = black_box(ids[index]);
-            index = (index + 1) % ids.len();
-            let encoded = id.encode();
-            black_box(encoded.as_str());
-        });
-    });
-
-    group.bench_function("encode_to_buf_as_str", |b| {
-        let mut output = ULID::base32_array();
-        let mut index = 0;
-        b.iter(move || {
-            let id = black_box(ids[index]);
-            index = (index + 1) % ids.len();
-            black_box(id.encode_to_buf(&mut output).as_str());
-        });
-    });
-
     group.bench_function("encode_as_string", |b| {
         let mut index = 0;
         b.iter(move || {
@@ -150,15 +102,6 @@ fn bench_ulid_base32(c: &mut Criterion) {
             index = (index + 1) % inputs.len();
             black_box(ULID::decode(input).unwrap());
         });
-    });
-
-    // Put the invalid character last to exercise the complete cold scan.
-    let mut invalid = ULID::base32_array();
-    invalid.copy_from_slice(encoded[3].as_bytes());
-    *invalid.last_mut().unwrap() = b'!';
-    assert!(ULID::decode(invalid).is_err());
-    group.bench_function("decode_invalid_ascii", |b| {
-        b.iter(|| black_box(ULID::decode(black_box(&invalid))));
     });
 
     group.finish();
@@ -206,98 +149,6 @@ fn bench_snow_generators(c: &mut Criterion) {
         });
     });
 
-    group.finish();
-}
-
-fn bench_pending_generators(c: &mut Criterion) {
-    struct FixedClock(u64);
-    impl TimeSource<u64> for FixedClock {
-        const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(8).unwrap();
-
-        fn current_millis(&self) -> u64 {
-            black_box(self.0)
-        }
-    }
-    impl TimeSource<u128> for FixedClock {
-        const GRANULARITY_MILLIS: NonZeroU64 = NonZeroU64::new(8).unwrap();
-
-        fn current_millis(&self) -> u128 {
-            u128::from(black_box(self.0))
-        }
-    }
-    struct ZeroRand;
-    impl RandSource<u128> for ZeroRand {
-        fn rand(&self) -> u128 {
-            0
-        }
-    }
-
-    // Fixed clocks keep both pending paths deterministic without sleeping.
-    let mut group = c.benchmark_group("snow/generator/pending");
-    for (case, now, sequence) in [
-        ("exhaustion", 42, BenchSnowflake::max_sequence()),
-        ("rollback", 39, 0),
-    ] {
-        let basic = BasicSnowflakeGenerator::<BenchSnowflake, _>::from_components(
-            42,
-            0,
-            sequence,
-            FixedClock(now),
-        );
-        group.bench_function(format!("basic/{case}"), |b| {
-            b.iter(|| black_box(basic.poll_id()));
-        });
-        let atomic = AtomicSnowflakeGenerator::<BenchSnowflake, _>::from_components(
-            42,
-            0,
-            sequence,
-            FixedClock(now),
-        );
-        group.bench_function(format!("atomic/{case}"), |b| {
-            b.iter(|| black_box(atomic.poll_id()));
-        });
-        let lock = LockSnowflakeGenerator::<BenchSnowflake, _>::from_components(
-            42,
-            0,
-            sequence,
-            FixedClock(now),
-        );
-        group.bench_function(format!("lock/{case}"), |b| {
-            b.iter(|| black_box(lock.try_poll_id().unwrap()));
-        });
-    }
-    group.finish();
-
-    let mut group = c.benchmark_group("ulid/generator/pending");
-    for (case, now, random) in [("exhaustion", 42, ULID::max_random()), ("rollback", 39, 0)] {
-        let basic = BasicMonoUlidGenerator::<ULID, _, _>::from_components(
-            42,
-            random,
-            FixedClock(now),
-            ZeroRand,
-        );
-        group.bench_function(format!("basic_mono/{case}"), |b| {
-            b.iter(|| black_box(basic.poll_id()));
-        });
-        let atomic = AtomicMonoUlidGenerator::<ULID, _, _>::from_components(
-            42,
-            random,
-            FixedClock(now),
-            ZeroRand,
-        );
-        group.bench_function(format!("atomic_mono/{case}"), |b| {
-            b.iter(|| black_box(atomic.poll_id()));
-        });
-        let lock = LockMonoUlidGenerator::<ULID, _, _>::from_components(
-            42,
-            random,
-            FixedClock(now),
-            ZeroRand,
-        );
-        group.bench_function(format!("lock_mono/{case}"), |b| {
-            b.iter(|| black_box(lock.try_poll_id().unwrap()));
-        });
-    }
     group.finish();
 }
 
@@ -380,69 +231,6 @@ fn bench_ulid_generation(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_generate_encode(c: &mut Criterion) {
-    let mut group = c.benchmark_group("generate_encode/ulid");
-    group.throughput(Throughput::Elements(1));
-    group.bench_function("now", |b| {
-        let mut output = ULID::base32_array();
-        b.iter(move || {
-            black_box(ULID::now().encode_to_buf(&mut output));
-        });
-    });
-    group.bench_function("basic_mono", |b| {
-        let generator =
-            BasicMonoUlidGenerator::<ULID, _, _>::new(DirectClock::default(), ThreadRandom);
-        let mut output = ULID::base32_array();
-        b.iter(move || {
-            let id = generator.next_id(|_| std::thread::yield_now());
-            black_box(id.encode_to_buf(&mut output));
-        });
-    });
-    group.bench_function("cached_mono", |b| {
-        let generator =
-            BasicMonoUlidGenerator::<ULID, _, _>::new(CachedClock::default(), ThreadRandom);
-        let mut output = ULID::base32_array();
-        b.iter(move || {
-            let id = generator.next_id(|_| std::thread::yield_now());
-            black_box(id.encode_to_buf(&mut output));
-        });
-    });
-    group.finish();
-}
-
-fn bench_async_ready(c: &mut Criterion) {
-    // Poll each future once to measure the ready path without an executor.
-    let mut group = c.benchmark_group("async/ready");
-    group.throughput(Throughput::Elements(1));
-    group.bench_function("snow", |b| {
-        let generator = BasicSnowflakeGenerator::<BenchSnowflake, _>::new(
-            0,
-            CachedClock::<1>::with_epoch(TWITTER_EPOCH),
-        );
-        b.iter(|| {
-            let id = generator
-                .next_id_async(|_| pending::<()>())
-                .now_or_never()
-                .expect("ready benchmark reached backoff");
-            black_box(id);
-        });
-    });
-
-    group.bench_function("ulid", |b| {
-        let generator =
-            BasicMonoUlidGenerator::<ULID, _, _>::new(CachedClock::default(), ThreadRandom);
-        b.iter(|| {
-            let id = generator
-                .next_id_async(|_| pending::<()>())
-                .now_or_never()
-                .expect("ready benchmark reached backoff");
-            black_box(id);
-        });
-    });
-
-    group.finish();
-}
-
 fn bench_thread_local(c: &mut Criterion) {
     let mut group = c.benchmark_group("thread_local/ulid");
     group.throughput(Throughput::Elements(1));
@@ -468,42 +256,13 @@ fn bench_thread_local(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_providers(c: &mut Criterion) {
-    let mut group = c.benchmark_group("clock/read");
-    group.throughput(Throughput::Elements(1));
-    group.bench_function("direct", |b| {
-        let clock = DirectClock::default();
-        b.iter(|| black_box(<DirectClock as TimeSource<u64>>::current_millis(&clock)));
-    });
-
-    group.bench_function("cached", |b| {
-        let clock = CachedClock::default();
-        b.iter(|| black_box(<CachedClock as TimeSource<u64>>::current_millis(&clock)));
-    });
-
-    group.finish();
-
-    let mut group = c.benchmark_group("rng");
-    group.throughput(Throughput::Elements(1));
-    group.bench_function("thread/u128", |b| {
-        let rng = ThreadRandom;
-        b.iter(|| black_box(<ThreadRandom as RandSource<u128>>::rand(&rng)));
-    });
-
-    group.finish();
-}
-
 criterion_group!(
     benches,
     bench_snow_base32,
     bench_ulid_base32,
     bench_ulid_generation,
-    bench_generate_encode,
     bench_snow_generators,
     bench_ulid_generators,
-    bench_pending_generators,
-    bench_async_ready,
     bench_thread_local,
-    bench_providers,
 );
 criterion_main!(benches);

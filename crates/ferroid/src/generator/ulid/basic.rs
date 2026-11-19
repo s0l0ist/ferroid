@@ -144,7 +144,7 @@ where
     #[cfg_attr(feature = "tracing", instrument(level = "trace", skip(self)))]
     pub fn poll_id(&self) -> Poll<ID> {
         Poll::Ready {
-            id: ID::from_components(self.time.current_millis(), self.rng.rand()),
+            id: ID::from_components(self.time.current_millis(), self.rng.rand::<ID>()),
         }
     }
 }

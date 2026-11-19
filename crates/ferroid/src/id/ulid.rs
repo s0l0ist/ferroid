@@ -10,7 +10,7 @@ use crate::id::Id;
 ///
 /// Types implementing `UlidId` expose methods for construction, encoding, and
 /// extracting field components from packed integers.
-pub trait UlidId: Id {
+pub trait UlidId: Id + crate::rand::RandomMask<Self::Ty> {
     /// Returns the timestamp portion of the ID.
     fn timestamp(&self) -> Self::Ty;
 
@@ -310,7 +310,7 @@ macro_rules! define_ulid {
             where
                 R: $crate::rand::RandSource<<Self as $crate::id::Id>::Ty>,
             {
-                let random = rng.rand();
+                let random = rng.rand::<Self>();
                 Self::from_components(timestamp, random)
             }
 
@@ -349,7 +349,7 @@ macro_rules! define_ulid {
                     )]
                     let timestamp = core::convert::TryFrom::try_from(timestamp)
                         .unwrap_or(<$int>::MAX);
-                    let random = rng.rand();
+                    let random = rng.rand::<Self>();
                     Self::from_components(timestamp, random)
                 }
             }
@@ -390,6 +390,10 @@ macro_rules! define_ulid {
                     Err($crate::Error::DecodeOverflow { id })
                 }
             }
+        }
+
+        impl $crate::rand::RandomMask<$int> for $name {
+            const MASK: $int = Self::RANDOM_MASK;
         }
 
         impl $crate::id::UlidId for $name {
@@ -584,8 +588,9 @@ mod tests {
 
     struct MockRand(u128);
     impl RandSource<u128> for MockRand {
-        fn rand(&self) -> u128 {
-            self.0
+        fn rand<M: crate::rand::RandomMask<u128>>(&self) -> u128 {
+            assert_eq!(M::MASK, ULID::max_random());
+            self.0 & M::MASK
         }
     }
 
@@ -675,8 +680,8 @@ mod tests {
         define_ulid!(CompactId, u64, reserved: 0, timestamp: 48, random: 16);
         struct Random;
         impl crate::rand::RandSource<u64> for Random {
-            fn rand(&self) -> u64 {
-                42
+            fn rand<M: crate::rand::RandomMask<u64>>(&self) -> u64 {
+                0x2A & M::MASK
             }
         }
 

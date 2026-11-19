@@ -190,7 +190,7 @@ where
             }
             Ordering::Greater => {
                 // Set the new timestamp and random number.
-                let rand = self.rng.rand();
+                let rand = self.rng.rand::<ID>();
                 let updated = state.rollover_to_timestamp(now, rand);
                 self.state.set(updated);
                 Poll::Ready { id: updated }

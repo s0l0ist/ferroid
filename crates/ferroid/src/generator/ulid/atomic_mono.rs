@@ -195,7 +195,7 @@ where
                     };
                 }
             }
-            cmp::Ordering::Greater => current_id.rollover_to_timestamp(now, self.rng.rand()),
+            cmp::Ordering::Greater => current_id.rollover_to_timestamp(now, self.rng.rand::<ID>()),
             cmp::Ordering::Less => {
                 return Self::cold_clock_behind(now, current_ts);
             }

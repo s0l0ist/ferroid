@@ -253,16 +253,17 @@ use one calling thread; shared generators are measured without contention.
 
 | Method                             | Clock  | Time per ID | IDs per second |
 | ---------------------------------- | ------ | ----------- | -------------- |
-| `ULID::now()`                      | Direct | ~35.9 ns    | ~27.8M         |
-| `direct::Ulid::new_ulid()`         | Direct | ~35.4 ns    | ~28.2M         |
-| `direct::Ulid::new_ulid_mono(...)` | Direct | ~28.2 ns    | ~35.4M         |
-| `cached::Ulid::new_ulid()`         | Cached | ~15.0 ns    | ~66.5M         |
-| `cached::Ulid::new_ulid_mono(...)` | Cached | ~3.45 ns    | ~290M          |
-| `AtomicMonoUlidGenerator`          | Cached | ~5.15 ns    | ~194M          |
-| `LockMonoUlidGenerator`            | Cached | ~8.95 ns    | ~112M          |
-| `BasicSnowflakeGenerator`          | Cached | ~1.35 ns    | ~741M          |
+| `ULID::now()`                      | Direct | ~31.9 ns    | ~31.4M         |
+| `direct::Ulid::new_ulid()`         | Direct | ~32.0 ns    | ~31.3M         |
+| `direct::Ulid::new_ulid_mono(...)` | Direct | ~28.1 ns    | ~35.5M         |
+| `cached::Ulid::new_ulid()`         | Cached | ~10.6 ns    | ~93.9M         |
+| `cached::Ulid::new_ulid_mono(...)` | Cached | ~3.46 ns    | ~289M          |
+| `BasicUlidGenerator`               | Cached | ~9.79 ns    | ~102M          |
+| `AtomicMonoUlidGenerator`          | Cached | ~5.16 ns    | ~194M          |
+| `LockMonoUlidGenerator`            | Cached | ~8.94 ns    | ~112M          |
+| `BasicSnowflakeGenerator`          | Cached | ~1.35 ns    | ~740M          |
 | `AtomicSnowflakeGenerator`         | Cached | ~2.33 ns    | ~428M          |
-| `LockSnowflakeGenerator`           | Cached | ~8.85 ns    | ~113M          |
+| `LockSnowflakeGenerator`           | Cached | ~8.83 ns    | ~113M          |
 
 Snowflake measurements use a cached clock and a layout with 22 sequence bits.
 
@@ -270,12 +271,11 @@ Snowflake measurements use a cached clock and a layout with 22 sequence bits.
 
 Base32 conversion using NEON with the default `intrinsics` feature enabled:
 
-| Operation                | Snowflake (`u64`, 13 characters) | ULID (`u128`, 26 characters) |
-| ------------------------ | -------------------------------- | ---------------------------- |
-| `encode_to_buf()`        | ~1.30 ns                         | ~1.58 ns                     |
-| `encode().as_str()`      | ~1.28 ns                         | ~1.54 ns                     |
-| `encode().as_string()`   | ~13.53 ns                        | ~13.61 ns                    |
-| `decode()`               | ~1.62 ns                         | ~2.35 ns                     |
+| Operation              | Snowflake (`u64`, 13 characters) | ULID (`u128`, 26 characters) |
+| ---------------------- | -------------------------------- | ---------------------------- |
+| `encode_to_buf()`      | ~1.28 ns                         | ~1.55 ns                     |
+| `encode().as_string()` | ~13.29 ns                        | ~13.36 ns                    |
+| `decode()`             | ~1.59 ns                         | ~2.31 ns                     |
 
 ## Advanced generators
 

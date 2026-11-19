@@ -288,7 +288,7 @@ where
                 }
             }
             Ordering::Greater => {
-                let rand = self.rng.rand();
+                let rand = self.rng.rand::<ID>();
                 *id = id.rollover_to_timestamp(now, rand);
                 Ok(Poll::Ready { id: *id })
             }

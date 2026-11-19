@@ -1,4 +1,7 @@
-use crate::{rand::RandSource, time::TimeSource};
+use crate::{
+    rand::{RandSource, RandomMask},
+    time::TimeSource,
+};
 use core::{cell::Cell, num::NonZeroU64};
 
 pub(super) struct CountingRand {
@@ -11,18 +14,18 @@ impl CountingRand {
     }
 }
 
-impl<T: From<u64>> RandSource<T> for CountingRand {
-    fn rand(&self) -> T {
+impl<T: From<u64> + core::ops::BitAnd<Output = T>> RandSource<T> for CountingRand {
+    fn rand<M: RandomMask<T>>(&self) -> T {
         let next = self.next.get();
         self.next.set(next + 1);
-        T::from(next)
+        T::from(next) & M::MASK
     }
 }
 
 pub(super) struct ZeroRand;
-impl<T: From<u64>> RandSource<T> for ZeroRand {
-    fn rand(&self) -> T {
-        T::from(0)
+impl<T: From<u64> + core::ops::BitAnd<Output = T>> RandSource<T> for ZeroRand {
+    fn rand<M: RandomMask<T>>(&self) -> T {
+        T::from(0) & M::MASK
     }
 }
 
@@ -64,5 +67,45 @@ impl<T: From<u64>> TimeSource<T> for OverflowClock {
 
     fn current_millis(&self) -> T {
         T::from(0)
+    }
+}
+
+#[cfg(any(
+    feature = "basic",
+    feature = "lock",
+    all(feature = "atomic", target_has_atomic = "128")
+))]
+#[test]
+fn generators_request_the_layout_random_mask() {
+    use crate::{generator::*, id::ULID};
+
+    struct MaskOnlyRand;
+    impl RandSource<u128> for MaskOnlyRand {
+        fn rand<M: crate::rand::RandomMask<u128>>(&self) -> u128 {
+            assert_eq!(M::MASK, ULID::max_random());
+            42
+        }
+    }
+
+    let clock = TestClock::new(1);
+    let expected = Poll::Ready {
+        id: ULID::from_components(1, 42),
+    };
+    #[cfg(feature = "basic")]
+    {
+        let basic = BasicUlidGenerator::<ULID, _, _>::new(&clock, MaskOnlyRand);
+        assert_eq!(basic.try_poll_id().unwrap(), expected);
+        let mono = BasicMonoUlidGenerator::<ULID, _, _>::new(&clock, MaskOnlyRand);
+        assert_eq!(mono.try_poll_id().unwrap(), expected);
+    }
+    #[cfg(feature = "lock")]
+    {
+        let lock = LockMonoUlidGenerator::<ULID, _, _>::new(&clock, MaskOnlyRand);
+        assert_eq!(lock.try_poll_id().unwrap(), expected);
+    }
+    #[cfg(all(feature = "atomic", target_has_atomic = "128"))]
+    {
+        let atomic = AtomicMonoUlidGenerator::<ULID, _, _>::new(&clock, MaskOnlyRand);
+        assert_eq!(atomic.try_poll_id().unwrap(), expected);
     }
 }

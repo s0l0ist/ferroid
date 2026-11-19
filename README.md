@@ -1,8 +1,7 @@
 # 🤖 ferroid
 
 **ferroid** is a Rust library for generating and streaming time-sortable IDs,
-including **Snowflake-style** IDs and **ULIDs**. It aims to be flexible while
-having exceptional performance.
+including **Snowflake-style** IDs and **ULIDs**.
 
 This workspace includes:
 
