@@ -3,6 +3,7 @@
 ## 3.1.1
 
 ### Changed
+
 - Lowered the core library's MSRV to Rust 1.89.0 using a private
   `cfg_select!` compatibility macro and `parking_lot` 0.12.5.
 
