@@ -20,6 +20,45 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  msrv:
+    name: Library MSRV (Rust 1.89, ${{ matrix.backend }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: NEON
+            os: ubuntu-24.04-arm
+            rustflags: ""
+          - backend: SSSE3
+            os: ubuntu-24.04
+            rustflags: "-C target-feature=+ssse3"
+    env:
+      RUSTFLAGS: "-D warnings ${{ matrix.rustflags }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@1.89.0
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check no_std library
+        run: cargo check -p ferroid --locked --no-default-features
+
+      - name: Test standard mutex backend
+        run: cargo test -p ferroid --locked --features all
+
+      - name: Test all library features
+        run: cargo test -p ferroid --locked --all-features
+
+      - name: Test scalar Base32
+        run: >-
+          cargo test -p ferroid --lib --locked --no-default-features
+          --features snowflake,ulid,alloc,base32
+
   documentation:
     name: Documentation
     runs-on: ubuntu-24.04-arm

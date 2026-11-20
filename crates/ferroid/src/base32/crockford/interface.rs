@@ -59,7 +59,7 @@ pub(in crate::base32) fn decode_base32<T, ID>(bytes: &[u8]) -> Result<T, Error<I
 where
     T: BeBytes + Default + From<u8> + Shl<usize, Output = T> + BitOr<Output = T>,
 {
-    let (decoded, has_error) = core::cfg_select! {
+    let (decoded, has_error) = cfg_select! {{
         all(
             feature = "intrinsics",
             any(
@@ -88,7 +88,7 @@ where
             }
         }
         _ => { scalar::decode_base32::<T>(bytes) }
-    };
+    }};
     if has_error {
         validate_symbols(bytes)?;
     }

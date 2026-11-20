@@ -269,10 +269,10 @@ where
     pub fn try_poll_id(&self) -> Result<Poll<ID>, LockError> {
         let now = self.time.current_millis();
 
-        let mut id = core::cfg_select! {
-            feature = "parking-lot" => self.state.lock(),
-            _ => self.state.lock()?,
-        };
+        let mut id = cfg_select! {{
+            feature = "parking-lot" => { self.state.lock() }
+            _ => { self.state.lock()? }
+        }};
 
         let current_ts = id.timestamp();
 
