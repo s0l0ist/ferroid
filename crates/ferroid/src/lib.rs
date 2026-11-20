@@ -41,6 +41,9 @@ extern crate std;
 #[cfg(any(feature = "alloc", test))]
 extern crate alloc;
 
+#[macro_use]
+mod cfg_select;
+
 // Check README examples without including the README on the crate's API page.
 #[cfg(doctest)]
 mod readme_tests;

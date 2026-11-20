@@ -1,4 +1,4 @@
-core::cfg_select! {
+cfg_select! {
     feature = "parking-lot" => {
         pub(crate) use parking_lot::Mutex;
 

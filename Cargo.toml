@@ -18,7 +18,7 @@ default-members = [
 [workspace.package]
 version = "3.1.0"
 edition = "2024"
-rust-version = "1.95.0"
+rust-version = "1.89.0"
 license = "MIT OR Apache-2.0"
 authors = ["Nick Angelou <angelou.nick@gmail.com>"]
 documentation = "https://docs.rs/ferroid"
@@ -37,7 +37,7 @@ opentelemetry-otlp = { version = "0.33", default-features = false }
 opentelemetry-semantic-conventions = { version = "0.33", default-features = false }
 opentelemetry-stdout = { version = "0.33", default-features = false }
 opentelemetry_sdk = { version = "0.33", default-features = false }
-parking_lot = { version = "0.13", default-features = false }
+parking_lot = { version = "0.12", default-features = false }
 pgrx = { version = "0.20", default-features = false }
 pgrx-tests = { version = "0.20", default-features = false }
 portable-atomic = { version = "1.15", default-features = false }
